@@ -104,7 +104,9 @@ authRoutes.post('/login', async (context) => {
   }
 
   const sessionId = generateId();
-  const token = generateSessionToken();
+  // Token format: base64(userId:role:timestamp) - self-contained, no DB verification needed
+  const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
+  const token = btoa(tokenData);
   const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // Unix timestamp
 
   await context.env.DB.prepare(

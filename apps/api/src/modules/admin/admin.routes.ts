@@ -20,7 +20,7 @@ function canAccess(userRole: string, minimum: string): boolean {
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>();
 
-// Middleware to check admin access
+// Middleware to check admin access - token-based approach (no DB verification)
 adminRoutes.use('*', async (context, next) => {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -28,20 +28,24 @@ adminRoutes.use('*', async (context, next) => {
   }
 
   const token = authHeader.slice(7);
-  const session = await context.env.DB.prepare(
-    `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ?`
-  ).bind(token).first();
 
-  if (!session) {
-    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  // Decode token to get user info (token format: base64(userId:role:timestamp))
+  try {
+    const decoded = atob(token);
+    const [userId, roleId] = decoded.split(':');
+
+    if (!userId || !roleId) {
+      return context.json({ error: 'INVALID_TOKEN' }, 401);
+    }
+
+    if (!canAccess(roleId, 'admin')) {
+      return context.json({ error: 'FORBIDDEN' }, 403);
+    }
+
+    await next();
+  } catch {
+    return context.json({ error: 'INVALID_TOKEN' }, 401);
   }
-
-  if (!canAccess(session.role_id as string, 'admin')) {
-    return context.json({ error: 'FORBIDDEN' }, 403);
-  }
-
-  await next();
 });
 
 // GET /admin/stats - Dashboard statistics
