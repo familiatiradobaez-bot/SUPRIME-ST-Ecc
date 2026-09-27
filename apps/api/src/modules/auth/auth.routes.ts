@@ -3,8 +3,11 @@ import { z } from 'zod';
 import type { Bindings } from '../../app';
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().optional(),
+  username: z.string().optional(),
   password: z.string().min(1),
+}).refine((data) => data.email || data.username, {
+  message: 'Email or username is required',
 });
 
 const registerSchema = z.object({
@@ -89,12 +92,12 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
 
-  const { email, password } = parsed.data;
+  const { email, username, password } = parsed.data;
 
   const user = await context.env.DB.prepare(
     `SELECT id, username, email, display_name, role_id, password_hash FROM users
-     WHERE email = ? AND is_active = 1`
-  ).bind(email).first();
+     WHERE (email = ? OR username = ?) AND is_active = 1`
+  ).bind(email || '', username || '').first();
 
   if (!user || !(await verifyPassword(password, user.password_hash as string))) {
     return context.json({ error: 'INVALID_CREDENTIALS' }, 401);

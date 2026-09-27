@@ -319,6 +319,7 @@ export function App() {
   const [showMenu, setShowMenu] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showUserPanel, setShowUserPanel] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [user, setUser] = useState<User | null>(null);
@@ -552,15 +553,12 @@ export function App() {
               🛒 ({cartCount})
             </button>
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>👤 {user.display_name || user.username}</span>
-                <button 
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleLogout}
-                >
-                  Cerrar Sesión
-                </button>
-              </div>
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowUserPanel(true)}
+              >
+                👤 {user.display_name || user.username}
+              </button>
             ) : (
               <button 
                 className="btn btn-secondary btn-sm"
@@ -588,8 +586,8 @@ export function App() {
             {user ? (
               <>
                 <p style={{ padding: '0.5rem 1rem', fontWeight: 600 }}>👤 {user.display_name || user.username}</p>
-                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={handleLogout}>
-                  Cerrar Sesión
+                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setShowMenu(false); setShowUserPanel(true); }}>
+                  Mi Cuenta
                 </button>
               </>
             ) : (
@@ -830,6 +828,70 @@ export function App() {
               mode={loginMode}
               onToggleMode={() => { setLoginMode(prev => prev === 'login' ? 'register' : 'login'); setActionError(''); }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* User Panel Modal */}
+      {showUserPanel && user && (
+        <div className="modal-overlay" onClick={() => setShowUserPanel(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Mi Cuenta</h2>
+              <button className="close-btn" onClick={() => setShowUserPanel(false)}>✕</button>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ marginBottom: '0.5rem' }}>Información de la cuenta</h3>
+                <p><strong>Usuario:</strong> {user.username}</p>
+                <p><strong>Email:</strong> {user.email}</p>
+                <p><strong>Nombre:</strong> {user.display_name}</p>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ marginBottom: '0.5rem' }}>Vincular cuenta de Google</h3>
+                <p style={{ color: '#68736b', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                  Vincula tu cuenta de Google para iniciar sesión más fácilmente
+                </p>
+                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => alert('Google OAuth - Próximamente')}>
+                  🔗 Vincular con Google
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ marginBottom: '0.5rem' }}>Datos de envío</h3>
+                <p style={{ color: '#68736b', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                  Estos datos se usarán automáticamente en el checkout
+                </p>
+                <div className="form-group">
+                  <label>Nombre completo:</label>
+                  <input type="text" placeholder="Juan Pérez" id="profile-name" />
+                </div>
+                <div className="form-group">
+                  <label>Teléfono:</label>
+                  <input type="tel" placeholder="+34 123 456 789" id="profile-phone" />
+                </div>
+                <div className="form-group">
+                  <label>Dirección:</label>
+                  <input type="text" placeholder="Calle Principal 123, Madrid" id="profile-address" />
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+                  const name = (document.getElementById('profile-name') as HTMLInputElement)?.value;
+                  const phone = (document.getElementById('profile-phone') as HTMLInputElement)?.value;
+                  const address = (document.getElementById('profile-address') as HTMLInputElement)?.value;
+                  localStorage.setItem('su_prime_shipping', JSON.stringify({ name, phone, address }));
+                  alert('Datos de envío guardados');
+                }}>
+                  💾 Guardar datos de envío
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
+                <button className="btn btn-secondary" style={{ width: '100%', borderColor: '#a3422b', color: '#a3422b' }} onClick={handleLogout}>
+                  Cerrar Sesión
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
