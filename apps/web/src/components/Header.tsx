@@ -1,4 +1,5 @@
 import type { User } from '../types';
+import { CategoryNav } from './CategoryNav';
 
 type HeaderProps = {
   user: User | null;
@@ -12,9 +13,10 @@ type HeaderProps = {
   showMenu: boolean;
   onCloseMenu: () => void;
   onNavClick: (section: string) => void;
+  onCategorySelect?: (categorySlug: string) => void;
 };
 
-export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, showMenu, onCloseMenu, onNavClick }: HeaderProps) {
+export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, showMenu, onCloseMenu, onNavClick, onCategorySelect }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
@@ -62,6 +64,7 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
 
       <nav className="nav">
         <a href="#products" onClick={(e) => { e.preventDefault(); onNavClick('products'); }}>Tienda</a>
+        <CategoryNav onCategorySelect={onCategorySelect} />
         <a href="#about" onClick={(e) => { e.preventDefault(); onNavClick('about'); }}>Sobre Nosotros</a>
         <a href="#contact" onClick={(e) => { e.preventDefault(); onNavClick('contact'); }}>Contacto</a>
       </nav>
