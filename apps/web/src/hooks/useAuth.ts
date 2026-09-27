@@ -37,7 +37,7 @@ export function useAuth() {
       try {
         const sessionData = JSON.parse(savedSession);
         const userData = JSON.parse(savedUser);
-        if (sessionData.expires_at && new Date(sessionData.expires_at) > new Date()) {
+        if (sessionData.expires_at && sessionData.expires_at > Math.floor(Date.now() / 1000)) {
           setSession(sessionData);
           setUser(userData);
           // Cargar datos de envío desde la API
@@ -95,6 +95,17 @@ export function useAuth() {
       setSession(sessionData);
       localStorage.setItem('su_prime_session', JSON.stringify(sessionData));
       localStorage.setItem('su_prime_user', JSON.stringify(userData));
+      // Cargar datos de envío al iniciar sesión
+      fetch(`${apiUrl}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${sessionData.token}` },
+      })
+        .then(r => r.json())
+        .then(meData => {
+          if (meData.data?.shipping) {
+            setUser(prev => prev ? { ...prev, shipping: meData.data.shipping } : prev);
+          }
+        })
+        .catch(() => {});
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Error de conexión');
     } finally {

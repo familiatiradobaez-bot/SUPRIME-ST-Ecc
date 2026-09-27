@@ -69,11 +69,24 @@ export function UserPanel({ user, onClose, onLogout, onSaveShipping }: UserPanel
               <input type="text" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" />
             </div>
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={async () => {
+              // Verificar si ya se editó hoy
+              const lastEdit = localStorage.getItem('su_prime_shipping_last_edit');
+              const today = new Date().toISOString().split('T')[0];
+              if (lastEdit === today) {
+                alert('Solo puedes editar tus datos de envío una vez al día. Vuelve mañana.');
+                return;
+              }
               await onSaveShipping({ full_name: name, phone, address, city, postal_code: postal });
+              localStorage.setItem('su_prime_shipping_last_edit', today);
               alert('Datos de envío guardados en la nube');
             }}>
               💾 Guardar datos de envío
             </button>
+            {localStorage.getItem('su_prime_shipping_last_edit') === new Date().toISOString().split('T')[0] && (
+              <p style={{ color: '#68736b', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                ⚠️ Ya editaste tus datos hoy. Podrás editarlos mañana.
+              </p>
+            )}
           </div>
 
           <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>

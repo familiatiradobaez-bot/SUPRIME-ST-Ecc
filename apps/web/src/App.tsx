@@ -11,7 +11,7 @@ import { CheckoutForm } from './components/CheckoutForm';
 import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
 import { ProductCard } from './components/ProductCard';
-import { AdminPanel } from './components/AdminPanel';
+import { AdminPage } from './pages/AdminPage';
 
 export function App() {
   const apiUrl = useApiUrl();
@@ -87,12 +87,13 @@ export function App() {
         onNavClick={handleNavClick}
       />
 
-      {/* Admin Panel - solo visible para admin+ */}
-      {showAdminPanel && user && ['role-admin', 'role-owner', 'role-stock-manager'].includes(user.role_id) && (
-        <AdminPanel
-          onClose={() => setShowAdminPanel(false)}
-          authToken={session?.token || ''}
+      {/* Admin Page - página separada para admin+ */}
+      {showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || '')) && (
+        <AdminPage
+          user={user}
+          sessionToken={session?.token || ''}
           apiUrl={apiUrl}
+          onBack={() => setShowAdminPanel(false)}
         />
       )}
 
