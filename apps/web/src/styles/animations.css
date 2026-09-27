@@ -1,0 +1,1633 @@
+/* ============================================
+   SISTEMA DE ANIMACIONES REUTILIZABLES
+   ============================================
+   Este archivo contiene animaciones CSS reutilizables
+   que pueden aplicarse a cualquier componente.
+
+   Uso:
+   - Clases utilitarias: .anim-fade-in, .anim-slide-up, etc.
+   - Clases por componente: .anim-product-card, .anim-button, etc.
+   - Variables CSS para personalizar duración y easing
+   ============================================ */
+
+/* Variables de animación */
+:root {
+  --anim-duration-fast: 150ms;
+  --anim-duration-normal: 300ms;
+  --anim-duration-slow: 500ms;
+  --anim-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --anim-easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ============================================
+   ANIMACIONES DE ENTRADA
+   ============================================ */
+
+/* Fade in - Aparición suave */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.anim-fade-in {
+  animation: fadeIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Slide up - Deslizar hacia arriba */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-slide-up {
+  animation: slideUp var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Slide down - Deslizar hacia abajo */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-slide-down {
+  animation: slideDown var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Slide in from left */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.anim-slide-in-left {
+  animation: slideInLeft var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.anim-slide-in-right {
+  animation: slideInRight var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Scale in - Escala desde 0 */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.anim-scale-in {
+  animation: scaleIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE HOVER
+   ============================================ */
+
+/* Hover lift - Elevar al pasar el mouse */
+@keyframes hoverLift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-4px); }
+}
+
+.anim-hover-lift {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-hover-lift:hover {
+  animation: hoverLift var(--anim-duration-fast) var(--anim-easing) forwards;
+}
+
+/* Hover scale - Escalar al pasar el mouse */
+.anim-hover-scale {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* Hover glow - Brillo al pasar el mouse */
+.anim-hover-glow {
+  transition: box-shadow var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-hover-glow:hover {
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.3);
+}
+
+/* ============================================
+   ANIMACIONES POR COMPONENTE
+   ============================================ */
+
+/* Product Card */
+@keyframes productCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anim-product-card {
+  animation: productCardIn var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* Button pulse */
+@keyframes buttonPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.anim-button-pulse {
+  animation: buttonPulse 2s var(--anim-easing) infinite;
+}
+
+/* Button bounce */
+@keyframes buttonBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.anim-button-bounce {
+  animation: buttonBounce 0.5s var(--anim-easing-bounce);
+}
+
+/* Modal overlay */
+@keyframes modalOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.anim-modal-overlay {
+  animation: modalOverlayIn var(--anim-duration-fast) var(--anim-easing) forwards;
+}
+
+/* Modal content */
+@keyframes modalContentIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.anim-modal-content {
+  animation: modalContentIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Cart sidebar */
+@keyframes cartSidebarIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.anim-cart-sidebar {
+  animation: cartSidebarIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.anim-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Shake - Para errores */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.anim-shake {
+  animation: shake 0.3s var(--anim-easing);
+}
+
+/* ============================================
+   ANIMACIONES DE TRANSICIÓN
+   ============================================ */
+
+/* Fade transition */
+.anim-fade-transition {
+  transition: opacity var(--anim-duration-normal) var(--anim-easing);
+}
+
+/* Scale transition */
+.anim-scale-transition {
+  transition: transform var(--anim-duration-normal) var(--anim-easing);
+}
+
+/* Slide transition */
+.anim-slide-transition {
+  transition: transform var(--anim-duration-normal) var(--anim-easing);
+}
+
+/* ============================================
+   ANIMACIONES DE CARGA
+   ============================================ */
+
+/* Skeleton loading */
+@keyframes skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.anim-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.5s infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE NOTIFICACIÓN
+   ============================================ */
+
+/* Toast in */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anim-toast-in {
+  animation: toastIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Toast out */
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+}
+
+.anim-toast-out {
+  animation: toastOut var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE SCROLL
+   ============================================ */
+
+/* Scroll fade in */
+@keyframes scrollFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-scroll-fade-in {
+  animation: scrollFadeIn var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES
+   ============================================ */
+
+/* Button ripple effect */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.anim-button-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.anim-button-ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  transform: scale(0);
+  opacity: 0;
+}
+
+.anim-button-ripple:active::after {
+  animation: ripple 0.6s var(--anim-easing);
+}
+
+/* ============================================
+   ANIMACIONES DE TEXTO
+   ============================================ */
+
+/* Text fade in */
+@keyframes textFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-text-fade-in {
+  animation: textFadeIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE IMAGEN
+   ============================================ */
+
+/* Image zoom on hover */
+.anim-img-zoom {
+  overflow: hidden;
+}
+
+.anim-img-zoom img {
+  transition: transform var(--anim-duration-slow) var(--anim-easing);
+}
+
+.anim-img-zoom:hover img {
+  transform: scale(1.1);
+}
+
+/* Image fade in */
+@keyframes imgFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.anim-img-fade-in {
+  animation: imgFadeIn var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE BADGE
+   ============================================ */
+
+/* Badge pop */
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.anim-badge-pop {
+  animation: badgePop var(--anim-duration-normal) var(--anim-easing-bounce) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE NAVEGACIÓN
+   ============================================ */
+
+/* Nav link underline */
+.anim-nav-link {
+  position: relative;
+}
+
+.anim-nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width var(--anim-duration-normal) var(--anim-easing);
+}
+
+.anim-nav-link:hover::after {
+  width: 100%;
+}
+
+/* ============================================
+   ANIMACIONES DE DROPDOWN
+   ============================================ */
+
+/* Dropdown in */
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anim-dropdown-in {
+  animation: dropdownIn var(--anim-duration-fast) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE PROGRESO
+   ============================================ */
+
+/* Progress bar */
+@keyframes progress {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.anim-progress {
+  animation: progress var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE BORDES
+   ============================================ */
+
+/* Border draw */
+@keyframes borderDraw {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+.anim-border-draw {
+  stroke-dasharray: 1000;
+  animation: borderDraw var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE SOMBRA
+   ============================================ */
+
+/* Shadow pulse */
+@keyframes shadowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(233, 69, 96, 0); }
+}
+
+.anim-shadow-pulse {
+  animation: shadowPulse 2s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE FONDO
+   ============================================ */
+
+/* Gradient shift */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.anim-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 3s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE CARGA DE PÁGINA
+   ============================================ */
+
+/* Page load */
+@keyframes pageLoad {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-page-load {
+  animation: pageLoad var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE MODAL
+   ============================================ */
+
+/* Modal backdrop blur */
+@keyframes modalBackdrop {
+  from { backdrop-filter: blur(0); }
+  to { backdrop-filter: blur(5px); }
+}
+
+.anim-modal-backdrop {
+  animation: modalBackdrop var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE TARJETA
+   ============================================ */
+
+/* Card flip */
+@keyframes cardFlip {
+  from { transform: rotateY(0); }
+  to { transform: rotateY(180deg); }
+}
+
+.anim-card-flip {
+  animation: cardFlip var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* Card shake */
+@keyframes cardShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.anim-card-shake {
+  animation: cardShake 0.3s var(--anim-easing);
+}
+
+/* ============================================
+   ANIMACIONES DE ICONOS
+   ============================================ */
+
+/* Icon bounce */
+@keyframes iconBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.anim-icon-bounce {
+  animation: iconBounce 0.5s var(--anim-easing-bounce);
+}
+
+/* Icon spin */
+@keyframes iconSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.anim-icon-spin {
+  animation: iconSpin var(--anim-duration-slow) linear infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ACCIÓN
+   ============================================ */
+
+/* Action button hover */
+.anim-action-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.anim-action-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   ANIMACIONES DE ENTRADA DE ELEMENTOS
+   ============================================ */
+
+/* Stagger children */
+.anim-stagger-children > * {
+  animation: slideUp var(--anim-duration-normal) var(--anim-easing) forwards;
+  opacity: 0;
+}
+
+.anim-stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.anim-stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.anim-stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.anim-stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.anim-stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.anim-stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.anim-stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.anim-stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+.anim-stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+.anim-stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+
+/* ============================================
+   ANIMACIONES DE SALIDA
+   ============================================ */
+
+/* Fade out */
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.anim-fade-out {
+  animation: fadeOut var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Slide out */
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+.anim-slide-out {
+  animation: slideOut var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE TRANSFORMACIÓN
+   ============================================ */
+
+/* Rotate */
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.anim-rotate {
+  animation: rotate var(--anim-duration-slow) linear infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE ESCALA
+   ============================================ */
+
+/* Scale up */
+@keyframes scaleUp {
+  from { transform: scale(0.8); }
+  to { transform: scale(1); }
+}
+
+.anim-scale-up {
+  animation: scaleUp var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* Scale down */
+@keyframes scaleDown {
+  from { transform: scale(1); }
+  to { transform: scale(0.8); }
+}
+
+.anim-scale-down {
+  animation: scaleDown var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE OPACIDAD
+   ============================================ */
+
+/* Opacity pulse */
+@keyframes opacityPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.anim-opacity-pulse {
+  animation: opacityPulse 2s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE COLOR
+   ============================================ */
+
+/* Color shift */
+@keyframes colorShift {
+  0% { color: var(--accent); }
+  50% { color: var(--primary); }
+  100% { color: var(--accent); }
+}
+
+.anim-color-shift {
+  animation: colorShift 3s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE FONDO
+   ============================================ */
+
+/* Background fade */
+@keyframes backgroundFade {
+  from { background-color: transparent; }
+  to { background-color: rgba(0, 0, 0, 0.5); }
+}
+
+.anim-background-fade {
+  animation: backgroundFade var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE BORDE
+   ============================================ */
+
+/* Border pulse */
+@keyframes borderPulse {
+  0%, 100% { border-color: var(--accent); }
+  50% { border-color: transparent; }
+}
+
+.anim-border-pulse {
+  animation: borderPulse 2s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE TEXTO
+   ============================================ */
+
+/* Text glow */
+@keyframes textGlow {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  50% { text-shadow: 0 0 10px var(--accent); }
+}
+
+.anim-text-glow {
+  animation: textGlow 2s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE IMAGEN
+   ============================================ */
+
+/* Image grayscale to color */
+.anim-img-grayscale {
+  filter: grayscale(100%);
+  transition: filter var(--anim-duration-slow) var(--anim-easing);
+}
+
+.anim-img-grayscale:hover {
+  filter: grayscale(0%);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES
+   ============================================ */
+
+/* Button gradient */
+@keyframes buttonGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.anim-button-gradient {
+  background-size: 200% 200%;
+  animation: buttonGradient 3s var(--anim-easing) infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE TARJETAS
+   ============================================ */
+
+/* Card hover lift */
+.anim-card-hover {
+  transition: transform var(--anim-duration-fast) var(--anim-easing),
+              box-shadow var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   ANIMACIONES DE MODALES
+   ============================================ */
+
+/* Modal slide up */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-modal-slide-up {
+  animation: modalSlideUp var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE NOTIFICACIONES
+   ============================================ */
+
+/* Notification slide in */
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.anim-notification-slide-in {
+  animation: notificationSlideIn var(--anim-duration-normal) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE PROGRESO
+   ============================================ */
+
+/* Progress bar fill */
+@keyframes progressFill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.anim-progress-fill {
+  animation: progressFill var(--anim-duration-slow) var(--anim-easing) forwards;
+}
+
+/* ============================================
+   ANIMACIONES DE CARGA
+   ============================================ */
+
+/* Loading dots */
+@keyframes loadingDots {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+.anim-loading-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.anim-loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: loadingDots 1.4s ease-in-out infinite;
+}
+
+.anim-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.anim-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE FORMULARIO
+   ============================================ */
+
+/* Input focus */
+.anim-input-focus {
+  transition: border-color var(--anim-duration-fast) var(--anim-easing),
+              box-shadow var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-input-focus:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ENVÍO
+   ============================================ */
+
+/* Submit button */
+.anim-submit-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.anim-submit-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.anim-submit-btn:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE CANCELAR
+   ============================================ */
+
+/* Cancel button */
+.anim-cancel-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-cancel-btn:hover {
+  background-color: #f5f5f5;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE CIERRE
+   ============================================ */
+
+/* Close button */
+.anim-close-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-close-btn:hover {
+  transform: rotate(90deg);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE MENÚ
+   ============================================ */
+
+/* Menu button */
+.anim-menu-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-menu-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE BÚSQUEDA
+   ============================================ */
+
+/* Search button */
+.anim-search-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-search-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE CARRITO
+   ============================================ */
+
+/* Cart button */
+.anim-cart-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-cart-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE FAVORITOS
+   ============================================ */
+
+/* Favorite button */
+.anim-favorite-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-favorite-btn:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE COMPARTIR
+   ============================================ */
+
+/* Share button */
+.anim-share-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-share-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE DESCARGA
+   ============================================ */
+
+/* Download button */
+.anim-download-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-download-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE IMPRESIÓN
+   ============================================ */
+
+/* Print button */
+.anim-print-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-print-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE AYUDA
+   ============================================ */
+
+/* Help button */
+.anim-help-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-help-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE CONFIGURACIÓN
+   ============================================ */
+
+/* Settings button */
+.anim-settings-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-settings-btn:hover {
+  transform: rotate(90deg);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE NOTIFICACIONES
+   ============================================ */
+
+/* Notification button */
+.anim-notification-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-notification-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE PERFIL
+   ============================================ */
+
+/* Profile button */
+.anim-profile-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-profile-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE SESIÓN
+   ============================================ */
+
+/* Logout button */
+.anim-logout-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-logout-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE REGISTRO
+   ============================================ */
+
+/* Register button */
+.anim-register-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-register-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE INICIO DE SESIÓN
+   ============================================ */
+
+/* Login button */
+.anim-login-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-login-btn:hover {
+  background-color: #e3f2fd;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE BÚSQUEDA AVANZADA
+   ============================================ */
+
+/* Advanced search button */
+.anim-advanced-search-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-advanced-search-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE FILTRO
+   ============================================ */
+
+/* Filter button */
+.anim-filter-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-filter-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ORDENAMIENTO
+   ============================================ */
+
+/* Sort button */
+.anim-sort-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-sort-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE PAGINACIÓN
+   ============================================ */
+
+/* Pagination button */
+.anim-pagination-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-pagination-btn:hover {
+  background-color: #f5f5f5;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE NAVEGACIÓN
+   ============================================ */
+
+/* Navigation button */
+.anim-nav-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-nav-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE VOLVER
+   ============================================ */
+
+/* Back button */
+.anim-back-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-back-btn:hover {
+  transform: translateX(-3px);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE SIGUIENTE
+   ============================================ */
+
+/* Next button */
+.anim-next-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-next-btn:hover {
+  transform: translateX(3px);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE GUARDAR
+   ============================================ */
+
+/* Save button */
+.anim-save-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-save-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ELIMINAR
+   ============================================ */
+
+/* Delete button */
+.anim-delete-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-delete-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE EDITAR
+   ============================================ */
+
+/* Edit button */
+.anim-edit-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-edit-btn:hover {
+  background-color: #fff3e0;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE VER
+   ============================================ */
+
+/* View button */
+.anim-view-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-view-btn:hover {
+  background-color: #e3f2fd;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE AÑADIR
+   ============================================ */
+
+/* Add button */
+.anim-add-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-add-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE QUITAR
+   ============================================ */
+
+/* Remove button */
+.anim-remove-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-remove-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE SUBIR
+   ============================================ */
+
+/* Upload button */
+.anim-upload-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-upload-btn:hover {
+  background-color: #e3f2fd;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE BAJAR
+   ============================================ */
+
+/* Download button */
+.anim-download-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-download-btn:hover {
+  background-color: #fff3e0;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE COMPARTIR
+   ============================================ */
+
+/* Share button */
+.anim-share-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-share-btn:hover {
+  background-color: #f3e5f5;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ME GUSTA
+   ============================================ */
+
+/* Like button */
+.anim-like-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-like-btn:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE NO ME GUSTA
+   ============================================ */
+
+/* Dislike button */
+.anim-dislike-btn {
+  transition: transform var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-dislike-btn:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE COMENTAR
+   ============================================ */
+
+/* Comment button */
+.anim-comment-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-comment-btn:hover {
+  background-color: #e3f2fd;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE GUARDAR
+   ============================================ */
+
+/* Bookmark button */
+.anim-bookmark-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-bookmark-btn:hover {
+  background-color: #fff3e0;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE SEGUIR
+   ============================================ */
+
+/* Follow button */
+.anim-follow-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-follow-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE DEJAR DE SEGUIR
+   ============================================ */
+
+/* Unfollow button */
+.anim-unfollow-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-unfollow-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE BLOQUEAR
+   ============================================ */
+
+/* Block button */
+.anim-block-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-block-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE DESBLOQUEAR
+   ============================================ */
+
+/* Unblock button */
+.anim-unblock-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-unblock-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE REPORTAR
+   ============================================ */
+
+/* Report button */
+.anim-report-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-report-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE SILENCIAR
+   ============================================ */
+
+/* Mute button */
+.anim-mute-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-mute-btn:hover {
+  background-color: #f5f5f5;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ACTIVAR
+   ============================================ */
+
+/* Unmute button */
+.anim-unmute-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-unmute-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE VERIFICAR
+   ============================================ */
+
+/* Verify button */
+.anim-verify-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-verify-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE RECHAZAR
+   ============================================ */
+
+/* Reject button */
+.anim-reject-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-reject-btn:hover {
+  background-color: #ffebee;
+}
+
+/* ============================================
+   ANIMACIONES DE BOTONES DE ACEPTAR
+   ============================================ */
+
+/* Accept button */
+.anim-accept-btn {
+  transition: background-color var(--anim-duration-fast) var(--anim-easing);
+}
+
+.anim-accept-btn:hover {
+  background-color: #e8f5e9;
+}
+
+/* ============================================
+   APERSONALIZACIÓN
+   ============================================ */
+
+/* Personalización de animaciones */
+.anim-custom {
+  animation-duration: var(--anim-duration-normal);
+  animation-timing-function: var(--anim-easing);
+}
+
+/* Personalización de duración */
+.anim-fast {
+  animation-duration: var(--anim-duration-fast);
+}
+
+.anim-slow {
+  animation-duration: var(--anim-duration-slow);
+}
+
+/* Personalización de easing */
+.anim-bounce {
+  animation-timing-function: var(--anim-easing-bounce);
+}
+
+/* Personalización de dirección */
+.anim-reverse {
+  animation-direction: reverse;
+}
+
+.anim-alternate {
+  animation-direction: alternate;
+}
+
+/* Personalización de iteraciones */
+.anim-infinite {
+  animation-iteration-count: infinite;
+}
+
+/* Personalización de delay */
+.anim-delay-100 { animation-delay: 100ms; }
+.anim-delay-200 { animation-delay: 200ms; }
+.anim-delay-300 { animation-delay: 300ms; }
+.anim-delay-400 { animation-delay: 400ms; }
+.anim-delay-500 { animation-delay: 500ms; }
+
+/* Personalización de fill mode */
+.anim-fill-forwards {
+  animation-fill-mode: forwards;
+}
+
+.anim-fill-backwards {
+  animation-fill-mode: backwards;
+}
+
+.anim-fill-both {
+  animation-fill-mode: both;
+}
+
+/* Personalización de play state */
+.anim-paused {
+  animation-play-state: paused;
+}
+
+.anim-running {
+  animation-play-state: running;
+}

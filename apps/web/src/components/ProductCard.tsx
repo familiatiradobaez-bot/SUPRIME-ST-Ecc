@@ -9,7 +9,7 @@ type ProductCardProps = {
 
 export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps) {
   return (
-    <div className="product-card">
+    <div className="product-card anim-product-card">
       <div className="product-image-wrapper">
         <img
           src={product.image_url}

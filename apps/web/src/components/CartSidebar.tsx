@@ -14,7 +14,7 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
   return (
     <>
       <div className="cart-overlay" onClick={onClose} />
-      <div className="cart-sidebar">
+      <div className="cart-sidebar anim-cart-sidebar">
         <div className="cart-header">
           <h3>Tu Carrito</h3>
           <button className="close-btn" onClick={onClose}>✕</button>

@@ -16,8 +16,8 @@ export function UserPanel({ user, onClose, onLogout, onSaveShipping }: UserPanel
   const [postal, setPostal] = useState(user.shipping?.postal_code || '');
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay anim-modal-overlay" onClick={onClose}>
+      <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Mi Cuenta</h2>
           <button className="close-btn" onClick={onClose}>✕</button>

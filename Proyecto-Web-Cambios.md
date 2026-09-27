@@ -152,3 +152,55 @@ curl http://localhost:8789/api/v1/health
 2. Añadir tests de integración.
 3. Implementar Google OAuth 2.0.
 4. Configurar producción (D1 remoto, dominio propio).
+
+---
+
+## 2026-09-27 (segunda sesión) — Migración a Cloudflare y fragmentación
+
+### Migración a Cloudflare
+
+- Se creó la base de datos D1 remota `suprime-st-ecc-db`.
+- Se aplicaron las migraciones 0001, 0002, 0003 y los datos semilla a la BD remota.
+- Se desplegó el Worker `suprime-st-ecc-api` en Cloudflare Workers.
+- Se conectó el repositorio GitHub a Cloudflare Pages para deploy automático.
+- Se actualizó `config.js` con la URL del Worker.
+
+### URLs de producción
+
+| Servicio | URL |
+|----------|-----|
+| Frontend | `https://suprime-st-ecc.pages.dev` |
+| API | `https://suprime-st-ecc-api.familia-tirado-baez.workers.dev` |
+| Base de datos | Cloudflare D1 (remota) |
+
+### Fragmentación de App.tsx
+
+- Se fragmentó `App.tsx` (1000+ líneas) en 15 archivos más pequeños:
+  - `components/`: Header, Footer, LoginForm, CheckoutForm, UserPanel, CartSidebar, ProductCard
+  - `hooks/`: useAuth, useCart, useProducts, useApiUrl
+  - `lib/`: api (funciones de API)
+  - `types/`: index (tipos compartidos)
+
+### Funcionalidades implementadas
+
+- **Panel de usuario**: Modal con información de cuenta, vinculación de Google (UI), y datos de envío.
+- **Persistencia de envío**: Los datos de envío se guardan en la BD (tabla `user_shipping`) y se cargan automáticamente al abrir el panel.
+- **Checkout prellenado**: El formulario de checkout se prellena con los datos de envío del perfil.
+- **Login con username**: Se puede iniciar sesión con email o username.
+- **Roles**: Jerarquía owner > admin > stock_manager > customer. El rol no se muestra a usuarios normales.
+
+### Credenciales de prueba
+
+| Campo | Valor |
+|-------|-------|
+| Email | `admin@admin.com` |
+| Username | `Jose` |
+| Contraseña | `123456` |
+| Rol | `owner` |
+
+### Pendiente
+
+1. Página estilo SheIn (departamentos, subdepartamentos, categorías).
+2. Google OAuth real.
+3. Mostrar rol solo a admin+.
+4. Tests de integración.
