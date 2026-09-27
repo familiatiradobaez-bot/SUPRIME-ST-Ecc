@@ -1,9 +1,26 @@
+# Obsidian local config
+.obsidian/
+
+# Node modules
 node_modules/
+
+# Build output
 dist/
-.wrangler/
+
+# Environment variables
 .env
-.env.*
-!.env.example
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
+.env.local
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Wrangler local state
+.wrangler/
+
+# IDE
+.vscode/
+.idea/
