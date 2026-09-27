@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { catalogRoutes } from './modules/catalog/catalog.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
+import { adminRoutes } from './modules/admin/admin.routes';
 
 export type Bindings = {
   DB: D1Database;

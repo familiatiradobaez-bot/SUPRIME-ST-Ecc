@@ -11,6 +11,7 @@ import { CheckoutForm } from './components/CheckoutForm';
 import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
 import { ProductCard } from './components/ProductCard';
+import { AdminPanel } from './components/AdminPanel';
 
 export function App() {
   const apiUrl = useApiUrl();
@@ -23,6 +24,7 @@ export function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const closeMenu = () => setShowMenu(false);
 
@@ -82,6 +84,15 @@ export function App() {
         onCloseMenu={closeMenu}
         onNavClick={handleNavClick}
       />
+
+      {/* Admin Panel - solo visible para admin+ */}
+      {showAdminPanel && user && ['role-admin', 'role-owner', 'role-stock-manager'].includes(user.role_id) && (
+        <AdminPanel
+          onClose={() => setShowAdminPanel(false)}
+          authToken={session?.token || ''}
+          apiUrl={apiUrl}
+        />
+      )}
 
       <div className="layout-main">
         <section className="hero">
