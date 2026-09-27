@@ -84,8 +84,17 @@ export function CheckoutForm({ total, itemCount, loading, defaultName, defaultPh
       )}
 
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Procesando...' : 'Confirmar Compra'}</button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancelar</button>
+        <button type="submit" className="btn btn-primary btn-glow" disabled={loading}>
+          {loading ? (
+            <>
+              <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'white' }}></span>
+              Procesando...
+            </>
+          ) : (
+            'Confirmar Compra'
+          )}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
       </div>
     </form>
   );

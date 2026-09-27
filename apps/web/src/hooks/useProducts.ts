@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Product } from '../types';
 import { useApiUrl } from './useApiUrl';
+
+const PRODUCTS_PER_PAGE = 12;
 
 export function useProducts() {
   const apiUrl = useApiUrl();
@@ -8,6 +10,7 @@ export function useProducts() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +45,7 @@ export function useProducts() {
 
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
+    setCurrentPage(1);
     const filtered = products.filter(p =>
       p.name.toLowerCase().includes(term.toLowerCase()) ||
       p.description.toLowerCase().includes(term.toLowerCase())
@@ -49,12 +53,29 @@ export function useProducts() {
     setFilteredProducts(filtered);
   }, [products]);
 
+  // Pagination
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(start, start + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const goToPage = useCallback((page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  }, [totalPages]);
+
   return {
     products,
     status,
     searchTerm,
     filteredProducts,
+    paginatedProducts,
+    currentPage,
+    totalPages,
     setProducts,
     handleSearch,
+    goToPage,
   };
 }

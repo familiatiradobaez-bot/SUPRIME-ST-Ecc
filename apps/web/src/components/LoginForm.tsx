@@ -1,18 +1,20 @@
 import { useState } from 'react';
 
 type LoginFormProps = {
-  onSubmit: (email: string, password: string, extra?: { username: string; display_name: string }) => void;
+  onSubmit: (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean }) => void;
   onCancel: () => void;
   mode: 'login' | 'register';
   onToggleMode: () => void;
+  loading?: boolean;
 };
 
-export function LoginForm({ onSubmit, onCancel, mode, onToggleMode }: LoginFormProps) {
+export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +30,7 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode }: LoginFormP
       }
       onSubmit(email, password, { username, display_name: displayName || username });
     } else {
-      onSubmit(email, password);
+      onSubmit(email, password, rememberMe ? { rememberMe } : undefined);
     }
   };
 
@@ -83,11 +85,30 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode }: LoginFormP
         />
         {mode === 'register' && <small style={{ color: '#68736b' }}>Mínimo 6 caracteres</small>}
       </div>
+      <div className="form-group remember-me">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            disabled={mode === 'register'}
+          />
+          <span>Permanecer conectado</span>
+        </label>
+      </div>
+
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary">
-          {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
+        <button type="submit" className="btn btn-primary btn-glow btn-truck-drive" disabled={loading}>
+          {loading ? (
+            <>
+              <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'white' }}></span>
+              Procesando...
+            </>
+          ) : (
+            mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'
+          )}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancelar</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
       </div>
       <div className="form-group" style={{ textAlign: 'center', margin: '1rem 0' }}>
         <button

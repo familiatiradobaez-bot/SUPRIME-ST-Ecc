@@ -21,6 +21,11 @@ Thumbs.db
 # Wrangler local state
 .wrangler/
 
+# Google credentials (secret file)
+CliGG.json
+google-credentials.json
+google-credentials*.json
+
 # IDE
 .vscode/
 .idea/

@@ -29,52 +29,46 @@ export function useAuth() {
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Restore session from localStorage on mount
+  // Restore session from cookie on mount
   useEffect(() => {
-    const savedSession = localStorage.getItem('su_prime_session');
-    const savedUser = localStorage.getItem('su_prime_user');
-    if (savedSession && savedUser) {
-      try {
-        const sessionData = JSON.parse(savedSession);
-        const userData = JSON.parse(savedUser);
-        if (sessionData.expires_at && sessionData.expires_at > Math.floor(Date.now() / 1000)) {
-          setSession(sessionData);
-          setUser(userData);
-          // Cargar datos de envío desde la API
-          fetch(`${apiUrl}/auth/me`, {
-            headers: { 'Authorization': `Bearer ${sessionData.token}` },
-          })
-            .then(r => r.json())
-            .then(payload => {
-              if (payload.data?.shipping) {
-                setUser(prev => prev ? { ...prev, shipping: payload.data.shipping } : prev);
-              }
-            })
-            .catch(() => {});
-        } else {
-          localStorage.removeItem('su_prime_session');
-          localStorage.removeItem('su_prime_user');
-        }
-      } catch {
-        localStorage.removeItem('su_prime_session');
-        localStorage.removeItem('su_prime_user');
-      }
+    const getCookie = (name: string): string | null => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+      return null;
+    };
+
+    const token = getCookie('session_token');
+    if (token) {
+      fetch(`${apiUrl}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
+      })
+        .then(r => r.json())
+        .then(payload => {
+          if (payload.data) {
+            setUser(payload.data);
+            setSession({ id: token, token, expires_at: String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) });
+          }
+        })
+        .catch(() => {});
     }
   }, [apiUrl]);
 
-  const handleLogin = useCallback(async (email: string, password: string, extra?: { username: string; display_name: string }) => {
+  const handleLogin = useCallback(async (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean }) => {
     setActionLoading(true);
     setActionError('');
     try {
       const url = loginMode === 'register' ? `${apiUrl}/auth/register` : `${apiUrl}/auth/login`;
       const body = loginMode === 'register'
         ? { email, password, username: extra?.username, display_name: extra?.display_name }
-        : { email, password };
+        : { email, password, rememberMe: extra?.rememberMe };
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        credentials: 'include',
       });
 
       const payload = await response.json();
@@ -86,18 +80,21 @@ export function useAuth() {
             ? 'El usuario ya existe'
             : payload.error === 'INVALID_INPUT'
               ? 'Datos inválidos'
-              : 'Error del servidor';
+              : payload.error === 'RATE_LIMIT_EXCEEDED'
+                ? 'Demasiados intentos. Intenta más tarde.'
+                : payload.error === 'EMAIL_NOT_VERIFIED'
+                  ? 'Debes verificar tu correo electrónico'
+                  : 'Error del servidor';
         throw new Error(errorMsg);
       }
 
       const { user: userData, session: sessionData } = payload.data;
       setUser(userData);
       setSession(sessionData);
-      localStorage.setItem('su_prime_session', JSON.stringify(sessionData));
-      localStorage.setItem('su_prime_user', JSON.stringify(userData));
       // Cargar datos de envío al iniciar sesión
       fetch(`${apiUrl}/auth/me`, {
         headers: { 'Authorization': `Bearer ${sessionData.token}` },
+        credentials: 'include',
       })
         .then(r => r.json())
         .then(meData => {
@@ -119,6 +116,7 @@ export function useAuth() {
         await fetch(`${apiUrl}/auth/logout`, {
           method: 'POST',
           headers: getAuthHeaders(session),
+          credentials: 'include',
         });
       } catch {
         // Ignore logout errors
@@ -126,16 +124,20 @@ export function useAuth() {
     }
     setUser(null);
     setSession(null);
-    localStorage.removeItem('su_prime_session');
-    localStorage.removeItem('su_prime_user');
+    // Clear cookie
+    document.cookie = 'session_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
   }, [apiUrl, session]);
 
   const saveShipping = useCallback(async (data: { full_name: string; phone: string; address: string; city: string; postal_code: string }) => {
     if (!session) throw new Error('No session');
     const response = await fetch(`${apiUrl}/auth/me/shipping`, {
       method: 'PUT',
-      headers: getAuthHeaders(session),
+      headers: {
+        ...getAuthHeaders(session),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(data),
+      credentials: 'include',
     });
     if (!response.ok) throw new Error('Error al guardar');
     setUser(prev => prev ? { ...prev, shipping: { ...data, country: 'España' } } : prev);
@@ -147,6 +149,8 @@ export function useAuth() {
     loginMode,
     actionError,
     actionLoading,
+    setUser,
+    setSession,
     setLoginMode,
     setActionError,
     setActionLoading,

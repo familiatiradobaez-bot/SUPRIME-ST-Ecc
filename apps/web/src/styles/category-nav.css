@@ -2,36 +2,46 @@
 
 .category-nav {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .category-nav-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background: transparent;
   border: none;
-  color: inherit;
-  font-size: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
   padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .category-nav-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  background: var(--pill-hover-bg);
 }
 
 .category-nav-dropdown {
   position: absolute;
-  top: 100%;
-  left: 0;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
   min-width: 250px;
   max-height: 400px;
   overflow-y: auto;
   z-index: 1000;
-  padding: 0.5rem 0;
+  padding: 0.5rem;
 }
 
 .category-nav-item {
@@ -44,11 +54,12 @@
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.2s ease;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
 }
 
 .category-nav-item:hover {
-  background-color: #f5f5f5;
+  background: var(--pill-hover-bg);
 }
 
 .category-nav-icon {
@@ -57,16 +68,17 @@
 
 .category-nav-name {
   font-weight: 500;
-  color: #1a1a2e;
+  color: var(--text-primary);
   flex: 1;
 }
 
 .category-nav-dept {
   font-size: 0.75rem;
-  color: #68736b;
-  background: #f0f0f0;
+  color: var(--text-secondary);
+  background: var(--pill-bg);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--pill-border);
 }
 
 /* Mobile responsive */
@@ -77,7 +89,9 @@
     left: 0;
     right: 0;
     bottom: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     max-height: 60vh;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
   }
 }

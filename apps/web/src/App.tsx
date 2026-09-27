@@ -15,8 +15,8 @@ import { AdminPage } from './pages/AdminPage';
 
 export function App() {
   const apiUrl = useApiUrl();
-  const { user, session, loginMode, actionError, actionLoading, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, decodeTokenRole, hasAdminAccess } = useAuth();
-  const { products, status, searchTerm, filteredProducts, setProducts, handleSearch } = useProducts();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
 
   const [showCart, setShowCart] = useState(false);
@@ -69,6 +69,31 @@ export function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  // Handle Google Auth redirect with success indicator
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const loginSuccess = params.get('login') === 'success';
+    const provider = params.get('provider');
+    
+    if (loginSuccess && provider === 'google') {
+      // Cookie was set by server, fetch user data
+      fetch(`${apiUrl}/auth/me`, {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+        .then(r => r.json())
+        .then(payload => {
+          if (payload.data) {
+            setUser(payload.data);
+          }
+        })
+        .catch(() => {});
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [apiUrl]);
+
   // Vista admin completamente separada - oculta toda la tienda
   if (showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || ''))) {
     return (
@@ -114,7 +139,7 @@ export function App() {
           <h1>Bienvenido a SUPRIME</h1>
           <p>La mejor selección de productos premium. Calidad, estilo y excelencia en cada compra.</p>
           <div className="hero-actions">
-            <button className="btn btn-primary" onClick={scrollToProducts}>
+            <button className="btn btn-primary btn-truck-drive" onClick={scrollToProducts}>
               🛍️ Explorar Tienda
             </button>
             <button className="btn btn-secondary" onClick={scrollToProducts}>📚 Ver Catálogo</button>
@@ -174,16 +199,39 @@ export function App() {
                     <p>{searchTerm ? 'No encontramos productos que coincidan con tu búsqueda.' : 'Aún no hay productos disponibles.'}</p>
                   </div>
                 ) : (
-                  <div className="product-grid">
-                    {filteredProducts.map((product) => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        onAddToCart={handleAddToCart}
-                        isAdded={addedToCartId === product.id}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className="product-grid">
+                      {paginatedProducts.map((product) => (
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          onAddToCart={handleAddToCart}
+                          isAdded={addedToCartId === product.id}
+                        />
+                      ))}
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => goToPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                        >
+                          ← Anterior
+                        </button>
+                        <span style={{ display: 'flex', alignItems: 'center', padding: '0 1rem', color: 'var(--text-secondary)' }}>
+                          Página {currentPage} de {totalPages}
+                        </span>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => goToPage(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                        >
+                          Siguiente →
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -215,18 +263,19 @@ export function App() {
       )}
 
       {showLogin && (
-        <div className="modal-overlay" onClick={() => setShowLogin(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
+          <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
+              <h2 className="character-bounce-in">{loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
               <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); }}>✕</button>
             </div>
-            {actionError && <p className="error" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {actionError && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
             <LoginForm
               onSubmit={handleLogin}
               onCancel={() => { setShowLogin(false); setActionError(''); }}
               mode={loginMode}
               onToggleMode={() => { setLoginMode(prev => prev === 'login' ? 'register' : 'login'); setActionError(''); }}
+              loading={actionLoading}
             />
           </div>
         </div>
@@ -260,7 +309,10 @@ export function App() {
                 try {
                   const response = await fetch(`${apiUrl}/orders`, {
                     method: 'POST',
-                    headers: getAuthHeaders(session),
+                    headers: {
+                      ...getAuthHeaders(session),
+                      'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                       items: cart.map(item => {
                         const product = products.find(p => p.id === item.id);
@@ -269,6 +321,7 @@ export function App() {
                       }).filter(Boolean),
                       ...shippingInfo,
                     }),
+                    credentials: 'include',
                   });
 
                   const payload = await response.json();

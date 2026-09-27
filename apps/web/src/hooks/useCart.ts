@@ -1,10 +1,30 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { CartItem, Product } from '../types';
 
+const CART_STORAGE_KEY = 'su_prime_cart';
+
+function loadCartFromStorage(): CartItem[] {
+  try {
+    const saved = localStorage.getItem(CART_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function useCart(products: Product[]) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(loadCartFromStorage);
   const [addedToCartId, setAddedToCartId] = useState<string | null>(null);
   const addedToCartTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist cart to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [cart]);
 
   const handleAddToCart = useCallback((productId: string) => {
     const product = products.find(p => p.id === productId);

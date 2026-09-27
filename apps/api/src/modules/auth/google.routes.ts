@@ -1,20 +1,60 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import type { Bindings } from '../../app';
+
+// Frontend URLs for post-login redirect
+const FRONTEND_URLS = [
+  'https://suprime.xyz',
+  'https://suprime-st-ecc.pages.dev',
+];
+
+// Determine redirect URI based on request origin
+function getRedirectUri(context: { req: { header: (name: string) => string | undefined } }, baseUrl: string): string {
+  const origin = context.req.header('Origin') || context.req.header('Referer');
+  
+  if (origin && origin.includes('suprime.xyz')) {
+    return 'https://suprime.xyz/api/v1/auth/google/callback';
+  }
+  if (origin && origin.includes('pages.dev')) {
+    return 'https://suprime-st-ecc.pages.dev/api/v1/auth/google/callback';
+  }
+  
+  // Fallback to provided base URL
+  return `${baseUrl}/api/v1/auth/google/callback`;
+}
+
+function getFrontendUrl(context: { req: { header: (name: string) => string | undefined } }): string {
+  const origin = context.req.header('Origin') || context.req.header('Referer');
+  
+  if (origin && origin.includes('suprime.xyz')) {
+    return 'https://suprime.xyz';
+  }
+  if (origin && origin.includes('pages.dev')) {
+    return 'https://suprime-st-ecc.pages.dev';
+  }
+  
+  return 'https://suprime.xyz';
+}
 
 export const googleRoutes = new Hono<{ Bindings: Bindings }>();
 
-// Google OAuth configuration
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
-const GOOGLE_CLIENT_SECRET = 'YOUR_GOOGLE_CLIENT_SECRET';
-const GOOGLE_REDIRECT_URI = 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev/api/v1/auth/google/callback';
-
 // GET /auth/google/login - Redirect to Google OAuth
 googleRoutes.get('/login', (context) => {
+  const clientId = context.env.GOOGLE_CLIENT_ID;
+  
+  if (!clientId) {
+    return context.json({ error: 'GOOGLE_AUTH_NOT_CONFIGURED', message: 'Google Client ID not configured' }, 500);
+  }
+
   const state = crypto.randomUUID();
+  const baseUrl = context.req.header('Host') 
+    ? `https://${context.req.header('Host')}`
+    : 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev';
+  
+  const redirectUri = getRedirectUri(context, baseUrl);
+  
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: GOOGLE_REDIRECT_URI,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     state,
@@ -25,6 +65,13 @@ googleRoutes.get('/login', (context) => {
 
 // GET /auth/google/callback - Handle Google OAuth callback
 googleRoutes.get('/callback', async (context) => {
+  const clientId = context.env.GOOGLE_CLIENT_ID;
+  const clientSecret = context.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return context.json({ error: 'GOOGLE_AUTH_NOT_CONFIGURED', message: 'Google OAuth not configured' }, 500);
+  }
+
   const code = context.req.query('code');
   const state = context.req.query('state');
 
@@ -33,20 +80,29 @@ googleRoutes.get('/callback', async (context) => {
   }
 
   try {
+    const baseUrl = context.req.header('Host') 
+      ? `https://${context.req.header('Host')}`
+      : 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev';
+    const redirectUri = getRedirectUri(context, baseUrl);
+
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: GOOGLE_REDIRECT_URI,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
     });
 
-    const tokens = await tokenResponse.json() as { access_token: string };
+    const tokens = await tokenResponse.json() as { access_token?: string; error?: string };
+
+    if (!tokens.access_token) {
+      return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Failed to obtain access token' }, 502);
+    }
 
     // Get user info from Google
     const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -58,7 +114,12 @@ googleRoutes.get('/callback', async (context) => {
       email: string;
       name: string;
       picture: string;
+      error?: string;
     };
+
+    if (!googleUser.email) {
+      return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Failed to get user info' }, 502);
+    }
 
     // Find or create user
     let user = await context.env.DB.prepare(
@@ -87,9 +148,14 @@ googleRoutes.get('/callback', async (context) => {
       'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
     ).bind(sessionId, user.id, expiresAt).run();
 
-    // Redirect to frontend with token
-    return context.redirect(`https://suprime-st-ecc.pages.dev?token=${token}&login=success`);
+    // Set HttpOnly cookie
+    context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`);
+
+    // Redirect to frontend with success indicator
+    const frontendUrl = getFrontendUrl(context);
+    return context.redirect(`${frontendUrl}?login=success&provider=google`);
   } catch (error) {
+    console.error('Google OAuth error:', error);
     return context.json({ error: 'GOOGLE_AUTH_FAILED' }, 500);
   }
 });

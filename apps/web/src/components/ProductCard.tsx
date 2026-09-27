@@ -7,14 +7,22 @@ type ProductCardProps = {
   isAdded: boolean;
 };
 
+// Sanitize HTML to prevent XSS
+function sanitizeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps) {
   return (
     <div className="product-card anim-product-card">
       <div className="product-image-wrapper">
         <img
           src={product.image_url}
-          alt={product.name}
+          alt={sanitizeHtml(product.name)}
           className="product-image"
+          loading="lazy"
           onError={(e) => {
             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="20"%3E📦%3C/text%3E%3C/svg%3E';
           }}
@@ -27,8 +35,8 @@ export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps)
         )}
       </div>
       <div className="product-body">
-        <h3 className="product-name">{product.name}</h3>
-        <p className="product-desc">{product.description}</p>
+        <h3 className="product-name">{sanitizeHtml(product.name)}</h3>
+        <p className="product-desc">{sanitizeHtml(product.description)}</p>
         <div className="product-footer">
           <span className="product-price">{formatPrice(product.price_cents)}</span>
           <span className="product-stock">
@@ -37,7 +45,7 @@ export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps)
         </div>
       </div>
       <button
-        className="btn btn-primary"
+        className={`btn btn-primary ${isAdded ? 'btn-success' : ''}`}
         style={{
           margin: '1rem',
           width: 'calc(100% - 2rem)',

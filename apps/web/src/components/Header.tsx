@@ -33,7 +33,7 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
           />
         </div>
         <div className="header-right">
-          <button className="btn btn-primary btn-sm" onClick={onCartClick}>
+          <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick}>
             🛒 ({cartCount})
           </button>
           {user ? (
@@ -71,11 +71,20 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
         </nav>
       )}
 
-      <nav className="nav">
-        <a href="#products" onClick={(e) => { e.preventDefault(); onNavClick('products'); }}>Tienda</a>
+      <nav className="pill-nav" aria-label="Navegación principal">
+        <a href="#products" className="pill-nav-item active" onClick={(e) => { e.preventDefault(); onNavClick('products'); }} aria-current="page">
+          <span className="pill-icon" aria-hidden="true">🛍️</span>
+          <span>Tienda</span>
+        </a>
         <CategoryNav onCategorySelect={onCategorySelect} />
-        <a href="#about" onClick={(e) => { e.preventDefault(); onNavClick('about'); }}>Sobre Nosotros</a>
-        <a href="#contact" onClick={(e) => { e.preventDefault(); onNavClick('contact'); }}>Contacto</a>
+        <a href="#about" className="pill-nav-item" onClick={(e) => { e.preventDefault(); onNavClick('about'); }}>
+          <span className="pill-icon" aria-hidden="true">ℹ️</span>
+          <span>Nosotros</span>
+        </a>
+        <a href="#contact" className="pill-nav-item" onClick={(e) => { e.preventDefault(); onNavClick('contact'); }}>
+          <span className="pill-icon" aria-hidden="true">📞</span>
+          <span>Contacto</span>
+        </a>
       </nav>
     </header>
   );
