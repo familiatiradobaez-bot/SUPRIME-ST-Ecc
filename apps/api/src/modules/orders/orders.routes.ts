@@ -46,7 +46,7 @@ ordersRoutes.post('/', async (context) => {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     const session = await context.env.DB.prepare(
-      `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+      `SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
     ).bind(token).first();
     if (session) {
       userId = session.user_id as string;
@@ -131,7 +131,7 @@ ordersRoutes.get('/', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {
@@ -157,7 +157,7 @@ ordersRoutes.get('/:id', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {

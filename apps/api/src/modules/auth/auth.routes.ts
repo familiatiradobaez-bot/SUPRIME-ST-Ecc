@@ -105,7 +105,7 @@ authRoutes.post('/login', async (context) => {
 
   const sessionId = generateId();
   const token = generateSessionToken();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+  const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // Unix timestamp
 
   await context.env.DB.prepare(
     'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
@@ -117,6 +117,7 @@ authRoutes.post('/login', async (context) => {
       session: { id: sessionId, token, expires_at: expiresAt },
     },
   });
+
 });
 
 // POST /auth/logout
@@ -128,7 +129,7 @@ authRoutes.post('/logout', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+    `SELECT id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {
@@ -153,7 +154,7 @@ authRoutes.get('/me', async (context) => {
   const session = await context.env.DB.prepare(
     `SELECT s.id, s.expires_at, u.id as user_id, u.username, u.email, u.display_name, u.role_id
      FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.expires_at > datetime('now')`
+     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {
@@ -193,7 +194,7 @@ authRoutes.put('/me/shipping', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {
