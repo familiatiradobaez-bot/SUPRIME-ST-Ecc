@@ -129,7 +129,7 @@ authRoutes.post('/logout', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
+    `SELECT id FROM sessions WHERE id = ?`
   ).bind(token).first();
 
   if (!session) {
@@ -154,7 +154,7 @@ authRoutes.get('/me', async (context) => {
   const session = await context.env.DB.prepare(
     `SELECT s.id, s.expires_at, u.id as user_id, u.username, u.email, u.display_name, u.role_id
      FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+     WHERE s.id = ?`
   ).bind(token).first();
 
   if (!session) {
@@ -194,7 +194,7 @@ authRoutes.put('/me/shipping', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime('%s', 'now')`
+    `SELECT user_id FROM sessions WHERE id = ?`
   ).bind(token).first();
 
   if (!session) {
