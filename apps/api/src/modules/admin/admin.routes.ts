@@ -150,3 +150,56 @@ adminRoutes.get('/audit', async (context) => {
 
   return context.json({ data: result.results });
 });
+
+// POST /admin/products - Create new product
+adminRoutes.post('/products', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  if (!body) {
+    return context.json({ error: 'INVALID_INPUT' }, 400);
+  }
+
+  const { name, description, image_url, price_cents, stock_quantity } = body;
+
+  if (!name || !description || !image_url || price_cents == null || stock_quantity == null) {
+    return context.json({ error: 'MISSING_FIELDS' }, 400);
+  }
+
+  const productId = generateId();
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+  await context.env.DB.prepare(
+    `INSERT INTO products (id, subdepartment_id, name, slug, description, image_url, price_cents, stock_quantity, status)
+     VALUES (?, 'subdep-demo', ?, ?, ?, ?, ?, ?, 'active')`
+  ).bind(productId, name, slug, description, image_url, price_cents, stock_quantity).run();
+
+  return context.json({ data: { id: productId, name, slug } }, 201);
+});
+
+// PUT /admin/products/:id - Update product
+adminRoutes.put('/products/:id', async (context) => {
+  const productId = context.req.param('id');
+  const body = await context.req.json().catch(() => null);
+  if (!body) {
+    return context.json({ error: 'INVALID_INPUT' }, 400);
+  }
+
+  const { name, description, image_url, price_cents, stock_quantity } = body;
+
+  await context.env.DB.prepare(
+    `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
+     WHERE id = ?`
+  ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
+
+  return context.json({ data: { updated: true } });
+});
+
+// DELETE /admin/products/:id - Delete product
+adminRoutes.delete('/products/:id', async (context) => {
+  const productId = context.req.param('id');
+
+  await context.env.DB.prepare(
+    `UPDATE products SET status = 'archived' WHERE id = ?`
+  ).bind(productId).run();
+
+  return context.json({ data: { deleted: true } });
+});
