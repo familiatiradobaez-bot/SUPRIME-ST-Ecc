@@ -30,7 +30,7 @@ adminRoutes.use('*', async (context, next) => {
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
     `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.expires_at > datetime('now')`
+     WHERE s.id = ? AND s.expires_at > datetime('now', 'utc')`
   ).bind(token).first();
 
   if (!session) {
