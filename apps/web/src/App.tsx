@@ -583,14 +583,7 @@ export function App() {
             <a href="#products" onClick={scrollToProducts}>Tienda</a>
             <a href="#about" onClick={closeMenu}>Sobre Nosotros</a>
             <a href="#contact" onClick={closeMenu}>Contacto</a>
-            {user ? (
-              <>
-                <p style={{ padding: '0.5rem 1rem', fontWeight: 600 }}>👤 {user.display_name || user.username}</p>
-                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setShowMenu(false); setShowUserPanel(true); }}>
-                  Mi Cuenta
-                </button>
-              </>
-            ) : (
+            {!user && (
               <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => { setShowMenu(false); setShowLogin(true); }}>
                 👤 Cuenta
               </button>
