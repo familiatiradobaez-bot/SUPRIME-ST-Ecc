@@ -1,0 +1,23 @@
+{
+  "name": "cerebro-ecommerce",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "npm --workspace apps/api run build",
+    "build:web": "npm --workspace apps/web run build",
+    "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "typecheck:api": "npm --workspace apps/api run typecheck",
+    "typecheck:web": "npm --workspace apps/web run typecheck",
+    "db:migrate": "npm --workspace apps/api run db:migrate",
+    "db:seed": "npm --workspace apps/api run db:seed",
+    "network-info": "echo Accede desde tu celular en: && echo http://192.168.0.105:5173"
+  },
+  "workspaces": ["apps/*", "packages/*"],
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
