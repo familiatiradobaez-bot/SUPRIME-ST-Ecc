@@ -89,6 +89,21 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode }: LoginFormP
         </button>
         <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancelar</button>
       </div>
+      <div className="form-group" style={{ textAlign: 'center', margin: '1rem 0' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ width: '100%' }}
+          onClick={() => {
+            const config = (window as any).__APP_CONFIG__;
+            const apiUrl = config?.API_URL || `${window.location.protocol}//${window.location.hostname}:8789/api/v1`;
+            window.location.href = `${apiUrl}/auth/google/login`;
+          }}
+        >
+          🔵 Iniciar sesión con Google
+        </button>
+      </div>
+
       <p className="form-text">
         {mode === 'login' ? (
           <>¿No tienes cuenta? <a href="#signup" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: '#c65d35', cursor: 'pointer' }}>Regístrate aquí</a></>

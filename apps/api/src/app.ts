@@ -4,6 +4,7 @@ import { catalogRoutes } from './modules/catalog/catalog.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
+import { googleRoutes } from './modules/auth/google.routes';
 
 export type Bindings = {
   DB: D1Database;
@@ -47,6 +48,7 @@ export function createApp() {
   api.route('/auth', authRoutes);
   api.route('/orders', ordersRoutes);
   api.route('/admin', adminRoutes);
+  api.route('/auth/google', googleRoutes);
   app.route('/api/v1', api);
 
   return app;
