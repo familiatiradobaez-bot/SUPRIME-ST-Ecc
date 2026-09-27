@@ -28,6 +28,9 @@ export function UserPanel({ user, onClose, onLogout, onSaveShipping }: UserPanel
             <p><strong>Usuario:</strong> {user.username}</p>
             <p><strong>Email:</strong> {user.email}</p>
             <p><strong>Nombre:</strong> {user.display_name}</p>
+            {(user.role_id === 'role-owner' || user.role_id === 'role-admin' || user.role_id === 'role-stock-manager') && (
+              <p><strong>Rol:</strong> {user.role_id.replace('role-', '').replace('_', ' ')}</p>
+            )}
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
