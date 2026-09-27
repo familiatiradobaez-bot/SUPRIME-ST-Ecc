@@ -46,6 +46,7 @@ export function createApp() {
   api.route('/catalog', catalogRoutes);
   api.route('/auth', authRoutes);
   api.route('/orders', ordersRoutes);
+  api.route('/admin', adminRoutes);
   app.route('/api/v1', api);
 
   return app;
