@@ -160,6 +160,11 @@ authRoutes.get('/me', async (context) => {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
 
+  // Load shipping data
+  const shipping = await context.env.DB.prepare(
+    `SELECT full_name, phone, address, city, postal_code, country FROM user_shipping WHERE user_id = ?`
+  ).bind(session.user_id).first();
+
   return context.json({
     data: {
       id: session.user_id,
@@ -167,6 +172,53 @@ authRoutes.get('/me', async (context) => {
       email: session.email,
       display_name: session.display_name,
       role_id: session.role_id,
+      shipping: shipping ? {
+        full_name: shipping.full_name,
+        phone: shipping.phone,
+        address: shipping.address,
+        city: shipping.city,
+        postal_code: shipping.postal_code,
+        country: shipping.country,
+      } : null,
     },
   });
+});
+
+// PUT /auth/me/shipping
+authRoutes.put('/me/shipping', async (context) => {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const token = authHeader.slice(7);
+  const session = await context.env.DB.prepare(
+    `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')`
+  ).bind(token).first();
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  if (!body) {
+    return context.json({ error: 'INVALID_INPUT' }, 400);
+  }
+
+  const { full_name, phone, address, city, postal_code, country } = body;
+
+  await context.env.DB.prepare(
+    `INSERT INTO user_shipping (user_id, full_name, phone, address, city, postal_code, country, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET
+       full_name = excluded.full_name,
+       phone = excluded.phone,
+       address = excluded.address,
+       city = excluded.city,
+       postal_code = excluded.postal_code,
+       country = excluded.country,
+       updated_at = datetime('now')`
+  ).bind(session.user_id, full_name || '', phone || '', address || '', city || '', postal_code || '', country || 'España').run();
+
+  return context.json({ data: { saved: true } });
 });
