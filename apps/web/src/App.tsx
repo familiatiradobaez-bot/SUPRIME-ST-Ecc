@@ -69,6 +69,18 @@ export function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  // Vista admin completamente separada - oculta toda la tienda
+  if (showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || ''))) {
+    return (
+      <AdminPage
+        user={user}
+        sessionToken={session?.token || ''}
+        apiUrl={apiUrl}
+        onBack={() => setShowAdminPanel(false)}
+      />
+    );
+  }
+
   return (
     <div className="layout">
       <Header

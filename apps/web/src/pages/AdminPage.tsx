@@ -125,8 +125,8 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: productName,
-          description: productDesc,
+          name: productName || editingProduct.name,
+          description: productDesc || editingProduct.description,
           image_url: productImage,
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
