@@ -26,13 +26,15 @@ export function createApp() {
     'http://localhost:5176',
     'http://192.168.0.105:5176',
     'http://192.168.0.105:5173',
-    'https://phases-exceptional-wheels-sunset.trycloudflare.com',
+    'https://suprime-st-ecc.pages.dev',
     'https://anew-straw-goggles.ngrok-free.dev',
   ];
 
   api.use('*', cors({ origin: (origin) => {
     if (!origin) return null;
     if (allowedOrigins.includes(origin)) return origin;
+    // Permitir cualquier subdominio de pages.dev (Cloudflare Pages)
+    if (origin.endsWith('.pages.dev')) return origin;
     // Permitir cualquier subdominio de trycloudflare.com
     if (origin.endsWith('.trycloudflare.com')) return origin;
     // Permitir cualquier subdominio de ngrok-free.dev
