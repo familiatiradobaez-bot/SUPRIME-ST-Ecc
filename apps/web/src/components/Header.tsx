@@ -11,13 +11,14 @@ type HeaderProps = {
   onLoginClick: () => void;
   onUserPanelClick: () => void;
   onAdminClick?: () => void;
+  isAdmin?: boolean;
   showMenu: boolean;
   onCloseMenu: () => void;
   onNavClick: (section: string) => void;
   onCategorySelect?: (categorySlug: string) => void;
 };
 
-export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, showMenu, onCloseMenu, onNavClick, onCategorySelect }: HeaderProps) {
+export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
@@ -40,7 +41,7 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
               <button className="btn btn-secondary btn-sm" onClick={onUserPanelClick}>
                 👤 {user.display_name || user.username}
               </button>
-              {['role-admin', 'role-owner', 'role-stock-manager'].includes(user.role_id) && (
+              {isAdmin && (
                 <button className="admin-btn" onClick={onAdminClick}>
                   ⚙️ Admin
                 </button>

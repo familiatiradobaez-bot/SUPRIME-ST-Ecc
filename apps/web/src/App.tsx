@@ -15,7 +15,7 @@ import { AdminPanel } from './components/AdminPanel';
 
 export function App() {
   const apiUrl = useApiUrl();
-  const { user, session, loginMode, actionError, actionLoading, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, setProducts, handleSearch } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
 
@@ -80,6 +80,8 @@ export function App() {
         onMenuClick={() => setShowMenu(!showMenu)}
         onLoginClick={() => setShowLogin(true)}
         onUserPanelClick={() => setShowUserPanel(true)}
+        onAdminClick={() => setShowAdminPanel(true)}
+        isAdmin={hasAdminAccess(decodeTokenRole(session?.token || ''))}
         showMenu={showMenu}
         onCloseMenu={closeMenu}
         onNavClick={handleNavClick}

@@ -3,6 +3,24 @@ import type { User, Session } from '../types';
 import { useApiUrl } from './useApiUrl';
 import { getAuthHeaders } from '../lib/api';
 
+// Decode token to get user role (token format: base64(userId:role:timestamp))
+function decodeTokenRole(token: string): string | null {
+  try {
+    const decoded = atob(token);
+    const parts = decoded.split(':');
+    return parts[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+// Check if user has admin access
+function hasAdminAccess(roleId: string | null): boolean {
+  if (!roleId) return false;
+  const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
+  return adminRoles.includes(roleId);
+}
+
 export function useAuth() {
   const apiUrl = useApiUrl();
   const [user, setUser] = useState<User | null>(null);
@@ -124,5 +142,7 @@ export function useAuth() {
     handleLogin,
     handleLogout,
     saveShipping,
+    decodeTokenRole,
+    hasAdminAccess,
   };
 }
