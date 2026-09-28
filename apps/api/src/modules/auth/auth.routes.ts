@@ -20,24 +20,34 @@ const registerSchema = z.object({
   display_name: z.string().min(1).max(100),
 });
 
-// Rate limiting storage (in-memory - use KV in production)
+// Rate limiting storage (in-memory - use KV in production).
+// Mapas separados por flujo: compartir uno solo bloqueaba login tras pedir OTPs.
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const forgotAttempts = new Map<string, { count: number; resetAt: number }>();
 
-function checkRateLimit(ip: string): boolean {
+function checkBucket(bucket: Map<string, { count: number; resetAt: number }>, ip: string, max: number, windowMs: number): boolean {
   const now = Date.now();
-  const attempt = loginAttempts.get(ip);
-  
+  const attempt = bucket.get(ip);
+
   if (!attempt || attempt.resetAt < now) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 }); // 15 min window
+    bucket.set(ip, { count: 1, resetAt: now + windowMs });
     return true;
   }
-  
-  if (attempt.count >= 5) {
+
+  if (attempt.count >= max) {
     return false;
   }
-  
+
   attempt.count++;
   return true;
+}
+
+function checkRateLimit(ip: string): boolean {
+  return checkBucket(loginAttempts, ip, 5, 15 * 60 * 1000); // login: 5 / 15 min
+}
+
+function checkForgotRateLimit(ip: string): boolean {
+  return checkBucket(forgotAttempts, ip, 3, 15 * 60 * 1000); // forgot: 3 / 15 min
 }
 
 async function hashPassword(password: string, salt?: string): Promise<string> {
@@ -132,80 +142,59 @@ async function issueOtp(env: Bindings, email: string): Promise<{ sent: boolean; 
   return { sent, cooldown: 0 };
 }
 
-// TOTP verification using HMAC-SHA1
+import { verifyTOTP as verifyTotpLib, generateTotpSecret } from '../../lib/totp';
+
+// Acepta secretos nuevos (base32) y legacy (hex de 64 chars, tratados como UTF-8).
+// Los legacy se validan con el algoritmo antiguo inline para no romper 2FA existentes.
 function verifyTOTP(code: string, secret: string): boolean {
   if (!/^\d{6}$/.test(code)) return false;
-  
+  if (/^[A-Z2-7]+=*$/.test(secret)) {
+    return verifyTotpLib(code, secret);
+  }
+  return verifyTotpLegacy(code, secret);
+}
+
+function verifyTotpLegacy(code: string, secret: string): boolean {
+  const keyData = new TextEncoder().encode(secret);
   const timeStep = Math.floor(Date.now() / 1000 / 30);
-  // Check current and adjacent time steps for clock drift
   for (let i = -1; i <= 1; i++) {
-    if (generateTOTP(secret, timeStep + i) === code) return true;
+    const timeBuffer = new ArrayBuffer(8);
+    const timeView = new DataView(timeBuffer);
+    timeView.setUint32(4, timeStep + i, false);
+    const hmacResult = hmacSyncLegacy(keyData, new Uint8Array(timeBuffer));
+    const offset = hmacResult[hmacResult.length - 1] & 0x0f;
+    const binary = ((hmacResult[offset] & 0x7f) << 24) |
+                   ((hmacResult[offset + 1] & 0xff) << 16) |
+                   ((hmacResult[offset + 2] & 0xff) << 8) |
+                   (hmacResult[offset + 3] & 0xff);
+    if (String(binary % 1000000).padStart(6, '0') === code) return true;
   }
   return false;
 }
 
-function generateTOTP(secret: string, timeStep: number): string {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  
-  // Convert time step to 8-byte buffer
-  const timeBuffer = new ArrayBuffer(8);
-  const timeView = new DataView(timeBuffer);
-  timeView.setUint32(4, timeStep, false);
-  
-  // HMAC-SHA1
-  const key = crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-1' },
-    false,
-    ['sign']
-  );
-  
-  // Synchronous HMAC using SubtleCrypto is not possible, so we use a simplified approach
-  // In production, use a proper TOTP library
-  const hmacResult = hmacSync(keyData, new Uint8Array(timeBuffer));
-  
-  // Dynamic truncation
-  const offset = hmacResult[hmacResult.length - 1] & 0x0f;
-  const binary = ((hmacResult[offset] & 0x7f) << 24) |
-                 ((hmacResult[offset + 1] & 0xff) << 16) |
-                 ((hmacResult[offset + 2] & 0xff) << 8) |
-                 (hmacResult[offset + 3] & 0xff);
-  
-  const otp = binary % 1000000;
-  return otp.toString().padStart(6, '0');
-}
-
-// Synchronous HMAC-SHA1 implementation
-function hmacSync(key: Uint8Array, message: Uint8Array): Uint8Array {
+function hmacSyncLegacy(key: Uint8Array, message: Uint8Array): Uint8Array {
   const blockSize = 64;
   let keyBytes: Uint8Array = new Uint8Array(key);
-  
   if (keyBytes.length > blockSize) {
-    keyBytes = sha1(keyBytes) as Uint8Array;
+    keyBytes = sha1Legacy(keyBytes);
   }
-  
   if (keyBytes.length < blockSize) {
     const padded = new Uint8Array(blockSize);
     padded.set(keyBytes);
     keyBytes = padded;
   }
-  
   const ipad = new Uint8Array(blockSize);
   const opad = new Uint8Array(blockSize);
   for (let i = 0; i < blockSize; i++) {
     ipad[i] = keyBytes[i] ^ 0x36;
     opad[i] = keyBytes[i] ^ 0x5c;
   }
-  
-  const inner = sha1(concat(ipad, message));
-  return sha1(concat(opad, inner));
+  const inner = sha1Legacy(concatLegacy(ipad, message));
+  return sha1Legacy(concatLegacy(opad, inner));
 }
 
-function sha1(data: Uint8Array): Uint8Array {
-  // Simple SHA-1 implementation for TOTP
-  // In production, use crypto.subtle.digest('SHA-1', data)
+function sha1Legacy(data: Uint8Array): Uint8Array {
+  // Implementación SHA-1 legacy (conservada para 2FA ya configurados)
   const msgLen = data.length;
   const bitLen = msgLen * 8;
   
@@ -280,7 +269,7 @@ function sha1(data: Uint8Array): Uint8Array {
   return result;
 }
 
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+function concatLegacy(a: Uint8Array, b: Uint8Array): Uint8Array {
   const result = new Uint8Array(a.length + b.length);
   result.set(a);
   result.set(b, a.length);
@@ -423,7 +412,7 @@ authRoutes.post('/resend-otp', async (context) => {
 // POST /auth/forgot-password - Enviar OTP para recuperar contraseña (respuesta genérica anti-enumeración)
 authRoutes.post('/forgot-password', async (context) => {
   const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
-  if (!checkRateLimit(clientIp)) {
+  if (!checkForgotRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -642,9 +631,8 @@ authRoutes.post('/me/totp/setup', async (context) => {
   }
 
   // Generate TOTP secret (32 bytes hex = 64 chars)
-  const secretArray = new Uint8Array(32);
-  crypto.getRandomValues(secretArray);
-  const secret = Array.from(secretArray, b => b.toString(16).padStart(2, '0')).join('');
+  // Secreto base32 de 160 bits (estándar otpauth, compatible con Authenticator/Authy)
+  const secret = generateTotpSecret();
 
   // Store secret temporarily (not enabled until verified)
   await context.env.DB.prepare(

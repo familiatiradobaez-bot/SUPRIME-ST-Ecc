@@ -7,20 +7,13 @@ type ProductCardProps = {
   isAdded: boolean;
 };
 
-// Sanitize HTML to prevent XSS
-function sanitizeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps) {
   return (
     <div className="product-card anim-product-card">
       <div className="product-image-wrapper">
         <img
           src={product.image_url}
-          alt={sanitizeHtml(product.name)}
+          alt={product.name}
           className="product-image"
           loading="lazy"
           onError={(e) => {
@@ -35,8 +28,8 @@ export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps)
         )}
       </div>
       <div className="product-body">
-        <h3 className="product-name">{sanitizeHtml(product.name)}</h3>
-        <p className="product-desc">{sanitizeHtml(product.description)}</p>
+        <h3 className="product-name">{product.name}</h3>
+        <p className="product-desc">{product.description}</p>
         <div className="product-footer">
           <span className="product-price">{formatPrice(product.price_cents)}</span>
           <span className="product-stock">

@@ -74,12 +74,9 @@ const up = await j(r);
 check('upload 1px 200 + url ik.imagekit', r.status === 200 && (up.data?.url || '').includes('ik.imagekit.io'), r.status);
 
 console.log('== Órdenes/stock (sin mutar) ==');
+const OH = { ...H, 'Content-Type': 'application/json' };
 r = await fetch(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
 check('orders body vacío 400', r.status === 400, r.status);
-// login owner para pruebas de órdenes con auth
-r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', password: '123456' }) });
-const lj2 = await j(r);
-const OH = { 'Authorization': `Bearer ${lj2.data?.session?.token}`, 'Content-Type': 'application/json' };
 r = await fetch(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ product_id: products[0]?.id || 'x', quantity: 1 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: '1', shipping_address: 'X', payment_method: 'paypal' }) });
 check('orders sin auth 401 (login requerido)', r.status === 401, r.status);
 if (products.length) {

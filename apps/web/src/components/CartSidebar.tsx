@@ -10,13 +10,6 @@ type CartSidebarProps = {
   onCheckout: () => void;
 };
 
-// Sanitize HTML to prevent XSS
-function sanitizeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout }: CartSidebarProps) {
   return (
     <>
@@ -36,12 +29,12 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
                 return product ? (
                   <div key={item.id} className="cart-item">
                     <div className="cart-item-info">
-                      <p className="cart-item-name">{sanitizeHtml(product.name)}</p>
+                      <p className="cart-item-name">{product.name}</p>
                       <p className="cart-item-price">
                         {formatPrice(product.price_cents)} x {item.quantity}
                       </p>
                     </div>
-                    <button className="btn-remove" onClick={() => onRemove(item.id)} aria-label={`Eliminar ${sanitizeHtml(product.name)} del carrito`}>
+                    <button className="btn-remove" onClick={() => onRemove(item.id)} aria-label={`Eliminar ${product.name} del carrito`}>
                       🗑️
                     </button>
                   </div>
