@@ -18,7 +18,7 @@ export function useApiUrl(): string {
 
     // 3. Si se accede desde el dominio personalizado suprime.xyz (API en subdominio)
     if (host.includes('suprime.xyz')) {
-      return 'https://api.suprime.xyz';
+      return 'https://api.suprime.xyz/api/v1';
     }
 
     // 4. Si se accede desde ngrok

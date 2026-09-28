@@ -128,11 +128,22 @@ export function App() {
   // la cookie HttpOnly no es legible cross-subdominio; se limpia la URL enseguida)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const loginSuccess = params.get('login') === 'success';
+    const loginResult = params.get('login');
     const provider = params.get('provider');
+
+    if (loginResult === 'error' && provider === 'google') {
+      const reason = params.get('reason');
+      setActionError(reason === 'invalid_state'
+        ? 'Google rechazó el inicio de sesión (sesión caducada). Inténtalo de nuevo.'
+        : 'Error al iniciar sesión con Google. Inténtalo de nuevo.');
+      setShowLogin(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     const token = params.get('token');
 
-    if (loginSuccess && provider === 'google' && token) {
+    if (loginResult === 'success' && provider === 'google' && token) {
       persistSession(token, String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), true);
       setSession({ id: token, token, expires_at: String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) });
       fetch(`${apiUrl}/auth/me`, {

@@ -115,8 +115,9 @@ const setCookie = r.headers.get('set-cookie') || '';
 check('google login fija cookie oauth_state', setCookie.includes('oauth_state='), setCookie.slice(0, 80));
 r = await fetch(`${API}/auth/google/callback`);
 check('callback sin code 400', r.status === 400, r.status);
-r = await fetch(`${API}/auth/google/callback?code=fake&state=fake`);
-check('callback state inválido 403', r.status === 403, r.status);
+r = await fetch(`${API}/auth/google/callback?code=fake&state=fake`, { redirect: 'manual' });
+const errLoc = r.headers.get('location') || '';
+check('callback state inválido redirige con error', r.status === 302 && errLoc.includes('login=error'), `${r.status} ${errLoc.slice(0, 80)}`);
 
 console.log('== Password reset ==');
 r = await fetch(`${API}/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'nadie-xyz-123@example.com' }) });

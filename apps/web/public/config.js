@@ -3,6 +3,6 @@
 // Para producción, simplemente cambia API_URL por la URL real de tu API
 
 window.__APP_CONFIG__ = {
-  API_URL: 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev/api/v1',
+  API_URL: 'https://api.suprime.xyz/api/v1',
   ENV: 'production',
 };

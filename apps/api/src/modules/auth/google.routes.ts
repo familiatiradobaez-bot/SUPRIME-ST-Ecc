@@ -79,12 +79,14 @@ googleRoutes.get('/callback', async (context) => {
     return context.json({ error: 'GOOGLE_AUTH_FAILED' }, 400);
   }
 
-  // Validar state contra la cookie (anti-CSRF). Sin match se rechaza el login.
+  // Validar state contra la cookie (anti-CSRF). Sin match se rechaza el login
+  // redirigiendo al front con error legible (no JSON crudo).
   const cookieHeader = context.req.header('Cookie') || '';
   const stateCookie = cookieHeader.split(';').map((p) => p.trim()).find((p) => p.startsWith('oauth_state='));
   const expectedState = stateCookie ? stateCookie.slice('oauth_state='.length) : '';
   if (!state || !expectedState || state !== expectedState) {
-    return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Invalid OAuth state' }, 403);
+    const frontendUrl = getFrontendUrl(context);
+    return context.redirect(`${frontendUrl}?login=error&provider=google&reason=invalid_state`);
   }
 
   try {
