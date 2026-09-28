@@ -69,14 +69,20 @@ export function createApp() {
     await next();
   });
 
-  api.use('*', cors({ origin: (origin) => {
-    if (!origin) return null;
-    if (allowedOrigins.includes(origin)) return origin;
-    if (origin.endsWith('.pages.dev')) return origin;
-    if (origin.endsWith('.trycloudflare.com')) return origin;
-    if (origin.endsWith('.ngrok-free.dev')) return origin;
-    return null;
-  }}));
+  api.use('*', cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      if (allowedOrigins.includes(origin)) return origin;
+      if (origin.endsWith('.pages.dev')) return origin;
+      if (origin.endsWith('.trycloudflare.com')) return origin;
+      if (origin.endsWith('.ngrok-free.dev')) return origin;
+      return null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposeHeaders: ['Set-Cookie'],
+  }));
   api.get('/health', (context) => context.json({ status: 'ok', environment: context.env.APP_ENV }));
   api.route('/catalog', catalogRoutes);
   api.route('/auth', authRoutes);
