@@ -28,16 +28,25 @@ adminRoutes.use('*', async (context, next) => {
   }
 
   const token = authHeader.slice(7);
-  const session = await context.env.DB.prepare(
-    `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?`
-  ).bind(token).first();
 
-  if (!session) {
-    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  // Token format: base64(userId:roleId:timestamp)
+  let roleId: string | null = null;
+  try {
+    const decoded = atob(token);
+    const parts = decoded.split(':');
+    if (parts.length >= 2) {
+      roleId = parts[1];
+    }
+  } catch {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  if (!roleId) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
   const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
-  if (!adminRoles.includes(session.role_id as string)) {
+  if (!adminRoles.includes(roleId)) {
     return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
   }
 

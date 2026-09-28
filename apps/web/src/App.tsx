@@ -26,6 +26,13 @@ export function App() {
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
+  // Cerrar modal de login automáticamente cuando el usuario inicia sesión
+  useEffect(() => {
+    if (user && showLogin) {
+      setShowLogin(false);
+    }
+  }, [user, showLogin]);
+
   const closeMenu = () => setShowMenu(false);
 
   const scrollToProducts = () => {
