@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
+import { useCurrency } from './hooks/useCurrency';
+import { CURRENCIES } from './lib/api';
 import { useProducts } from './hooks/useProducts';
 import { useApiUrl } from './hooks/useApiUrl';
 import { getAuthHeaders } from './lib/api';
@@ -20,6 +22,7 @@ export function App() {
   const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
+  const { currency, setCurrency } = useCurrency();
 
   const [showCart, setShowCart] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -207,6 +210,20 @@ export function App() {
               <p className="section-subtitle">
                 {searchTerm ? `${filteredProducts.length} resultados para "${searchTerm}"` : `${products.length} productos disponibles`}
               </p>
+              <div style={{ marginTop: '0.5rem' }}>
+                <label htmlFor="currency-select" style={{ marginRight: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Moneda:</label>
+                <select
+                  id="currency-select"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="currency-select"
+                  aria-label="Seleccionar moneda"
+                >
+                  {Object.entries(CURRENCIES).map(([code, meta]) => (
+                    <option key={code} value={code}>{meta.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {status === 'loading' && (
@@ -238,6 +255,7 @@ export function App() {
                           product={product}
                           onAddToCart={handleAddToCartGated}
                           isAdded={addedToCartId === product.id}
+                          currency={currency}
                         />
                       ))}
                     </div>
@@ -290,6 +308,7 @@ export function App() {
           onClose={() => setShowCart(false)}
           onRemove={handleRemoveFromCart}
           onCheckout={handleCheckout}
+          currency={currency}
         />
       )}
 

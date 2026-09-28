@@ -90,7 +90,7 @@ Response:
 - Validación de URLs manuales (`POST /upload/validate-url`)
 - Todas las subidas pasan por el servidor
 
-## Nota: ruta ImgBB legacy
+## Nota: ruta ImgBB eliminada
 
-`POST /upload/imgbb` sigue en el backend pero el front ya no la usa
-(ImgBB devuelve `code 103 forbidden` para estas keys). No requiere acción.
+La antigua `POST /upload/imgbb` se eliminó (ImgBB devolvía `code 103 forbidden`
+para estas keys). El flujo global es ImageKit.

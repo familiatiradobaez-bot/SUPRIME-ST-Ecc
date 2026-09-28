@@ -20,7 +20,6 @@ export type Bindings = {
   DB: D1Database;
   APP_ENV: string;
   EMAIL?: EmailBinding;
-  IMGBB_API_KEY?: string;
   IMAGEKIT_PRIVATE_KEY?: string;
   IMAGEKIT_PUBLIC_KEY?: string;
   IMAGEKIT_URL_ENDPOINT?: string;
@@ -73,7 +72,7 @@ export function createApp() {
     }
 
     // Security headers
-    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://*.trycloudflare.com https://*.ngrok-free.dev https://*.pages.dev http://localhost:* http://127.0.0.1:* http://192.168.*:* https://api.imgbb.com https://api.qrserver.com;");
+    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://*.trycloudflare.com https://*.ngrok-free.dev https://*.pages.dev http://localhost:* http://127.0.0.1:* http://192.168.*:* https://api.qrserver.com;");
     context.header('X-XSS-Protection', '1; mode=block');
     context.header('X-Frame-Options', 'DENY');
     context.header('X-Content-Type-Options', 'nosniff');

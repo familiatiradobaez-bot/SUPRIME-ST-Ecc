@@ -55,6 +55,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     fetchStats();
     if (activeTab === 'products') fetchProducts();
     if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'orders') fetchOrders(0);
   }, [activeTab]);
 
   // Cerrar sidebar con Escape
@@ -213,6 +214,28 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   };
 
   const [users, setUsers] = useState<any[]>([]);
+
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersPage, setOrdersPage] = useState(0);
+  const [ordersTotal, setOrdersTotal] = useState(0);
+  const ORDERS_PAGE_SIZE = 20;
+
+  const fetchOrders = async (page: number) => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/orders?limit=${ORDERS_PAGE_SIZE}&offset=${page * ORDERS_PAGE_SIZE}`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.data) {
+        setOrders(data.data);
+        setOrdersPage(page);
+        setOrdersTotal(data.pagination?.total || 0);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
 
   const createProduct = async () => {
     try {
@@ -652,8 +675,58 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
           <div className="admin-orders">
-            <h2>Gestión de Órdenes</h2>
-            <p>Las órdenes se mostrarán aquí</p>
+            <h2>Gestión de Órdenes{ordersTotal > 0 && ` (${ordersTotal})`}</h2>
+            {orders.length === 0 ? (
+              <p>No hay órdenes todavía.</p>
+            ) : (
+              <>
+                <div className="table-wrapper">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Total</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map(o => (
+                        <tr key={o.id}>
+                          <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{String(o.id).slice(0, 8)}…</td>
+                          <td>{o.username || o.email || '—'}</td>
+                          <td>{(o.total_cents / 100).toFixed(2)}€</td>
+                          <td>{o.status}</td>
+                          <td>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-ES') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {ordersTotal > ORDERS_PAGE_SIZE && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => fetchOrders(ordersPage - 1)}
+                      disabled={ordersPage === 0}
+                    >
+                      ← Anterior
+                    </button>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Página {ordersPage + 1} de {Math.ceil(ordersTotal / ORDERS_PAGE_SIZE)}
+                    </span>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => fetchOrders(ordersPage + 1)}
+                      disabled={(ordersPage + 1) * ORDERS_PAGE_SIZE >= ordersTotal}
+                    >
+                      Siguiente →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

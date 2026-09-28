@@ -5,9 +5,10 @@ type ProductCardProps = {
   product: Product;
   onAddToCart: (productId: string) => void;
   isAdded: boolean;
+  currency?: string;
 };
 
-export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps) {
+export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR' }: ProductCardProps) {
   return (
     <div className="product-card anim-product-card">
       <div className="product-image-wrapper">
@@ -31,7 +32,7 @@ export function ProductCard({ product, onAddToCart, isAdded }: ProductCardProps)
         <h3 className="product-name">{product.name}</h3>
         <p className="product-desc">{product.description}</p>
         <div className="product-footer">
-          <span className="product-price">{formatPrice(product.price_cents)}</span>
+          <span className="product-price">{formatPrice(product.price_cents, currency)}</span>
           <span className="product-stock">
             {product.stock_quantity > 0 ? `${product.stock_quantity} disponibles` : 'Sin stock'}
           </span>

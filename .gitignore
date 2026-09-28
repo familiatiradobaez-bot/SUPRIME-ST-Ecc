@@ -13,6 +13,9 @@ dist/
 .dev.vars
 .dev.vars.local
 
+# Build output
+dist-api/
+
 # Logs
 *.log
 

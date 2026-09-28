@@ -136,17 +136,28 @@ adminRoutes.put('/users/:id/role', async (context) => {
   return context.json({ data: { updated: true } });
 });
 
-// GET /admin/orders - List all orders
+// GET /admin/orders - List orders (paginado: ?limit=50 por defecto, máx 100)
 adminRoutes.get('/orders', async (context) => {
-  const result = await context.env.DB.prepare(
-    `SELECT o.id, o.status, o.total_cents, o.created_at,
-            u.username, u.email
-     FROM orders o
-     LEFT JOIN users u ON u.id = o.user_id
-     ORDER BY o.created_at DESC`
-  ).all();
+  const limit = Math.min(Math.max(parseInt(context.req.query('limit') || '50', 10) || 50, 1), 100);
+  const offset = Math.max(parseInt(context.req.query('offset') || '0', 10) || 0, 0);
 
-  return context.json({ data: result.results });
+  const [result, total] = await context.env.DB.batch([
+    context.env.DB.prepare(
+      `SELECT o.id, o.status, o.total_cents, o.created_at,
+              u.username, u.email
+       FROM orders o
+       LEFT JOIN users u ON u.id = o.user_id
+       ORDER BY o.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset),
+    context.env.DB.prepare('SELECT COUNT(*) as count FROM orders'),
+  ]);
+
+  const totalCount = ((total.results?.[0] as { count?: number } | undefined)?.count) || 0;
+
+  return context.json({
+    data: result.results,
+    pagination: { limit, offset, total: totalCount },
+  });
 });
 
 // GET /admin/settings - Get store settings

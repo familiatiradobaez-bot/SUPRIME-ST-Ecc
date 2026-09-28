@@ -50,6 +50,12 @@ function checkForgotRateLimit(ip: string): boolean {
   return checkBucket(forgotAttempts, ip, 3, 15 * 60 * 1000); // forgot: 3 / 15 min
 }
 
+const otpVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function checkOtpVerifyRateLimit(ip: string): boolean {
+  return checkBucket(otpVerifyAttempts, ip, 20, 15 * 60 * 1000); // verify/reset: 20 / 15 min por IP (además del límite por email)
+}
+
 async function hashPassword(password: string, salt?: string): Promise<string> {
   const useSalt = salt || crypto.randomUUID().replace(/-/g, '');
   const encoder = new TextEncoder();
@@ -318,6 +324,11 @@ authRoutes.post('/register', async (context) => {
 
 // POST /auth/verify-otp - Validar código OTP y activar cuenta (con auto-login)
 authRoutes.post('/verify-otp', async (context) => {
+  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  if (!checkOtpVerifyRateLimit(clientIp)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
   const body = await context.req.json().catch(() => null);
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   const code = typeof body?.code === 'string' ? body.code.trim() : '';
@@ -437,6 +448,11 @@ authRoutes.post('/forgot-password', async (context) => {
 
 // POST /auth/reset-password - Restablecer contraseña con OTP
 authRoutes.post('/reset-password', async (context) => {
+  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  if (!checkOtpVerifyRateLimit(clientIp)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
   const body = await context.req.json().catch(() => null);
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   const code = typeof body?.code === 'string' ? body.code.trim() : '';

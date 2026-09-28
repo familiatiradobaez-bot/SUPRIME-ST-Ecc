@@ -8,9 +8,10 @@ type CartSidebarProps = {
   onClose: () => void;
   onRemove: (productId: string) => void;
   onCheckout: () => void;
+  currency?: string;
 };
 
-export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout }: CartSidebarProps) {
+export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout, currency = 'EUR' }: CartSidebarProps) {
   return (
     <>
       <div className="cart-overlay" onClick={onClose} />
@@ -31,7 +32,7 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
                     <div className="cart-item-info">
                       <p className="cart-item-name">{product.name}</p>
                       <p className="cart-item-price">
-                        {formatPrice(product.price_cents)} x {item.quantity}
+                        {formatPrice(product.price_cents, currency)} x {item.quantity}
                       </p>
                     </div>
                     <button className="btn-remove" onClick={() => onRemove(item.id)} aria-label={`Eliminar ${product.name} del carrito`}>
@@ -47,7 +48,7 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
           <div className="cart-footer">
             <div className="cart-total">
               <strong>Total:</strong>
-              <strong>{formatPrice(cartTotal)}</strong>
+              <strong>{formatPrice(cartTotal, currency)}</strong>
             </div>
             <button className="btn btn-primary btn-glow" style={{ width: '100%', marginTop: '1rem' }} onClick={onCheckout}>
               💳 Proceder al Pago
