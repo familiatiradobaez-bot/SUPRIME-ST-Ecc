@@ -177,6 +177,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     try {
       const res = await fetch(`${apiUrl}/admin/stats`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.data) setStats(data.data);
@@ -202,6 +203,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     try {
       const res = await fetch(`${apiUrl}/admin/users`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.data) setUsers(data.data);
@@ -220,6 +222,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: productName,
           description: productDesc,
@@ -228,7 +231,6 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
         }),
-        credentials: 'include',
       });
       const data = await res.json();
       if (data.data) {
@@ -253,6 +255,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: productName || editingProduct.name,
           description: productDesc || editingProduct.description,
@@ -261,7 +264,6 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
         }),
-        credentials: 'include',
       });
       const data = await res.json();
       if (data.data) {
@@ -283,6 +285,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       const res = await fetch(`${apiUrl}/admin/products/${productId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
       });
       if (res.ok) {
         fetchProducts();
