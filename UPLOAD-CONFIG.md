@@ -66,6 +66,21 @@ Errores: `SERVER_CONFIG_ERROR` (falta private key), `INVALID_INPUT`,
 `FILE_TOO_LARGE` (>5MB), `INVALID_TYPE` (solo JPEG/PNG/GIF/WebP),
 `RATE_LIMIT_EXCEEDED` (20 subidas / 15 min por IP), `UPLOAD_FAILED`.
 
+### GET /api/v1/upload/images (galería, requiere admin)
+
+Lista lo subido en `/products` para reutilizar sin resubir.
+Requiere `Authorization: Bearer <token>` de `role-admin`/`role-owner`/`role-stock-manager`.
+
+Response:
+
+```json
+{
+  "data": [
+    { "fileId": "...", "name": "...", "url": "https://ik.imagekit.io/...", "thumbnail": "https://...", "filePath": "/products/...", "size": 1234 }
+  ]
+}
+```
+
 ## Seguridad implementada
 
 - La private key nunca se expone al frontend
