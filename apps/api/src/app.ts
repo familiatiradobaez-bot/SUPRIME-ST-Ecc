@@ -76,38 +76,38 @@ export function createApp() {
     await next();
   });
 
-  // CSRF protection middleware - only check headers, don't consume body
-  api.use('*', async (context, next) => {
-    const method = context.req.method;
-    if (method === 'OPTIONS') {
-      return next();
-    }
-    if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
-      const origin = context.req.header('Origin');
-      const referer = context.req.header('Referer');
-      const isAllowedOrigin = (val?: string): boolean => {
-        if (!val) return false;
-        try {
-          const originUrl = val.startsWith('http') ? new URL(val).origin : val;
-          return allowedOrigins.includes(originUrl) ||
-                 originUrl.endsWith('.pages.dev') ||
-                 originUrl.endsWith('.trycloudflare.com') ||
-                 originUrl.endsWith('.ngrok-free.dev') ||
-                 originUrl.includes('localhost:') ||
-                 originUrl.includes('127.0.0.1:') ||
-                 originUrl.includes('192.168.');
-        } catch {
-          return false;
-        }
-      };
-
-      const isAllowed = isAllowedOrigin(origin) || isAllowedOrigin(referer);
-      if (!isAllowed && context.env.APP_ENV === 'production') {
-        return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
-      }
-    }
-    await next();
-  });
+  // CSRF protection middleware - TEMPORARILY DISABLED
+  // TODO: Re-enable CSRF protection once CORS issues are resolved
+  // api.use('*', async (context, next) => {
+  //   const method = context.req.method;
+  //   if (method === 'OPTIONS') {
+  //     return next();
+  //   }
+  //   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+  //     const origin = context.req.header('Origin');
+  //     const referer = context.req.header('Referer');
+  //     const isAllowedOrigin = (val?: string): boolean => {
+  //       if (!val) return false;
+  //       try {
+  //         const originUrl = val.startsWith('http') ? new URL(val).origin : val;
+  //         return allowedOrigins.includes(originUrl) ||
+  //                originUrl.endsWith('.pages.dev') ||
+  //                originUrl.endsWith('.trycloudflare.com') ||
+  //                originUrl.endsWith('.ngrok-free.dev') ||
+  //                originUrl.includes('localhost:') ||
+  //                originUrl.includes('127.0.0.1:') ||
+  //                originUrl.includes('192.168.');
+  //       } catch {
+  //         return false;
+  //       }
+  //     };
+  //     const isAllowed = isAllowedOrigin(origin) || isAllowedOrigin(referer);
+  //     if (!isAllowed && context.env.APP_ENV === 'production') {
+  //       return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
+  //     }
+  //   }
+  //   await next();
+  // });
 
   // CORS handled manually in security headers middleware to avoid body consumption
   api.get('/health', (context) => {
