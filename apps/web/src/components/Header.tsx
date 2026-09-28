@@ -16,13 +16,14 @@ type HeaderProps = {
   onCloseMenu: () => void;
   onNavClick: (section: string) => void;
   onCategorySelect?: (categorySlug: string) => void;
+  onLogoClick?: () => void;
 };
 
-export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect }: HeaderProps) {
+export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect, onLogoClick }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
-        <h1 className="logo">✨ SUPRIME</h1>
+        <h1 className="logo" onClick={onLogoClick} style={onLogoClick ? { cursor: 'pointer' } : undefined}>✨ SUPRIME</h1>
         <div className="search-bar">
           <input
             type="text"

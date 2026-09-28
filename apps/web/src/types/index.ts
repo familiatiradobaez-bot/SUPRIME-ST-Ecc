@@ -1,10 +1,15 @@
 export type Product = {
   id: string;
   name: string;
+  slug?: string;
   description: string;
   image_url: string;
+  images?: string[];
   price_cents: number;
   stock_quantity: number;
+  subdepartment_slug?: string;
+  department_slug?: string;
+  department_name?: string;
 };
 
 export type CartItem = {

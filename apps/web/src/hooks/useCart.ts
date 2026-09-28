@@ -26,13 +26,19 @@ export function useCart(products: Product[]) {
     }
   }, [cart]);
 
-  const handleAddToCart = useCallback((productId: string) => {
+  const handleAddToCart = useCallback((productId: string, qty: number = 1) => {
     const product = products.find(p => p.id === productId);
     if (!product || product.stock_quantity === 0) return;
+    const quantity = Math.max(1, Math.min(99, Math.floor(qty)));
 
     const cartItem = cart.find(item => item.id === productId);
     const currentQuantity = cartItem?.quantity ?? 0;
     if (currentQuantity >= product.stock_quantity) {
+      alert(`Solo hay ${product.stock_quantity} unidades disponibles`);
+      return;
+    }
+    const allowed = Math.min(quantity, product.stock_quantity - currentQuantity);
+    if (allowed <= 0) {
       alert(`Solo hay ${product.stock_quantity} unidades disponibles`);
       return;
     }
@@ -41,10 +47,10 @@ export function useCart(products: Product[]) {
       const existing = prevCart.find(item => item.id === productId);
       if (existing) {
         return prevCart.map(item =>
-          item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === productId ? { ...item, quantity: item.quantity + allowed } : item
         );
       }
-      return [...prevCart, { id: productId, quantity: 1 }];
+      return [...prevCart, { id: productId, quantity: allowed }];
     });
     setAddedToCartId(productId);
     if (addedToCartTimeout.current) clearTimeout(addedToCartTimeout.current);

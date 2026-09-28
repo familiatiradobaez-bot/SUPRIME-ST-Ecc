@@ -6,11 +6,19 @@ type ProductCardProps = {
   onAddToCart: (productId: string) => void;
   isAdded: boolean;
   currency?: string;
+  onOpen?: (product: Product) => void;
 };
 
-export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR' }: ProductCardProps) {
+export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', onOpen }: ProductCardProps) {
   return (
-    <div className="product-card anim-product-card">
+    <div
+      className="product-card anim-product-card"
+      onClick={() => onOpen?.(product)}
+      role={onOpen ? 'link' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={onOpen ? (e) => { if (e.key === 'Enter') onOpen(product); } : undefined}
+      style={onOpen ? { cursor: 'pointer' } : undefined}
+    >
       <div className="product-image-wrapper">
         <img
           src={product.image_url}
@@ -48,7 +56,7 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR' }:
           color: isAdded ? '#fff' : undefined,
           transition: 'background-color 0.3s ease',
         }}
-        onClick={() => onAddToCart(product.id)}
+        onClick={(e) => { e.stopPropagation(); onAddToCart(product.id); }}
         disabled={product.stock_quantity === 0}
       >
         {isAdded ? '✓ Agregado' : product.stock_quantity > 0 ? '🛒 Agregar al Carrito' : 'Sin Stock'}

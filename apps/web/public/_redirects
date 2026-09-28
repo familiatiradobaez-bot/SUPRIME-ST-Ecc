@@ -1,0 +1,2 @@
+# SPA fallback para Cloudflare Pages (rutas /producto/:slug, /categoria/:slug, ...)
+/* /index.html 200

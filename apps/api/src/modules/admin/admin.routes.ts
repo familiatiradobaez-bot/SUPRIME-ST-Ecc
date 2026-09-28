@@ -226,6 +226,17 @@ adminRoutes.post('/products', async (context) => {
      VALUES (?, 'subdep-demo', ?, ?, ?, ?, ?, ?, 'active')`
   ).bind(productId, name, slug, description, image_url, price_cents, stock_quantity).run();
 
+  // Persistir galería en product_images (primera = principal)
+  const galleryUrls = Array.isArray(body.images) && body.images.length > 0 ? body.images : [image_url];
+  await context.env.DB.batch([
+    context.env.DB.prepare('DELETE FROM product_images WHERE product_id = ?').bind(productId),
+    ...galleryUrls.slice(0, 10).map((url: string, i: number) =>
+      context.env.DB.prepare(
+        'INSERT INTO product_images (id, product_id, url, display_order, is_primary) VALUES (?, ?, ?, ?, ?)'
+      ).bind(generateId(), productId, url, i, i === 0 ? 1 : 0)
+    ),
+  ]);
+
   return context.json({ data: { id: productId, name, slug } }, 201);
 });
 
@@ -243,6 +254,19 @@ adminRoutes.put('/products/:id', async (context) => {
     `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
      WHERE id = ?`
   ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
+
+  // Sincronizar galería si se envía
+  if (Array.isArray(body.images)) {
+    const galleryUrls = body.images.length > 0 ? body.images : [image_url];
+    await context.env.DB.batch([
+      context.env.DB.prepare('DELETE FROM product_images WHERE product_id = ?').bind(productId),
+      ...galleryUrls.slice(0, 10).map((url: string, i: number) =>
+        context.env.DB.prepare(
+          'INSERT INTO product_images (id, product_id, url, display_order, is_primary) VALUES (?, ?, ?, ?, ?)'
+        ).bind(generateId(), productId, url, i, i === 0 ? 1 : 0)
+      ),
+    ]);
+  }
 
   return context.json({ data: { updated: true } });
 });

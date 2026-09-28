@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
-import { useCurrency } from './hooks/useCurrency';
-import { CURRENCIES } from './lib/api';
 import { useProducts } from './hooks/useProducts';
+import { useCurrency } from './hooks/useCurrency';
 import { useApiUrl } from './hooks/useApiUrl';
 import { getAuthHeaders } from './lib/api';
 import { Header } from './components/Header';
@@ -14,11 +14,23 @@ import { PasswordResetForm } from './components/PasswordResetForm';
 import { CheckoutForm } from './components/CheckoutForm';
 import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
-import { ProductCard } from './components/ProductCard';
 import { AdminPage } from './pages/AdminPage';
+import { HomePage } from './pages/HomePage';
+import { ProductPage } from './pages/ProductPage';
+import { CatalogPage } from './pages/CatalogPage';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 export function App() {
   const apiUrl = useApiUrl();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
@@ -43,34 +55,46 @@ export function App() {
 
   const closeMenu = () => setShowMenu(false);
 
-  const scrollToProducts = () => {
-    closeMenu();
-    const element = document.getElementById('products');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+  const scrollToId = (id: string) => {
+    const go = () => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    if (location.pathname !== '/') {
+      navigate('/');
+      setTimeout(go, 150);
     } else {
-      console.warn('Elemento #products no encontrado');
+      go();
     }
   };
 
   const handleNavClick = (section: string) => {
     if (section === 'products') {
-      scrollToProducts();
+      scrollToId('products');
     } else if (section === 'about') {
-      document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' });
+      scrollToId('about');
     } else if (section === 'contact') {
       document.querySelector('.footer')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
+  const handleSearchNav = useCallback((term: string) => {
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+    handleSearch(term);
+  }, [handleSearch, location.pathname, navigate]);
+
   // Carrito exige login: sin sesión se abre el login y no se pierde nada
   // (el carrito ya persiste en localStorage entre recargas)
-  const handleAddToCartGated = useCallback((productId: string) => {
+  const handleAddToCartGated = useCallback((productId: string, qty: number = 1) => {
     if (!user) {
       setShowLogin(true);
       return;
     }
-    handleAddToCart(productId);
+    handleAddToCart(productId, qty);
   }, [user, handleAddToCart]);
 
   const handleCheckout = () => {
@@ -142,11 +166,12 @@ export function App() {
 
   return (
     <div className="layout">
+      <ScrollToTop />
       <Header
         user={user}
         cartCount={cartCount}
         searchTerm={searchTerm}
-        onSearch={handleSearch}
+        onSearch={handleSearchNav}
         onCartClick={() => setShowCart(!showCart)}
         onMenuClick={() => setShowMenu(!showMenu)}
         onLoginClick={() => setShowLogin(true)}
@@ -156,6 +181,8 @@ export function App() {
         showMenu={showMenu}
         onCloseMenu={closeMenu}
         onNavClick={handleNavClick}
+        onCategorySelect={(slug) => { closeMenu(); navigate(`/categoria/${slug}`); }}
+        onLogoClick={() => navigate('/')}
       />
 
       {/* Admin Page - página separada para admin+ */}
@@ -168,137 +195,72 @@ export function App() {
         />
       )}
 
-      <div className="layout-main">
-        <section className="hero">
-          <h1>Bienvenido a SUPRIME</h1>
-          <p>La mejor selección de productos premium. Calidad, estilo y excelencia en cada compra.</p>
-          <div className="hero-actions">
-            <button className="btn btn-primary btn-truck-drive" onClick={scrollToProducts}>
-              🛍️ Explorar Tienda
-            </button>
-            <button className="btn btn-secondary" onClick={scrollToProducts}>📚 Ver Catálogo</button>
-          </div>
-        </section>
-
-        <section className="features">
-          <div className="feature-card">
-            <div className="feature-icon">🚚</div>
-            <h3>Envío Rápido</h3>
-            <p>Entrega en 24-48 horas a toda España</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">🛡️</div>
-            <h3>Garantía Total</h3>
-            <p>100% seguro y protegido</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">💳</div>
-            <h3>Pago Fácil</h3>
-            <p>Múltiples opciones de pago</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">❤️</div>
-            <h3>Satisfacción Garantizada</h3>
-            <p>Devolución en 30 días sin preguntas</p>
-          </div>
-        </section>
-
-        <div className="container">
-          <section className="products-section" id="products">
-            <div className="section-header">
-              <h2>Catálogo de Productos</h2>
-              <p className="section-subtitle">
-                {searchTerm ? `${filteredProducts.length} resultados para "${searchTerm}"` : `${products.length} productos disponibles`}
-              </p>
-              <div style={{ marginTop: '0.5rem' }}>
-                <label htmlFor="currency-select" style={{ marginRight: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Moneda:</label>
-                <select
-                  id="currency-select"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="currency-select"
-                  aria-label="Seleccionar moneda"
-                >
-                  {Object.entries(CURRENCIES).map(([code, meta]) => (
-                    <option key={code} value={code}>{meta.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {status === 'loading' && (
-              <div className="loading">
-                <div className="spinner"></div>
-                <span style={{ marginLeft: '1rem' }}>Cargando catálogo...</span>
-              </div>
-            )}
-
-            {status === 'error' && (
-              <div className="error-message">
-                ❌ No pudimos cargar el catálogo. Por favor, intenta más tarde.
-              </div>
-            )}
-
-            {status === 'ready' && (
-              <>
-                {filteredProducts.length === 0 ? (
-                  <div className="empty-state">
-                    <h3>No hay productos</h3>
-                    <p>{searchTerm ? 'No encontramos productos que coincidan con tu búsqueda.' : 'Aún no hay productos disponibles.'}</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="product-grid">
-                      {paginatedProducts.map((product) => (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          onAddToCart={handleAddToCartGated}
-                          isAdded={addedToCartId === product.id}
-                          currency={currency}
-                        />
-                      ))}
-                    </div>
-                    {totalPages > 1 && (
-                      <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => goToPage(currentPage - 1)}
-                          disabled={currentPage === 1}
-                        >
-                          ← Anterior
-                        </button>
-                        <span style={{ display: 'flex', alignItems: 'center', padding: '0 1rem', color: 'var(--text-secondary)' }}>
-                          Página {currentPage} de {totalPages}
-                        </span>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => goToPage(currentPage + 1)}
-                          disabled={currentPage === totalPages}
-                        >
-                          Siguiente →
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </section>
-        </div>
-
-        <section className="about-section" id="about">
-          <div className="about-content">
-            <h2>Sobre SUPRIME</h2>
-            <p>
-              SUPRIME es tu tienda de confianza para productos de calidad premium. Nos dedicamos a ofrecer la mejor experiencia de compra con productos cuidadosamente seleccionados, atención al cliente excepcional y entrega rápida.
-            </p>
-            <p>
-              Con más de 10 años en el mercado, hemos ganado la confianza de miles de clientes. Nuestra misión es hacer que cada compra sea memorable.
-            </p>
-          </div>
-        </section>
-      </div>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <HomePage
+              products={products}
+              status={status}
+              searchTerm={searchTerm}
+              filteredProducts={filteredProducts}
+              paginatedProducts={paginatedProducts}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              goToPage={goToPage}
+              addedToCartId={addedToCartId}
+              onAddToCart={handleAddToCartGated}
+              currency={currency}
+              setCurrency={setCurrency}
+              onShopNow={() => scrollToId('products')}
+            />
+          }
+        />
+        <Route
+          path="/producto/:slug"
+          element={
+            <ProductPage
+              addedToCartId={addedToCartId}
+              onAddToCart={(id, qty) => { handleAddToCartGated(id, qty ?? 1); setShowCart(true); }}
+              currency={currency}
+            />
+          }
+        />
+        <Route
+          path="/categoria/:slug"
+          element={
+            <CatalogPage
+              kind="categoria"
+              addedToCartId={addedToCartId}
+              onAddToCart={handleAddToCartGated}
+              currency={currency}
+            />
+          }
+        />
+        <Route
+          path="/departamento/:slug"
+          element={
+            <CatalogPage
+              kind="departamento"
+              addedToCartId={addedToCartId}
+              onAddToCart={handleAddToCartGated}
+              currency={currency}
+            />
+          }
+        />
+        <Route
+          path="/subdepartamento/:slug"
+          element={
+            <CatalogPage
+              kind="subdepartamento"
+              addedToCartId={addedToCartId}
+              onAddToCart={handleAddToCartGated}
+              currency={currency}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
       {showCart && (
         <CartSidebar

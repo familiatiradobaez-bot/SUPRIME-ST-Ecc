@@ -85,7 +85,28 @@ if (products.length) {
   check('orders stock insuficiente 400 (rollback)', r.status === 400, r.status);
 }
 
+console.log('== PDP y secciones ==');
+if (products.length && products[0].slug) {
+  const s = products[0].slug;
+  r = await fetch(`${API}/catalog/products/${s}/related?limit=4`);
+  const rel = await j(r);
+  check('related 200 + array', r.status === 200 && Array.isArray(rel.data), r.status);
+  if (products[0].department_slug) {
+    r = await fetch(`${API}/catalog/departments/${products[0].department_slug}/products`);
+    const dp = await j(r);
+    check('dept products 200 + array', r.status === 200 && Array.isArray(dp.data?.products), r.status);
+  }
+  if (products[0].subdepartment_slug) {
+    r = await fetch(`${API}/catalog/subdepartments/${products[0].subdepartment_slug}/products`);
+    const sp = await j(r);
+    check('subdept products 200 + array', r.status === 200 && Array.isArray(sp.data?.products), r.status);
+  }
+  r = await fetch(`${API}/catalog/products/no-existe-xyz`);
+  check('detail inexistente 404', r.status === 404, r.status);
+}
+
 console.log('== Google OAuth ==');
+
 r = await fetch(`${API}/auth/google/login`, { redirect: 'manual' });
 const loc = r.headers.get('location') || '';
 check('google login redirige 302', r.status === 302, r.status);
