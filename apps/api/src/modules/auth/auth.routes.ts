@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
+import { sendEmail } from '../../lib/email';
 
 const loginSchema = z.object({
   email: z.string().optional(),
@@ -89,56 +90,6 @@ function generateOtpCode(): string {
 async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Envío con fallback: 1) Cloudflare Email Service (nativo, sin keys),
-// 2) Resend. Devuelve true si alguno lo aceptó.
-async function sendEmail(env: Bindings, toEmail: string, subject: string, html: string): Promise<boolean> {
-  // 1. Cloudflare Email Service (requiere dominio onboarded en Email Sending)
-  if (env.EMAIL) {
-    try {
-      await env.EMAIL.send({
-        from: 'SUPRIME <noreply@suprime.xyz>',
-        to: toEmail,
-        subject,
-        html,
-      });
-      return true;
-    } catch (emailErr) {
-      console.error('Cloudflare Email Service failed, falling back to Resend:', emailErr);
-    }
-  }
-
-  // 2. Resend (fallback)
-  try {
-    const resendApiKey = env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      console.warn('RESEND_API_KEY not configured, skipping email send');
-      return false;
-    }
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'SUPRIME <noreply@suprime.xyz>',
-        to: toEmail,
-        subject,
-        html,
-      }),
-    });
-
-    if (!emailResponse.ok) {
-      console.error('Resend email failed:', await emailResponse.text());
-      return false;
-    }
-    return true;
-  } catch (emailErr) {
-    console.error('Failed to send email:', emailErr);
-    return false;
-  }
 }
 
 function otpEmailHtml(code: string): string {
@@ -467,6 +418,81 @@ authRoutes.post('/resend-otp', async (context) => {
   }
 
   return context.json({ data: { sent: true, otpExpiresIn: OTP_TTL_SECONDS } });
+});
+
+// POST /auth/forgot-password - Enviar OTP para recuperar contraseña (respuesta genérica anti-enumeración)
+authRoutes.post('/forgot-password', async (context) => {
+  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!email) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email requerido' }, 400);
+  }
+
+  const user = await context.env.DB.prepare(
+    'SELECT id FROM users WHERE email = ? AND is_active = 1'
+  ).bind(email).first();
+
+  // Solo se envía si la cuenta existe; la respuesta es idéntica para no revelar cuentas
+  if (user) {
+    const { sent } = await issueOtp(context.env, email);
+    if (!sent) console.warn(`Password-reset OTP for ${email} could not be sent`);
+  }
+
+  return context.json({ data: { sent: true, message: 'Si la cuenta existe, recibirás un código (15 min).' } });
+});
+
+// POST /auth/reset-password - Restablecer contraseña con OTP
+authRoutes.post('/reset-password', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+  const newPassword = typeof body?.newPassword === 'string' ? body.newPassword : '';
+
+  if (!email || !/^\d{6}$/.test(code)) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email y código de 6 dígitos requeridos' }, 400);
+  }
+  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(newPassword)) {
+    return context.json({ error: 'WEAK_PASSWORD', message: 'Mínimo 8 caracteres con mayúscula, minúscula, número y símbolo' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const record = await context.env.DB.prepare(
+    'SELECT code_hash, expires_at, attempts FROM email_otps WHERE email = ?'
+  ).bind(email).first() as { code_hash: string; expires_at: number; attempts: number } | null;
+
+  if (!record) {
+    return context.json({ error: 'OTP_NOT_FOUND', message: 'No hay código pendiente. Pide uno nuevo.' }, 404);
+  }
+  if (record.expires_at < now) {
+    await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+    return context.json({ error: 'OTP_EXPIRED', message: 'Código caducado (15 min). Pide uno nuevo.' }, 410);
+  }
+  if (record.attempts >= OTP_MAX_ATTEMPTS) {
+    await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+    return context.json({ error: 'OTP_LOCKED', message: 'Demasiados intentos. Pide un código nuevo.' }, 429);
+  }
+
+  const codeHash = await sha256Hex(code);
+  if (codeHash !== record.code_hash) {
+    await context.env.DB.prepare('UPDATE email_otps SET attempts = attempts + 1 WHERE email = ?').bind(email).run();
+    return context.json({ error: 'OTP_INVALID', message: 'Código incorrecto.' }, 401);
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await context.env.DB.prepare('UPDATE users SET password_hash = ? WHERE email = ?').bind(passwordHash, email).run();
+  await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+  // Cerrar sesiones activas por seguridad tras el cambio
+  const target = await context.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first() as { id: string } | null;
+  if (target) {
+    await context.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(target.id).run();
+  }
+
+  return context.json({ data: { reset: true } });
 });
 
 // POST /auth/login

@@ -52,11 +52,12 @@ export const uploadRoutes = new Hono<{ Bindings: UploadBindings }>();
 
 const GALLERY_ADMIN_ROLES = ['role-admin', 'role-owner', 'role-stock-manager'];
 
-// Galería: requiere sesión admin válida (el token es el id de sesión)
-uploadRoutes.use('/images', async (context, next) => {
+// Subir y ver galería requieren sesión admin válida (el token es el id de sesión).
+// Sin esto cualquiera consumiría la cuota de ImageKit (solo había rate-limit).
+async function requireUploadAdmin(context: any, next: () => Promise<void>) {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return context.json({ error: 'UNAUTHORIZED' }, 401);
+    return context.json({ error: 'UNAUTHORIZED', message: 'Inicia sesión como admin para gestionar imágenes' }, 401);
   }
   let roleId: string | null = null;
   try {
@@ -75,17 +76,23 @@ uploadRoutes.use('/images', async (context, next) => {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
   await next();
-});
+}
 
-// GET /upload/images - Listar imágenes subidas (galería reutilizable)
+uploadRoutes.use('/images', requireUploadAdmin);
+uploadRoutes.use('/imagekit', requireUploadAdmin);
+
+// GET /upload/images - Listar imágenes subidas (galería reutilizable, paginada)
 uploadRoutes.get('/images', async (context) => {
   if (!context.env.IMAGEKIT_PRIVATE_KEY) {
     return context.json({ error: 'SERVER_CONFIG_ERROR', message: 'Image upload service not configured (missing IMAGEKIT_PRIVATE_KEY on server)' }, 500);
   }
 
+  const limit = Math.min(Math.max(parseInt(context.req.query('limit') || '100', 10) || 100, 1), 100);
+  const skip = Math.max(parseInt(context.req.query('skip') || '0', 10) || 0, 0);
+
   try {
     const credentials = btoa(`${context.env.IMAGEKIT_PRIVATE_KEY}:`);
-    const params = new URLSearchParams({ path: '/products', limit: '100', sort: 'DESC_CREATED' });
+    const params = new URLSearchParams({ path: '/products', limit: String(limit), skip: String(skip), sort: 'DESC_CREATED' });
     const response = await fetch(`https://api.imagekit.io/v1/files?${params}`, {
       headers: { Authorization: `Basic ${credentials}` },
     });

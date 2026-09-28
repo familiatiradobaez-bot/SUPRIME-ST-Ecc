@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
+import { sendEmail, orderEmailHtml } from '../../lib/email';
 
 const checkoutSchema = z.object({
   items: z.array(z.object({
@@ -62,13 +63,13 @@ ordersRoutes.post('/', async (context) => {
   // db.batch() (atómico). El UPDATE de stock es condicional (>= qty) y se
   // verifica por changes; si falla, se compensa borrando orden + restaurando stock.
   let totalCents = 0;
-  const orderItems: Array<{ product_id: string; quantity: number; price_cents: number }> = [];
+  const orderItems: Array<{ product_id: string; name: string; quantity: number; price_cents: number }> = [];
 
   const orderId = generateId();
 
   for (const item of items) {
     const product = await context.env.DB.prepare(
-      'SELECT id, price_cents, stock_quantity FROM products WHERE id = ? AND status = ?'
+      'SELECT id, name, price_cents, stock_quantity FROM products WHERE id = ? AND status = ?'
     ).bind(item.product_id, 'active').first();
 
     if (!product) {
@@ -83,6 +84,7 @@ ordersRoutes.post('/', async (context) => {
     totalCents += priceCents * item.quantity;
     orderItems.push({
       product_id: item.product_id,
+      name: (product.name as string) || item.product_id,
       quantity: item.quantity,
       price_cents: priceCents,
     });
@@ -128,6 +130,9 @@ ordersRoutes.post('/', async (context) => {
     return context.json({ error: 'INSUFFICIENT_STOCK', message: 'Stock insuficiente (otro comprador fue más rápido)' }, 400);
   }
 
+  // Confirmación por email (no bloquea ni tumba la orden si falla)
+  sendOrderConfirmation(context.env, orderId, orderItems, totalCents, shipping_name, shipping_email);
+
   return context.json({
     data: {
       id: orderId,
@@ -137,6 +142,18 @@ ordersRoutes.post('/', async (context) => {
     },
   }, 201);
 });
+
+function sendOrderConfirmation(env: Bindings, orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, totalCents: number, shippingName: string, shippingEmail: string): void {
+  // Fire-and-forget: el email nunca debe tumbar la orden (sendEmail no lanza)
+  void sendEmail(
+    env,
+    shippingEmail,
+    `Tu pedido SUPRIME ${orderId.slice(0, 8)}`,
+    orderEmailHtml(orderId, items, totalCents, shippingName)
+  ).then((sent) => {
+    if (!sent) console.warn(`Order confirmation email for order ${orderId} could not be sent`);
+  });
+}
 
 // GET /orders (user's orders)
 ordersRoutes.get('/', async (context) => {

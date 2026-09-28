@@ -7,9 +7,10 @@ type LoginFormProps = {
   onToggleMode: () => void;
   loading?: boolean;
   apiUrl: string;
+  onForgotPassword?: () => void;
 };
 
-export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl }: LoginFormProps) {
+export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl, onForgotPassword }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -131,6 +132,11 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
           <>¿Ya tienes cuenta? <a href="#login" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: '#c65d35', cursor: 'pointer' }}>Inicia sesión</a></>
         )}
       </p>
+      {mode === 'login' && onForgotPassword && (
+        <p className="form-text" style={{ textAlign: 'center' }}>
+          <a href="#forgot" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} style={{ color: '#c65d35', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</a>
+        </p>
+      )}
     </form>
   );
 }

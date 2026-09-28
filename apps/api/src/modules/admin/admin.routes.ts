@@ -90,14 +90,25 @@ adminRoutes.get('/stats', async (context) => {
   });
 });
 
-// GET /admin/users - List all users
+// GET /admin/users - List users (paginado: ?limit=50 por defecto, máx 100)
 adminRoutes.get('/users', async (context) => {
-  const result = await context.env.DB.prepare(
-    `SELECT id, username, email, display_name, role_id, is_active, created_at
-     FROM users ORDER BY created_at DESC`
-  ).all();
+  const limit = Math.min(Math.max(parseInt(context.req.query('limit') || '50', 10) || 50, 1), 100);
+  const offset = Math.max(parseInt(context.req.query('offset') || '0', 10) || 0, 0);
 
-  return context.json({ data: result.results });
+  const [result, total] = await context.env.DB.batch([
+    context.env.DB.prepare(
+      `SELECT id, username, email, display_name, role_id, is_active, created_at
+       FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset),
+    context.env.DB.prepare('SELECT COUNT(*) as count FROM users'),
+  ]);
+
+  const totalCount = ((total.results?.[0] as { count?: number } | undefined)?.count) || 0;
+
+  return context.json({
+    data: result.results,
+    pagination: { limit, offset, total: totalCount },
+  });
 });
 
 // PUT /admin/users/:id/role - Update user role

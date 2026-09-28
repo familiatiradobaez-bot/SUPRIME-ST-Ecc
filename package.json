@@ -14,6 +14,7 @@
     "typecheck:web": "npm --workspace apps/web run typecheck",
     "db:migrate": "npm --workspace apps/api run db:migrate",
     "db:seed": "npm --workspace apps/api run db:seed",
+    "smoke": "node tests/smoke.mjs",
     "network-info": "echo Accede desde tu celular en: && echo http://192.168.0.105:5173"
   },
   "workspaces": ["apps/*", "packages/*"],

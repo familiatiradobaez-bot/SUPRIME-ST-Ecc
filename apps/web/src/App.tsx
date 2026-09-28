@@ -8,6 +8,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoginForm } from './components/LoginForm';
 import { OtpForm } from './components/OtpForm';
+import { PasswordResetForm } from './components/PasswordResetForm';
 import { CheckoutForm } from './components/CheckoutForm';
 import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
@@ -23,6 +24,7 @@ export function App() {
   const [showCart, setShowCart] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -295,11 +297,17 @@ export function App() {
         <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
           <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="character-bounce-in">{pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
-              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); }}>✕</button>
+              <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
+              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }}>✕</button>
             </div>
-            {actionError && !pendingOtpEmail && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
-            {pendingOtpEmail ? (
+            {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {showPasswordReset ? (
+              <PasswordResetForm
+                apiUrl={apiUrl}
+                onDone={() => { setShowPasswordReset(false); setLoginMode('login'); }}
+                onBack={() => setShowPasswordReset(false)}
+              />
+            ) : pendingOtpEmail ? (
               <OtpForm
                 email={pendingOtpEmail}
                 onVerify={handleVerifyOtp}
@@ -317,6 +325,7 @@ export function App() {
               onToggleMode={() => { setLoginMode(prev => prev === 'login' ? 'register' : 'login'); setActionError(''); }}
               loading={actionLoading}
               apiUrl={apiUrl}
+              onForgotPassword={() => setShowPasswordReset(true)}
             />
             )}
           </div>

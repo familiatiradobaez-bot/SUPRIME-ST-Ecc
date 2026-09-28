@@ -28,14 +28,16 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryHasMore, setGalleryHasMore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Galería: lista lo ya subido a /products para reutilizar sin resubir
-  const loadGallery = useCallback(async () => {
+  // Galería: lista lo ya subido a /products para reutilizar sin resubir (paginada)
+  const loadGallery = useCallback(async (append = false) => {
     setGalleryLoading(true);
     setError('');
     try {
-      const response = await fetch(`${apiUrl}/upload/images`, {
+      const skip = append ? galleryItems.length : 0;
+      const response = await fetch(`${apiUrl}/upload/images?limit=100&skip=${skip}`, {
         headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
         credentials: 'include',
       });
@@ -46,13 +48,15 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
           : data.message || 'No se pudo cargar la galería');
         return;
       }
-      setGalleryItems(data.data || []);
+      const items = data.data || [];
+      setGalleryItems(prev => append ? [...prev, ...items] : items);
+      setGalleryHasMore(items.length >= 100);
     } catch {
       setError('Error de conexión al cargar la galería');
     } finally {
       setGalleryLoading(false);
     }
-  }, [apiUrl, authToken]);
+  }, [apiUrl, authToken, galleryItems.length]);
 
   const toggleGallery = useCallback(() => {
     const next = !galleryOpen;
@@ -105,7 +109,10 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
 
       const response = await fetch(`${apiUrl}/upload/imagekit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ dataUrl, filename: file.name }),
         credentials: 'include',
       });
@@ -117,6 +124,8 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
         // Mensaje específico cuando falta la private key en el servidor
         if (data.error === 'SERVER_CONFIG_ERROR') {
           setError('Servicio de imágenes no configurado en el servidor (falta IMAGEKIT_PRIVATE_KEY). Ejecuta `wrangler secret put IMAGEKIT_PRIVATE_KEY`.');
+        } else if (data.error === 'SESSION_EXPIRED' || data.error === 'UNAUTHORIZED') {
+          setError('Sesión expirada: recarga e inicia sesión de nuevo para subir imágenes.');
         } else {
           setError(data.message || 'Error al subir la imagen');
         }
@@ -294,7 +303,7 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <small>{galleryItems.length} imágenes en /products — clic para agregar al producto</small>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={loadGallery}>↻ Actualizar</button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadGallery(false)}>↻ Actualizar</button>
                 </div>
                 <div className="gallery-grid">
                   {galleryItems.map((item) => {
@@ -313,6 +322,13 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
                     );
                   })}
                 </div>
+                {galleryHasMore && (
+                  <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadGallery(true)} disabled={galleryLoading}>
+                      {galleryLoading ? 'Cargando...' : 'Cargar más'}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

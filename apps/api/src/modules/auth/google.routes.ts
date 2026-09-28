@@ -43,6 +43,14 @@ googleRoutes.get('/login', (context) => {
 
   const state = crypto.randomUUID();
   const redirectUri = getRedirectUri(context);
+
+  // Guardar state en cookie HttpOnly para validarlo en el callback (anti-CSRF).
+  // SameSite=Lax permite el regreso top-level desde accounts.google.com.
+  // Sin Secure en local (http), con Secure en producción (https).
+  const host = context.req.header('Host') || '';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1') || host.includes('192.168');
+  const stateCookie = `oauth_state=${state}; HttpOnly; Path=/; Max-Age=300; SameSite=Lax${isLocal ? '' : '; Secure'}`;
+  context.header('Set-Cookie', stateCookie);
   
   const params = new URLSearchParams({
     client_id: clientId,
@@ -69,6 +77,14 @@ googleRoutes.get('/callback', async (context) => {
 
   if (!code) {
     return context.json({ error: 'GOOGLE_AUTH_FAILED' }, 400);
+  }
+
+  // Validar state contra la cookie (anti-CSRF). Sin match se rechaza el login.
+  const cookieHeader = context.req.header('Cookie') || '';
+  const stateCookie = cookieHeader.split(';').map((p) => p.trim()).find((p) => p.startsWith('oauth_state='));
+  const expectedState = stateCookie ? stateCookie.slice('oauth_state='.length) : '';
+  if (!state || !expectedState || state !== expectedState) {
+    return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Invalid OAuth state' }, 403);
   }
 
   try {
@@ -136,8 +152,9 @@ googleRoutes.get('/callback', async (context) => {
       'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
     ).bind(token, user.id, expiresAt).run();
 
-    // Set HttpOnly cookie
-    context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`);
+    // Limpiar cookie de state + fijar sesión (append: dos Set-Cookie)
+    context.header('Set-Cookie', 'oauth_state=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax', { append: true });
+    context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`, { append: true });
 
     // Redirect al front con el token (la cookie HttpOnly no es legible cross-subdominio,
     // el front lo guarda y limpia la URL inmediatamente)
