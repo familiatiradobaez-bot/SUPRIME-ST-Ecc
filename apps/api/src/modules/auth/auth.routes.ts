@@ -243,7 +243,8 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>();
 
 // POST /auth/register
 authRoutes.post('/register', async (context) => {
-  const body = await context.req.text().catch(() => null);
+  const arrayBuffer = await context.req.arrayBuffer().catch(() => null);
+  const body = arrayBuffer ? new TextDecoder().decode(arrayBuffer) : null;
   let parsedBody: unknown = null;
   try {
     parsedBody = body ? JSON.parse(body) : null;
@@ -356,7 +357,8 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
   }
 
-  const body = await context.req.text().catch(() => null);
+  const arrayBuffer = await context.req.arrayBuffer().catch(() => null);
+  const body = arrayBuffer ? new TextDecoder().decode(arrayBuffer) : null;
   let parsedBody: unknown = null;
   try {
     parsedBody = body ? JSON.parse(body) : null;
