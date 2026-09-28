@@ -39,77 +39,93 @@ ordersRoutes.post('/', async (context) => {
 
   const { items, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method } = parsed.data;
 
-  // Get user from session (optional - allow guest checkout)
+  // La compra exige sesión válida (el front la pide antes del checkout).
+  // Sin esto, user_id sería null y viola el NOT NULL de orders.user_id.
   const authHeader = context.req.header('Authorization');
-  let userId: string | null = null;
-
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const session = await context.env.DB.prepare(
-      `SELECT user_id FROM sessions WHERE id = ?`
-    ).bind(token).first();
-    if (session) {
-      userId = session.user_id as string;
-    }
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED', message: 'Inicia sesión para comprar' }, 401);
   }
 
-  // Validate products and calculate total with transaction to prevent race conditions
+  const token = authHeader.slice(7);
+  const session = await context.env.DB.prepare(
+    'SELECT user_id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
+  ).bind(token).first();
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED', message: 'Sesión expirada. Inicia sesión de nuevo.' }, 401);
+  }
+
+  const userId = session.user_id as string;
+
+  // Validate products and calculate total.
+  // D1 no soporta BEGIN/COMMIT raw: se valida con SELECTs y se escribe con
+  // db.batch() (atómico). El UPDATE de stock es condicional (>= qty) y se
+  // verifica por changes; si falla, se compensa borrando orden + restaurando stock.
   let totalCents = 0;
   const orderItems: Array<{ product_id: string; quantity: number; price_cents: number }> = [];
 
   const orderId = generateId();
 
-  // Begin immediate transaction to lock the database
-  await context.env.DB.prepare('BEGIN IMMEDIATE TRANSACTION').run();
+  for (const item of items) {
+    const product = await context.env.DB.prepare(
+      'SELECT id, price_cents, stock_quantity FROM products WHERE id = ? AND status = ?'
+    ).bind(item.product_id, 'active').first();
 
-  try {
-    for (const item of items) {
-      const product = await context.env.DB.prepare(
-        'SELECT id, price_cents, stock_quantity FROM products WHERE id = ? AND status = ?'
-      ).bind(item.product_id, 'active').first();
-
-      if (!product) {
-        await context.env.DB.prepare('ROLLBACK').run();
-        return context.json({ error: 'PRODUCT_NOT_FOUND', product_id: item.product_id }, 404);
-      }
-
-      if ((product.stock_quantity as number) < item.quantity) {
-        await context.env.DB.prepare('ROLLBACK').run();
-        return context.json({ error: 'INSUFFICIENT_STOCK', product_id: item.product_id }, 400);
-      }
-
-      const priceCents = product.price_cents as number;
-      totalCents += priceCents * item.quantity;
-      orderItems.push({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price_cents: priceCents,
-      });
+    if (!product) {
+      return context.json({ error: 'PRODUCT_NOT_FOUND', product_id: item.product_id }, 404);
     }
 
-    // Create order
-    await context.env.DB.prepare(
+    if ((product.stock_quantity as number) < item.quantity) {
+      return context.json({ error: 'INSUFFICIENT_STOCK', product_id: item.product_id }, 400);
+    }
+
+    const priceCents = product.price_cents as number;
+    totalCents += priceCents * item.quantity;
+    orderItems.push({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      price_cents: priceCents,
+    });
+  }
+
+  // Escritura atómica: orden + items + decremento condicional de stock
+  const statements = [
+    context.env.DB.prepare(
       `INSERT INTO orders (id, user_id, status, total_cents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method)
        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?)`
-    ).bind(orderId, userId, totalCents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method).run();
-
-    // Create order items and update stock
-    for (const item of orderItems) {
-      const orderItemId = generateId();
-      await context.env.DB.prepare(
+    ).bind(orderId, userId, totalCents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method),
+    ...orderItems.map((item) =>
+      context.env.DB.prepare(
         'INSERT INTO order_items (id, order_id, product_id, quantity, price_cents) VALUES (?, ?, ?, ?, ?)'
-      ).bind(orderItemId, orderId, item.product_id, item.quantity, item.price_cents).run();
+      ).bind(generateId(), orderId, item.product_id, item.quantity, item.price_cents)
+    ),
+    ...orderItems.map((item) =>
+      context.env.DB.prepare(
+        'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND status = ? AND stock_quantity >= ?'
+      ).bind(item.quantity, item.product_id, 'active', item.quantity)
+    ),
+  ];
 
-      await context.env.DB.prepare(
-        'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?'
-      ).bind(item.quantity, item.product_id).run();
-    }
+  const batchResults = await context.env.DB.batch(statements);
+  const stockResults = batchResults.slice(1 + orderItems.length);
+  const raceFailed = stockResults.some((res) => ((res.meta as { changes?: number } | undefined)?.changes ?? 0) === 0);
 
-    // Commit transaction
-    await context.env.DB.prepare('COMMIT').run();
-  } catch (error) {
-    await context.env.DB.prepare('ROLLBACK').run();
-    throw error;
+  if (raceFailed) {
+    // Otro checkout ganó la carrera: compensar (restaurar lo decrementado + borrar orden)
+    const compensation = [
+      ...orderItems.map((item, i) => {
+        const changed = ((stockResults[i].meta as { changes?: number } | undefined)?.changes ?? 0) > 0;
+        return changed
+          ? context.env.DB.prepare(
+              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?'
+            ).bind(item.quantity, item.product_id)
+          : null;
+      }).filter((s): s is D1PreparedStatement => s !== null),
+      context.env.DB.prepare('DELETE FROM order_items WHERE order_id = ?').bind(orderId),
+      context.env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId),
+    ];
+    await context.env.DB.batch(compensation);
+    return context.json({ error: 'INSUFFICIENT_STOCK', message: 'Stock insuficiente (otro comprador fue más rápido)' }, 400);
   }
 
   return context.json({
