@@ -16,9 +16,9 @@ export function useApiUrl(): string {
     const host = window.location.hostname;
     const protocol = window.location.protocol;
 
-    // 3. Si se accede desde el dominio personalizado suprime.xyz
+    // 3. Si se accede desde el dominio personalizado suprime.xyz (API en subdominio)
     if (host.includes('suprime.xyz')) {
-      return 'https://suprime.xyz/api/v1';
+      return 'https://api.suprime.xyz';
     }
 
     // 4. Si se accede desde ngrok
