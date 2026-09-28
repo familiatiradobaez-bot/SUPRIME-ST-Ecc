@@ -6,9 +6,20 @@ import { adminRoutes } from './modules/admin/admin.routes';
 import { googleRoutes } from './modules/auth/google.routes';
 import { uploadRoutes } from './modules/upload/upload.routes';
 
+export type EmailBinding = {
+  send(message: {
+    from: string;
+    to: string | string[];
+    subject: string;
+    text?: string;
+    html?: string;
+  }): Promise<unknown>;
+};
+
 export type Bindings = {
   DB: D1Database;
   APP_ENV: string;
+  EMAIL?: EmailBinding;
   IMGBB_API_KEY?: string;
   IMAGEKIT_PRIVATE_KEY?: string;
   IMAGEKIT_PUBLIC_KEY?: string;

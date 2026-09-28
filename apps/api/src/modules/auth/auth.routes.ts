@@ -84,6 +84,74 @@ function generateVerificationToken(): string {
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function verificationEmailHtml(verificationLink: string): string {
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #6366f1;">Bienvenido a SUPRIME</h1>
+      <p>Gracias por registrarte. Por favor verifica tu correo electrónico haciendo clic en el siguiente botón:</p>
+      <a href="${verificationLink}" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 16px 0;">
+        Verificar mi cuenta
+      </a>
+      <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
+      <p>Este enlace expira en 24 horas.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="color: #888; font-size: 12px;">SUPRIME - Tu tienda premium</p>
+    </div>
+  `;
+}
+
+// Envío con fallback: 1) Cloudflare Email Service (nativo, sin keys),
+// 2) Resend. Devuelve true si alguno lo aceptó.
+async function sendVerificationEmail(env: Bindings, toEmail: string, verificationLink: string): Promise<boolean> {
+  const html = verificationEmailHtml(verificationLink);
+
+  // 1. Cloudflare Email Service (requiere dominio onboarded en Email Sending)
+  if (env.EMAIL) {
+    try {
+      await env.EMAIL.send({
+        from: 'SUPRIME <noreply@suprime.xyz>',
+        to: toEmail,
+        subject: 'Verifica tu cuenta en SUPRIME',
+        html,
+      });
+      return true;
+    } catch (emailErr) {
+      console.error('Cloudflare Email Service failed, falling back to Resend:', emailErr);
+    }
+  }
+
+  // 2. Resend (fallback)
+  try {
+    const resendApiKey = env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      console.warn('RESEND_API_KEY not configured, skipping email send');
+      return false;
+    }
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'SUPRIME <noreply@suprime.xyz>',
+        to: toEmail,
+        subject: 'Verifica tu cuenta en SUPRIME',
+        html,
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      console.error('Resend email failed:', await emailResponse.text());
+      return false;
+    }
+    return true;
+  } catch (emailErr) {
+    console.error('Failed to send verification email:', emailErr);
+    return false;
+  }
+}
+
 // TOTP verification using HMAC-SHA1
 function verifyTOTP(code: string, secret: string): boolean {
   if (!/^\d{6}$/.test(code)) return false;
@@ -272,46 +340,11 @@ authRoutes.post('/register', async (context) => {
      VALUES (?, 'role-customer', ?, ?, ?, ?, 0)`
   ).bind(userId, username, email, passwordHash, display_name).run();
 
-  // Send verification email via Resend
-  try {
-    const verificationLink = `https://suprime.xyz/verify-email?token=${verificationToken}`;
-    const resendApiKey = context.env.RESEND_API_KEY;
-    
-    if (resendApiKey) {
-      const emailResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'SUPRIME <noreply@suprime.xyz>',
-          to: email,
-          subject: 'Verifica tu cuenta en SUPRIME',
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h1 style="color: #6366f1;">Bienvenido a SUPRIME</h1>
-              <p>Gracias por registrarte. Por favor verifica tu correo electrónico haciendo clic en el siguiente botón:</p>
-              <a href="${verificationLink}" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 16px 0;">
-                Verificar mi cuenta
-              </a>
-              <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
-              <p>Este enlace expira en 24 horas.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #888; font-size: 12px;">SUPRIME - Tu tienda premium</p>
-            </div>
-          `,
-        }),
-      });
-
-      if (!emailResponse.ok) {
-        console.error('Resend email failed:', await emailResponse.text());
-      }
-    } else {
-      console.warn('RESEND_API_KEY not configured, skipping email send');
-    }
-  } catch (emailErr) {
-    console.error('Failed to send verification email:', emailErr);
+  // Send verification email (Cloudflare Email Service con fallback a Resend)
+  const verificationLink = `https://suprime.xyz/verify-email?token=${verificationToken}`;
+  const emailSent = await sendVerificationEmail(context.env, email, verificationLink);
+  if (!emailSent) {
+    console.warn(`Verification email for ${email} could not be sent by any provider`);
   }
 
   return context.json({ 

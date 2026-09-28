@@ -5,6 +5,11 @@ compatibility_date = "2025-07-18"
 [dev]
 port = 8789
 
+# Cloudflare Email Service (requiere dominio onboarded en Email Sending).
+# Si no está disponible, el código usa Resend como fallback.
+[[send_email]]
+name = "EMAIL"
+
 [vars]
 APP_ENV = "production"
 IMAGEKIT_PUBLIC_KEY = "public_sGkaXnIgxG51APMqROLbG/uqEak="
