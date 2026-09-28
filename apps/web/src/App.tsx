@@ -7,6 +7,7 @@ import { getAuthHeaders } from './lib/api';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LoginForm } from './components/LoginForm';
+import { OtpForm } from './components/OtpForm';
 import { CheckoutForm } from './components/CheckoutForm';
 import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
@@ -15,7 +16,7 @@ import { AdminPage } from './pages/AdminPage';
 
 export function App() {
   const apiUrl = useApiUrl();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
 
@@ -30,6 +31,8 @@ export function App() {
   useEffect(() => {
     if (user && showLogin) {
       setShowLogin(false);
+      setPendingOtpEmail(null);
+      setOtpError('');
     }
   }, [user, showLogin]);
 
@@ -292,10 +295,21 @@ export function App() {
         <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
           <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="character-bounce-in">{loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
-              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); }}>✕</button>
+              <h2 className="character-bounce-in">{pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
+              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); }}>✕</button>
             </div>
-            {actionError && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {actionError && !pendingOtpEmail && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {pendingOtpEmail ? (
+              <OtpForm
+                email={pendingOtpEmail}
+                onVerify={handleVerifyOtp}
+                onResend={handleResendOtp}
+                onBack={() => { setPendingOtpEmail(null); setOtpError(''); }}
+                loading={otpLoading}
+                resending={otpResending}
+                error={otpError}
+              />
+            ) : (
             <LoginForm
               onSubmit={handleLogin}
               onCancel={() => { setShowLogin(false); setActionError(''); }}
@@ -304,6 +318,7 @@ export function App() {
               loading={actionLoading}
               apiUrl={apiUrl}
             />
+            )}
           </div>
         </div>
       )}

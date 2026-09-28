@@ -75,43 +75,32 @@ function generateSessionToken(): string {
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Email verification token storage
-const verificationTokens = new Map<string, { email: string; expiresAt: number }>();
+// OTP for email verification (6 digits, 15-minute validity, D1-backed)
+const OTP_TTL_SECONDS = 15 * 60;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
-function generateVerificationToken(): string {
-  const array = new Uint8Array(32);
+function generateOtpCode(): string {
+  const array = new Uint32Array(1);
   crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  return String(100000 + (array[0] % 900000));
 }
 
-function verificationEmailHtml(verificationLink: string): string {
-  return `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #6366f1;">Bienvenido a SUPRIME</h1>
-      <p>Gracias por registrarte. Por favor verifica tu correo electrónico haciendo clic en el siguiente botón:</p>
-      <a href="${verificationLink}" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 16px 0;">
-        Verificar mi cuenta
-      </a>
-      <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
-      <p>Este enlace expira en 24 horas.</p>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-      <p style="color: #888; font-size: 12px;">SUPRIME - Tu tienda premium</p>
-    </div>
-  `;
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Envío con fallback: 1) Cloudflare Email Service (nativo, sin keys),
 // 2) Resend. Devuelve true si alguno lo aceptó.
-async function sendVerificationEmail(env: Bindings, toEmail: string, verificationLink: string): Promise<boolean> {
-  const html = verificationEmailHtml(verificationLink);
-
+async function sendEmail(env: Bindings, toEmail: string, subject: string, html: string): Promise<boolean> {
   // 1. Cloudflare Email Service (requiere dominio onboarded en Email Sending)
   if (env.EMAIL) {
     try {
       await env.EMAIL.send({
         from: 'SUPRIME <noreply@suprime.xyz>',
         to: toEmail,
-        subject: 'Verifica tu cuenta en SUPRIME',
+        subject,
         html,
       });
       return true;
@@ -136,7 +125,7 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, verificatio
       body: JSON.stringify({
         from: 'SUPRIME <noreply@suprime.xyz>',
         to: toEmail,
-        subject: 'Verifica tu cuenta en SUPRIME',
+        subject,
         html,
       }),
     });
@@ -147,9 +136,49 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, verificatio
     }
     return true;
   } catch (emailErr) {
-    console.error('Failed to send verification email:', emailErr);
+    console.error('Failed to send email:', emailErr);
     return false;
   }
+}
+
+function otpEmailHtml(code: string): string {
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #6366f1;">Verifica tu cuenta en SUPRIME</h1>
+      <p>Usa este código para activar tu cuenta. Caduca en 15 minutos:</p>
+      <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.5rem; text-align: center; background: #f4f4f8; border-radius: 12px; padding: 16px; margin: 16px 0;">${code}</div>
+      <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="color: #888; font-size: 12px;">SUPRIME - Tu tienda premium</p>
+    </div>
+  `;
+}
+
+// Crea (o reemplaza) el OTP para un email y lo envía. Respeta cooldown de reenvío.
+async function issueOtp(env: Bindings, email: string): Promise<{ sent: boolean; cooldown: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await env.DB.prepare(
+    'SELECT last_sent_at FROM email_otps WHERE email = ?'
+  ).bind(email).first() as { last_sent_at: number } | null;
+
+  if (existing && now - existing.last_sent_at < OTP_RESEND_COOLDOWN_SECONDS) {
+    return { sent: false, cooldown: OTP_RESEND_COOLDOWN_SECONDS - (now - existing.last_sent_at) };
+  }
+
+  const code = generateOtpCode();
+  const codeHash = await sha256Hex(code);
+  await env.DB.prepare(
+    `INSERT INTO email_otps (email, code_hash, expires_at, attempts, last_sent_at)
+     VALUES (?, ?, ?, 0, ?)
+     ON CONFLICT(email) DO UPDATE SET
+       code_hash = excluded.code_hash,
+       expires_at = excluded.expires_at,
+       attempts = 0,
+       last_sent_at = excluded.last_sent_at`
+  ).bind(email, codeHash, now + OTP_TTL_SECONDS, now).run();
+
+  const sent = await sendEmail(env, email, 'Tu código de verificación SUPRIME', otpEmailHtml(code));
+  return { sent, cooldown: 0 };
 }
 
 // TOTP verification using HMAC-SHA1
@@ -317,7 +346,8 @@ authRoutes.post('/register', async (context) => {
     return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
 
-  const { email, password, username, display_name } = parsed.data;
+  const { email: rawEmail, password, username, display_name } = parsed.data;
+  const email = rawEmail.trim().toLowerCase();
 
   const existing = await context.env.DB.prepare(
     'SELECT id FROM users WHERE email = ? OR username = ?'
@@ -330,49 +360,113 @@ authRoutes.post('/register', async (context) => {
   const passwordHash = await hashPassword(password);
   const userId = generateId();
 
-  // Generate email verification token
-  const verificationToken = generateVerificationToken();
-  const verificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-  verificationTokens.set(verificationToken, { email, expiresAt: verificationExpires });
-
   await context.env.DB.prepare(
     `INSERT INTO users (id, role_id, username, email, password_hash, display_name, email_verified)
      VALUES (?, 'role-customer', ?, ?, ?, ?, 0)`
   ).bind(userId, username, email, passwordHash, display_name).run();
 
-  // Send verification email (Cloudflare Email Service con fallback a Resend)
-  const verificationLink = `https://suprime.xyz/verify-email?token=${verificationToken}`;
-  const emailSent = await sendVerificationEmail(context.env, email, verificationLink);
-  if (!emailSent) {
-    console.warn(`Verification email for ${email} could not be sent by any provider`);
+  // Generar y enviar código OTP de 15 minutos (sin esto no hay acceso)
+  const { sent } = await issueOtp(context.env, email);
+  if (!sent) {
+    console.warn(`OTP email for ${email} could not be sent by any provider`);
   }
 
-  return context.json({ 
-    data: { id: userId, email, username, display_name, verificationRequired: true } 
+  return context.json({
+    data: { id: userId, email, username, display_name, verificationRequired: true, otpExpiresIn: OTP_TTL_SECONDS }
   }, 201);
 });
 
-// GET /auth/verify-email - Verify email with token
-authRoutes.get('/verify-email', async (context) => {
-  const token = context.req.query('token');
-  if (!token) {
-    return context.json({ error: 'INVALID_TOKEN' }, 400);
+// POST /auth/verify-otp - Validar código OTP y activar cuenta (con auto-login)
+authRoutes.post('/verify-otp', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+
+  if (!email || !/^\d{6}$/.test(code)) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email y código de 6 dígitos requeridos' }, 400);
   }
 
-  const record = verificationTokens.get(token);
-  if (!record || record.expiresAt < Date.now()) {
-    return context.json({ error: 'TOKEN_EXPIRED' }, 400);
+  const now = Math.floor(Date.now() / 1000);
+  const record = await context.env.DB.prepare(
+    'SELECT code_hash, expires_at, attempts FROM email_otps WHERE email = ?'
+  ).bind(email).first() as { code_hash: string; expires_at: number; attempts: number } | null;
+
+  if (!record) {
+    return context.json({ error: 'OTP_NOT_FOUND', message: 'No hay código pendiente. Regístrate o pide uno nuevo.' }, 404);
   }
 
-  // Mark email as verified
+  if (record.expires_at < now) {
+    await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+    return context.json({ error: 'OTP_EXPIRED', message: 'Código caducado (15 min). Pide uno nuevo.' }, 410);
+  }
+
+  if (record.attempts >= OTP_MAX_ATTEMPTS) {
+    await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+    return context.json({ error: 'OTP_LOCKED', message: 'Demasiados intentos. Pide un código nuevo.' }, 429);
+  }
+
+  const codeHash = await sha256Hex(code);
+  if (codeHash !== record.code_hash) {
+    await context.env.DB.prepare(
+      'UPDATE email_otps SET attempts = attempts + 1 WHERE email = ?'
+    ).bind(email).run();
+    const remaining = OTP_MAX_ATTEMPTS - record.attempts - 1;
+    return context.json({ error: 'OTP_INVALID', message: `Código incorrecto. Te quedan ${remaining} intentos.`, remaining }, 401);
+  }
+
+  // OTP válido: activar cuenta y limpiar
+  await context.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE email = ?').bind(email).run();
+  await context.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(email).run();
+
+  const user = await context.env.DB.prepare(
+    'SELECT id, username, email, display_name, role_id FROM users WHERE email = ?'
+  ).bind(email).first();
+
+  if (!user) {
+    return context.json({ error: 'USER_NOT_FOUND' }, 404);
+  }
+
+  // Auto-login tras verificar (7 días)
+  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
+  const expiresAt = now + 7 * 24 * 60 * 60;
   await context.env.DB.prepare(
-    'UPDATE users SET email_verified = 1 WHERE email = ?'
-  ).bind(record.email).run();
+    'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
+  ).bind(token, user.id, expiresAt).run();
 
-  // Clean up token
-  verificationTokens.delete(token);
+  return context.json({
+    data: { user, session: { id: token, token, expires_at: expiresAt } },
+  });
+});
 
-  return context.redirect('https://suprime.xyz?email=verified');
+// POST /auth/resend-otp - Reenviar código OTP (cooldown 60s)
+authRoutes.post('/resend-otp', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+
+  if (!email) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email requerido' }, 400);
+  }
+
+  const user = await context.env.DB.prepare(
+    'SELECT email_verified FROM users WHERE email = ?'
+  ).bind(email).first() as { email_verified: number } | null;
+
+  if (!user) {
+    return context.json({ error: 'USER_NOT_FOUND', message: 'No hay cuenta con ese correo' }, 404);
+  }
+  if (user.email_verified) {
+    return context.json({ error: 'ALREADY_VERIFIED', message: 'La cuenta ya está verificada. Inicia sesión.' }, 400);
+  }
+
+  const { sent, cooldown } = await issueOtp(context.env, email);
+  if (cooldown > 0) {
+    return context.json({ error: 'OTP_COOLDOWN', message: `Espera ${cooldown}s antes de pedir otro código`, retryAfter: cooldown }, 429);
+  }
+  if (!sent) {
+    return context.json({ error: 'EMAIL_FAILED', message: 'No se pudo enviar el correo. Intenta más tarde.' }, 502);
+  }
+
+  return context.json({ data: { sent: true, otpExpiresIn: OTP_TTL_SECONDS } });
 });
 
 // POST /auth/login

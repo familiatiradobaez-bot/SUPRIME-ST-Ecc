@@ -30,6 +30,11 @@ export function useAuth() {
   const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  // Email pendiente de verificación OTP (tras registro)
+  const [pendingOtpEmail, setPendingOtpEmail] = useState<string | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpResending, setOtpResending] = useState(false);
+  const [otpError, setOtpError] = useState('');
 
   // Persistencia: rememberMe -> localStorage (30 días), si no -> sessionStorage (cierra al cerrar pestaña).
   // (La cookie HttpOnly del servidor no es legible cross-subdominio, por eso se guarda el token aquí.)
@@ -125,9 +130,19 @@ export function useAuth() {
               : payload.error === 'RATE_LIMIT_EXCEEDED'
                 ? 'Demasiados intentos. Intenta más tarde.'
                 : payload.error === 'EMAIL_NOT_VERIFIED'
-                  ? 'Debes verificar tu correo electrónico'
+                  ? 'Debes verificar tu correo con el código OTP. Regístrate de nuevo o pide un código.'
                   : 'Error del servidor';
         throw new Error(errorMsg);
+      }
+
+      // Registro: no hay sesión, hay que verificar el OTP primero
+      if (loginMode === 'register') {
+        if (payload.data?.verificationRequired && payload.data?.email) {
+          setPendingOtpEmail(payload.data.email);
+          setOtpError('');
+          return;
+        }
+        throw new Error('Respuesta inesperada del servidor');
       }
 
       const { user: userData, session: sessionData } = payload.data;
@@ -153,6 +168,65 @@ export function useAuth() {
       setActionLoading(false);
     }
   }, [apiUrl, loginMode, persistSession]);
+
+  const handleVerifyOtp = useCallback(async (code: string) => {
+    if (!pendingOtpEmail) return;
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      const response = await fetch(`${apiUrl}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingOtpEmail, code }),
+        credentials: 'include',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        const msg = payload.error === 'OTP_INVALID'
+          ? payload.message || 'Código incorrecto'
+          : payload.error === 'OTP_EXPIRED'
+            ? 'Código caducado. Pide uno nuevo.'
+            : payload.error === 'OTP_LOCKED'
+              ? 'Demasiados intentos. Pide un código nuevo.'
+              : payload.error === 'OTP_NOT_FOUND'
+                ? 'No hay código pendiente para este correo.'
+                : payload.message || 'Error al verificar';
+        throw new Error(msg);
+      }
+      // Auto-login tras verificar
+      const { user: userData, session: sessionData } = payload.data;
+      setUser(userData);
+      setSession(sessionData);
+      persistSession(sessionData.token, sessionData.expires_at, false);
+      setPendingOtpEmail(null);
+    } catch (err) {
+      setOtpError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setOtpLoading(false);
+    }
+  }, [apiUrl, pendingOtpEmail, persistSession]);
+
+  const handleResendOtp = useCallback(async () => {
+    if (!pendingOtpEmail) return;
+    setOtpResending(true);
+    setOtpError('');
+    try {
+      const response = await fetch(`${apiUrl}/auth/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingOtpEmail }),
+        credentials: 'include',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message || 'No se pudo reenviar el código');
+      }
+    } catch (err) {
+      setOtpError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setOtpResending(false);
+    }
+  }, [apiUrl, pendingOtpEmail]);
 
   const handleLogout = useCallback(async () => {
     if (session) {
@@ -204,6 +278,14 @@ export function useAuth() {
     saveShipping,
     persistSession,
     clearPersistedSession,
+    pendingOtpEmail,
+    otpLoading,
+    otpResending,
+    otpError,
+    setPendingOtpEmail,
+    setOtpError,
+    handleVerifyOtp,
+    handleResendOtp,
     decodeTokenRole,
     hasAdminAccess,
   };
