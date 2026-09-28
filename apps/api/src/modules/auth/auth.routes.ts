@@ -243,8 +243,14 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>();
 
 // POST /auth/register
 authRoutes.post('/register', async (context) => {
-  const body = await context.req.json().catch(() => null);
-  const parsed = registerSchema.safeParse(body);
+  const body = await context.req.text().catch(() => null);
+  let parsedBody: unknown = null;
+  try {
+    parsedBody = body ? JSON.parse(body) : null;
+  } catch {
+    parsedBody = null;
+  }
+  const parsed = registerSchema.safeParse(parsedBody);
   if (!parsed.success) {
     return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
@@ -350,8 +356,14 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
   }
 
-  const body = await context.req.json().catch(() => null);
-  const parsed = loginSchema.safeParse(body);
+  const body = await context.req.text().catch(() => null);
+  let parsedBody: unknown = null;
+  try {
+    parsedBody = body ? JSON.parse(body) : null;
+  } catch {
+    parsedBody = null;
+  }
+  const parsed = loginSchema.safeParse(parsedBody);
   if (!parsed.success) {
     return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
@@ -373,7 +385,7 @@ authRoutes.post('/login', async (context) => {
   }
 
   const sessionId = generateId();
-  const rememberMe = body.rememberMe === true;
+  const rememberMe = (parsedBody as Record<string, unknown>)?.rememberMe === true;
   // Token format: base64(userId:role:timestamp) - self-contained, no DB verification needed
   const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
   const token = btoa(tokenData);

@@ -54,7 +54,7 @@ export function createApp() {
     await next();
   });
 
-  // CSRF protection middleware
+  // CSRF protection middleware - only check headers, don't consume body
   api.use('*', async (context, next) => {
     const method = context.req.method;
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
