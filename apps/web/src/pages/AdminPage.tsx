@@ -311,6 +311,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     setProductImages(product.images?.length ? product.images : (product.image_url ? [product.image_url] : []));
     setProductPrice((product.price_cents / 100).toFixed(2));
     setProductStock(product.stock_quantity.toString());
+    setShowProductForm(true);
   };
 
   const tabs = [

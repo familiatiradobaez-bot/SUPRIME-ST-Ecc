@@ -10,6 +10,9 @@ export type Bindings = {
   DB: D1Database;
   APP_ENV: string;
   IMGBB_API_KEY?: string;
+  IMAGEKIT_PRIVATE_KEY?: string;
+  IMAGEKIT_PUBLIC_KEY?: string;
+  IMAGEKIT_URL_ENDPOINT?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;

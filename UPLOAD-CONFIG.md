@@ -1,83 +1,46 @@
-# Configuracion del Sistema de Subida de Imagenes
+# Configuración del Sistema de Subida de Imágenes (ImageKit)
 
-## Donde colocar la API Key de ImgBB
+Flujo global: navegador → Worker (`POST /api/v1/upload/imagekit`) → ImageKit.
+La private key nunca sale del servidor. El front no necesita keys.
 
-**IMPORTANTE:** La API Key de ImgBB NUNCA debe estar en el codigo del frontend.
+## Dónde colocar las credenciales
 
-### Opcion 1: Variables de entorno en wrangler.toml (Recomendado para produccion)
-
-Edita el archivo `wrangler.toml` en la raiz del proyecto:
-
-```toml
-[env.production]
-IMGBB_API_KEY = "tu_api_key_aqui"
-
-[env.preview]
-IMGBB_API_KEY = "tu_api_key_aqui"
-```
-
-### Opcion 2: Secretos en wrangler (Mas seguro - Recomodado)
-
-Usa el gestor de secretos de Wrangler:
+### Producción: secreto del Worker (obligatorio)
 
 ```bash
-wrangler secret put IMGBB_API_KEY
+wrangler secret put IMAGEKIT_PRIVATE_KEY
 ```
 
-Esto pedira que ingreses la API Key y la almacenara de forma segura.
+Verificar: `wrangler secret list` debe mostrar `IMAGEKIT_PRIVATE_KEY`.
 
-### Opcion 3: Archivo .env.local (Solo desarrollo local)
+### Variables públicas (ya commiteadas en `wrangler.toml`)
 
-Crea un archivo `.env.local` en la raiz del proyecto:
+```toml
+[vars]
+IMAGEKIT_PUBLIC_KEY = "public_..."
+IMAGEKIT_URL_ENDPOINT = "https://ik.imagekit.io/..."
+```
+
+### Desarrollo local
+
+Añade a `.dev.vars` en la raíz (no commitear, está en `.gitignore`):
 
 ```env
-IMGBB_API_KEY=tu_api_key_aqui
+IMAGEKIT_PRIVATE_KEY=private_...
 ```
 
-**Nota:** Asegurate de que `.env.local` este en tu `.gitignore`.
+## Cómo obtener las credenciales
 
-### Como obtener una API Key de ImgBB
+1. Ve a https://imagekit.io/ y crea cuenta / inicia sesión
+2. Dashboard → Developers → API Keys
+3. Copia: Private key, Public key y URL-endpoint
 
-1. Ve a https://imgbb.com/
-2. Crea una cuenta o inicia sesion
-3. Ve a https://api.imgbb.com/ (seccion API)
-4. Copia tu API Key
-5. Colocala en una de las opciones anteriores
+## Endpoint
 
----
+### POST /api/v1/upload/imagekit
 
-## Estructura del Sistema
+Request:
 
-```
-Frontend (React)                    Backend (Hono)              ImgBB
-     |                                  |                         |
-     |  1. Usuario selecciona imagen    |                         |
-     |--------------------------------->|                         |
-     |                                  |  2. Servidor recibe     |
-     |                                  |     imagen (sin key)    |
-     |                                  |                         |
-     |                                  |  3. Servidor sube a     |
-     |                                  |     ImgBB con API Key   |
-     |                                  |------------------------>|
-     |                                  |                         |
-     |                                  |  4. ImgBB responde con  |
-     |                                  |     URL publica         |
-     |                                  |<------------------------|
-     |                                  |                         |
-     |  5. Servidor devuelve URL       |                         |
-     |<---------------------------------|                         |
-     |                                  |                         |
-     |  6. Usuario ve la URL y guarda   |                         |
-```
-
----
-
-## Endpoints del Sistema
-
-### POST /api/v1/upload/imgbb
-Sube una imagen a ImgBB usando la API Key del servidor.
-
-**Request:**
 ```json
 {
   "dataUrl": "data:image/png;base64,iVBORw0KGgo...",
@@ -85,55 +48,34 @@ Sube una imagen a ImgBB usando la API Key del servidor.
 }
 ```
 
-**Response:**
+Response:
+
 ```json
 {
   "data": {
-    "url": "https://i.ibb.co/...",
-    "display_url": "https://i.ibb.co/...",
-    "delete_url": "https://imgbb.com/...",
-    "width": 800,
-    "height": 600,
-    "size": 12345
+    "url": "https://ik.imagekit.io/.../products/mi-imagen.png",
+    "display_url": "https://ik.imagekit.io/.../tr:w-400/...",
+    "fileId": "...",
+    "name": "mi-imagen.png",
+    "filePath": "/products/mi-imagen.png"
   }
 }
 ```
 
-### POST /api/v1/upload/validate-url
-Valida una URL de imagen ingresada manualmente.
+Errores: `SERVER_CONFIG_ERROR` (falta private key), `INVALID_INPUT`,
+`FILE_TOO_LARGE` (>5MB), `INVALID_TYPE` (solo JPEG/PNG/GIF/WebP),
+`RATE_LIMIT_EXCEEDED` (20 subidas / 15 min por IP), `UPLOAD_FAILED`.
 
-**Request:**
-```json
-{
-  "url": "https://ejemplo.com/imagen.jpg"
-}
-```
+## Seguridad implementada
 
-**Response:**
-```json
-{
-  "data": {
-    "valid": true,
-    "url": "https://ejemplo.com/imagen.jpg"
-  }
-}
-```
-
----
-
-## Seguridad Implementada
-
-- La API Key NUNCA se expone al frontend
+- La private key nunca se expone al frontend
 - Rate limiting de 20 subidas por 15 minutos por IP
-- Validacion de tipos de archivo (JPEG, PNG, GIF, WebP)
-- Validacion de tamano maximo (5MB)
-- Validacion de URLs manuales
-- Todas las solicitudes pasan por el servidor
+- Validación de tipos de archivo (JPEG, PNG, GIF, WebP)
+- Validación de tamaño máximo (5MB)
+- Validación de URLs manuales (`POST /upload/validate-url`)
+- Todas las subidas pasan por el servidor
 
----
+## Nota: ruta ImgBB legacy
 
-## Rate Limiting
-
-- **Limite:** 20 subidas por IP
-- **Ventana:** 15 minutos
-- **Respuesta al exceder:** 429 Too Many Requests
+`POST /upload/imgbb` sigue en el backend pero el front ya no la usa
+(ImgBB devuelve `code 103 forbidden` para estas keys). No requiere acción.

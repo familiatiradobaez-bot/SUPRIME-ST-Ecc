@@ -4,6 +4,7 @@ import type { Bindings } from '../../app';
 
 export type UploadBindings = Bindings & {
   IMGBB_API_KEY: string;
+  IMAGEKIT_PRIVATE_KEY: string;
 };
 
 // Allowed image MIME types
@@ -59,8 +60,8 @@ uploadRoutes.post('/imgbb', async (context) => {
 
   // Check API key is configured
   if (!context.env.IMGBB_API_KEY) {
-    console.error('IMGBB_API_KEY not configured in server environment');
-    return context.json({ error: 'SERVER_CONFIG_ERROR', message: 'Image upload service not configured' }, 500);
+    console.error('IMGBB_API_KEY not configured in server environment. Fix: create .dev.vars with IMGBB_API_KEY for local dev, or run `wrangler secret put IMGBB_API_KEY` for production.');
+    return context.json({ error: 'SERVER_CONFIG_ERROR', message: 'Image upload service not configured (missing IMGBB_API_KEY on server)' }, 500);
   }
 
   const body = await context.req.json().catch(() => null);
@@ -130,6 +131,90 @@ uploadRoutes.post('/imgbb', async (context) => {
     });
   } catch (err) {
     console.error('ImgBB upload error:', err);
+    return context.json({ error: 'UPLOAD_ERROR', message: 'Failed to upload image' }, 502);
+  }
+});
+
+// POST /upload/imagekit - Upload image to ImageKit via server (ruta global)
+uploadRoutes.post('/imagekit', async (context) => {
+  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+
+  if (!checkRateLimit(clientIp)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many upload attempts' }, 429);
+  }
+
+  // Check private key is configured
+  if (!context.env.IMAGEKIT_PRIVATE_KEY) {
+    console.error('IMAGEKIT_PRIVATE_KEY not configured in server environment. Fix: run `wrangler secret put IMAGEKIT_PRIVATE_KEY`.');
+    return context.json({ error: 'SERVER_CONFIG_ERROR', message: 'Image upload service not configured (missing IMAGEKIT_PRIVATE_KEY on server)' }, 500);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const parsed = imageDataSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
+  }
+
+  const { dataUrl, filename } = parsed.data;
+
+  // Validate file size (approximate from base64 length)
+  const base64Length = dataUrl.split(';base64,')[1]?.length || 0;
+  const approximateSize = Math.ceil((base64Length * 3) / 4);
+  if (approximateSize > MAX_FILE_SIZE) {
+    return context.json({ error: 'FILE_TOO_LARGE', message: 'Image must be smaller than 5MB' }, 400);
+  }
+
+  // Extract MIME type
+  const mimeMatch = dataUrl.match(/^data:(image\/[a-z]+);base64,/);
+  if (!mimeMatch || !ALLOWED_TYPES.includes(mimeMatch[1])) {
+    return context.json({ error: 'INVALID_TYPE', message: 'Only JPEG, PNG, GIF and WebP images are allowed' }, 400);
+  }
+
+  // Upload to ImageKit (server-side, private key nunca sale del Worker)
+  try {
+    const base64Data = dataUrl.split(';base64,')[1];
+    const ext = mimeMatch[1].split('/')[1] === 'jpeg' ? 'jpg' : mimeMatch[1].split('/')[1];
+    const safeName = (filename || `upload-${Date.now()}`).replace(/[^a-zA-Z0-9-_]/g, '_');
+
+    const formData = new FormData();
+    formData.append('file', base64Data);
+    formData.append('fileName', `${safeName}.${ext}`);
+    formData.append('folder', '/products');
+
+    const credentials = btoa(`${context.env.IMAGEKIT_PRIVATE_KEY}:`);
+    const response = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${credentials}` },
+      body: formData,
+    });
+
+    const result = await response.json() as {
+      fileId?: string;
+      name?: string;
+      url?: string;
+      thumbnailUrl?: string;
+      filePath?: string;
+      error?: { message?: string };
+      message?: string;
+    };
+
+    if (!response.ok || !result.url) {
+      console.error('ImageKit upload failed:', result.error?.message || result.message || 'Unknown error');
+      return context.json({ error: 'UPLOAD_FAILED', message: 'Failed to upload image' }, 502);
+    }
+
+    return context.json({
+      data: {
+        url: result.url,
+        display_url: result.thumbnailUrl || result.url,
+        fileId: result.fileId,
+        name: result.name,
+        filePath: result.filePath,
+      },
+    });
+  } catch (err) {
+    console.error('ImageKit upload error:', err);
     return context.json({ error: 'UPLOAD_ERROR', message: 'Failed to upload image' }, 502);
   }
 });

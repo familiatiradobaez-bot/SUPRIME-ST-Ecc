@@ -10,6 +10,8 @@ dist/
 # Environment variables
 .env
 .env.local
+.dev.vars
+.dev.vars.local
 
 # Logs
 *.log

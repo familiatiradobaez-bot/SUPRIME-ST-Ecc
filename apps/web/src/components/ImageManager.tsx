@@ -18,7 +18,9 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl }: Image
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Upload single image to server (which forwards to ImgBB)
+  // Subida global: navegador -> Worker (`POST /upload/imagekit`) -> ImageKit.
+  // La private key nunca sale del servidor. Mantiene validación local
+  // (tipo/tamaño) para fallar rápido sin gastar rate limit.
   const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -33,44 +35,46 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl }: Image
       return null;
     }
 
-    const reader = new FileReader();
-    return new Promise((resolve) => {
-      reader.onload = async () => {
-        const dataUrl = reader.result as string;
-        const fileKey = `${Date.now()}-${file.name}`;
+    const fileKey = `${Date.now()}-${file.name}`;
+    setUploading(prev => ({ ...prev, [fileKey]: 'uploading' }));
+    setError('');
 
-        setUploading(prev => ({ ...prev, [fileKey]: 'uploading' }));
+    // --- Ruta global: vía servidor a ImageKit ---
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
 
-        try {
-          const response = await fetch(`${apiUrl}/upload/imgbb`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              dataUrl,
-              filename: file.name,
-            }),
-            credentials: 'include',
-          });
+      const response = await fetch(`${apiUrl}/upload/imagekit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl, filename: file.name }),
+        credentials: 'include',
+      });
 
-          const data = await response.json();
+      const data = await response.json();
 
-          if (!response.ok) {
-            setUploading(prev => ({ ...prev, [fileKey]: 'error' }));
-            setError(data.message || 'Error al subir la imagen');
-            resolve(null);
-            return;
-          }
-
-          setUploading(prev => ({ ...prev, [fileKey]: 'success' }));
-          resolve(data.data.url);
-        } catch (err) {
-          setUploading(prev => ({ ...prev, [fileKey]: 'error' }));
-          setError('Error de conexión al subir la imagen');
-          resolve(null);
+      if (!response.ok) {
+        setUploading(prev => ({ ...prev, [fileKey]: 'error' }));
+        // Mensaje específico cuando falta la private key en el servidor
+        if (data.error === 'SERVER_CONFIG_ERROR') {
+          setError('Servicio de imágenes no configurado en el servidor (falta IMAGEKIT_PRIVATE_KEY). Ejecuta `wrangler secret put IMAGEKIT_PRIVATE_KEY`.');
+        } else {
+          setError(data.message || 'Error al subir la imagen');
         }
-      };
-      reader.readAsDataURL(file);
-    });
+        return null;
+      }
+
+      setUploading(prev => ({ ...prev, [fileKey]: 'success' }));
+      return data.data.url as string;
+    } catch {
+      setUploading(prev => ({ ...prev, [fileKey]: 'error' }));
+      setError('Error de conexión al subir la imagen');
+      return null;
+    }
   }, [apiUrl]);
 
   // Handle file selection
@@ -85,13 +89,20 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl }: Image
     }
 
     const filesToUpload = Array.from(files).slice(0, remaining);
+    // Acumular en variable local para evitar closure stale de `images`
+    // (antes: onChange([...images, url]) perdía imágenes al subir varias seguidas)
+    let updated = [...images];
 
     for (const file of filesToUpload) {
       const url = await uploadImage(file);
       if (url) {
-        onChange([...images, url]);
+        updated = [...updated, url];
+        onChange(updated);
       }
     }
+
+    // Reset input para permitir reseleccionar el mismo archivo
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [images, maxImages, onChange, uploadImage]);
 
   // Handle manual URL addition
