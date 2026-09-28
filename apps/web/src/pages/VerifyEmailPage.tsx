@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
+import { useApiUrl } from '../hooks/useApiUrl';
 
 export function VerifyEmailPage() {
+  const apiUrl = useApiUrl();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    const emailParam = params.get('email');
+    if (emailParam) setEmailInput(emailParam);
 
     if (!token) {
       setStatus('error');
@@ -17,9 +22,6 @@ export function VerifyEmailPage() {
 
     const verifyEmail = async () => {
       try {
-        const config = (window as any).__APP_CONFIG__;
-        const apiUrl = config?.API_URL || `${window.location.protocol}//${window.location.hostname}:8789/api/v1`;
-
         const response = await fetch(`${apiUrl}/auth/verify-email?token=${token}`, {
           credentials: 'include',
         });
@@ -27,36 +29,37 @@ export function VerifyEmailPage() {
         if (response.ok) {
           setStatus('success');
         } else {
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
           setStatus('error');
           setError(data.message || 'Token inválido o expirado');
         }
       } catch (err) {
         setStatus('error');
-        setError('Error de conexión');
+        setError('Error de conexión con el servidor');
       }
     };
 
     verifyEmail();
-  }, []);
+  }, [apiUrl]);
 
   const handleResend = async () => {
+    const emailToSend = emailInput || prompt('Introduce tu correo electrónico para reenviar el enlace:');
+    if (!emailToSend) return;
+
     setResending(true);
     try {
-      const config = (window as any).__APP_CONFIG__;
-      const apiUrl = config?.API_URL || `${window.location.protocol}//${window.location.hostname}:8789/api/v1`;
-
       const response = await fetch(`${apiUrl}/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: '' }),
+        body: JSON.stringify({ email: emailToSend }),
         credentials: 'include',
       });
 
       if (response.ok) {
         alert('Correo de verificación enviado. Revisa tu bandeja de entrada.');
       } else {
-        alert('No se pudo reenviar el correo. Intenta más tarde.');
+        const data = await response.json().catch(() => ({}));
+        alert(data.message || 'No se pudo reenviar el correo. Verifica el email e intenta más tarde.');
       }
     } catch (err) {
       alert('Error de conexión');

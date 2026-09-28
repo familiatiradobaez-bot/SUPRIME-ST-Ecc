@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { catalogRoutes } from './modules/catalog/catalog.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
@@ -40,9 +39,26 @@ export function createApp() {
     'https://anew-straw-goggles.ngrok-free.dev',
   ];
 
-  // Security headers middleware
+  // Security headers + CORS middleware (manual CORS to avoid body consumption)
   api.use('*', async (context, next) => {
-    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'");
+    const requestOrigin = context.req.header('Origin');
+
+    // CORS headers
+    if (requestOrigin) {
+      if (allowedOrigins.includes(requestOrigin) ||
+          requestOrigin.endsWith('.pages.dev') ||
+          requestOrigin.endsWith('.trycloudflare.com') ||
+          requestOrigin.endsWith('.ngrok-free.dev')) {
+        context.header('Access-Control-Allow-Origin', requestOrigin);
+        context.header('Access-Control-Allow-Credentials', 'true');
+        context.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        context.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        context.header('Access-Control-Expose-Headers', 'Set-Cookie');
+      }
+    }
+
+    // Security headers
+    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://*.trycloudflare.com https://*.ngrok-free.dev https://*.pages.dev http://localhost:* http://127.0.0.1:* http://192.168.*:* https://api.imgbb.com https://api.qrserver.com;");
     context.header('X-XSS-Protection', '1; mode=block');
     context.header('X-Frame-Options', 'DENY');
     context.header('X-Content-Type-Options', 'nosniff');
@@ -51,17 +67,40 @@ export function createApp() {
     if (context.env.APP_ENV === 'production') {
       context.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
     }
+
+    if (context.req.method === 'OPTIONS') {
+      return context.body(null, 204);
+    }
+
     await next();
   });
 
   // CSRF protection middleware - only check headers, don't consume body
   api.use('*', async (context, next) => {
     const method = context.req.method;
+    if (method === 'OPTIONS') {
+      return next();
+    }
     if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
       const origin = context.req.header('Origin');
       const referer = context.req.header('Referer');
-      const isAllowed = (origin && allowedOrigins.includes(origin)) || 
-                        (referer && allowedOrigins.some(o => referer.startsWith(o)));
+      const isAllowedOrigin = (val?: string): boolean => {
+        if (!val) return false;
+        try {
+          const originUrl = val.startsWith('http') ? new URL(val).origin : val;
+          return allowedOrigins.includes(originUrl) ||
+                 originUrl.endsWith('.pages.dev') ||
+                 originUrl.endsWith('.trycloudflare.com') ||
+                 originUrl.endsWith('.ngrok-free.dev') ||
+                 originUrl.includes('localhost:') ||
+                 originUrl.includes('127.0.0.1:') ||
+                 originUrl.includes('192.168.');
+        } catch {
+          return false;
+        }
+      };
+
+      const isAllowed = isAllowedOrigin(origin) || isAllowedOrigin(referer);
       if (!isAllowed && context.env.APP_ENV === 'production') {
         return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
       }
@@ -69,20 +108,7 @@ export function createApp() {
     await next();
   });
 
-  api.use('*', cors({
-    origin: (origin) => {
-      if (!origin) return null;
-      if (allowedOrigins.includes(origin)) return origin;
-      if (origin.endsWith('.pages.dev')) return origin;
-      if (origin.endsWith('.trycloudflare.com')) return origin;
-      if (origin.endsWith('.ngrok-free.dev')) return origin;
-      return null;
-    },
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposeHeaders: ['Set-Cookie'],
-  }));
+  // CORS handled manually in security headers middleware to avoid body consumption
   api.get('/health', (context) => {
     context.header('X-API-Version', '2.0.1');
     return context.json({ status: 'ok', environment: context.env.APP_ENV, version: '2.0.1' });
@@ -93,7 +119,9 @@ export function createApp() {
   api.route('/admin', adminRoutes);
   api.route('/auth/google', googleRoutes);
   api.route('/upload', uploadRoutes);
+
   app.route('/api/v1', api);
+  app.route('/api', api);
 
   return app;
 }

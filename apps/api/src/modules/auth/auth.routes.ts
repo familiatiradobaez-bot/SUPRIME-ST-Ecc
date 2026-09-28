@@ -243,15 +243,8 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>();
 
 // POST /auth/register
 authRoutes.post('/register', async (context) => {
-  const arrayBuffer = await context.req.arrayBuffer().catch(() => null);
-  const body = arrayBuffer ? new TextDecoder().decode(arrayBuffer) : null;
-  let parsedBody: unknown = null;
-  try {
-    parsedBody = body ? JSON.parse(body) : null;
-  } catch {
-    parsedBody = null;
-  }
-  const parsed = registerSchema.safeParse(parsedBody);
+  const body = await context.req.json().catch(() => null);
+  const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {
     return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
