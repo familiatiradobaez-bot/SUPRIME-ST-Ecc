@@ -380,7 +380,7 @@ authRoutes.post('/login', async (context) => {
   }
 
   const sessionId = generateId();
-  const rememberMe = (parsedBody as Record<string, unknown>)?.rememberMe === true;
+  const rememberMe = (parsedBody as Record<string, unknown> | null)?.rememberMe === true;
   // Token format: base64(userId:role:timestamp) - self-contained, no DB verification needed
   const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
   const token = btoa(tokenData);
