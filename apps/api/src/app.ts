@@ -37,6 +37,7 @@ export function createApp() {
     'https://www.suprime.xyz',
     'https://suprime-st-ecc.pages.dev',
     'https://anew-straw-goggles.ngrok-free.dev',
+    'https://api.suprime.xyz',
   ];
 
   // Security headers + CORS middleware (manual CORS to avoid body consumption)
