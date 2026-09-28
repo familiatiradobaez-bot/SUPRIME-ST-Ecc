@@ -83,7 +83,10 @@ export function createApp() {
     allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     exposeHeaders: ['Set-Cookie'],
   }));
-  api.get('/health', (context) => context.json({ status: 'ok', environment: context.env.APP_ENV }));
+  api.get('/health', (context) => {
+    context.header('X-API-Version', '2.0.1');
+    return context.json({ status: 'ok', environment: context.env.APP_ENV, version: '2.0.1' });
+  });
   api.route('/catalog', catalogRoutes);
   api.route('/auth', authRoutes);
   api.route('/orders', ordersRoutes);
