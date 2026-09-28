@@ -35,6 +35,11 @@ export function useAuth() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpResending, setOtpResending] = useState(false);
   const [otpError, setOtpError] = useState('');
+  // 2FA pendiente tras login con contraseña
+  const [pending2FAEmail, setPending2FAEmail] = useState<string | null>(null);
+  const [pending2FARemember, setPending2FARemember] = useState(false);
+  const [twofaLoading, setTwofaLoading] = useState(false);
+  const [twofaError, setTwofaError] = useState('');
 
   // Persistencia: rememberMe -> localStorage (30 días), si no -> sessionStorage (cierra al cerrar pestaña).
   // (La cookie HttpOnly del servidor no es legible cross-subdominio, por eso se guarda el token aquí.)
@@ -145,6 +150,14 @@ export function useAuth() {
         throw new Error('Respuesta inesperada del servidor');
       }
 
+      // Login con 2FA activado: falta el segundo factor
+      if (payload.data?.requires2FA && payload.data?.email) {
+        setPending2FAEmail(payload.data.email);
+        setPending2FARemember(extra?.rememberMe === true);
+        setTwofaError('');
+        return;
+      }
+
       const { user: userData, session: sessionData } = payload.data;
       setUser(userData);
       setSession(sessionData);
@@ -228,6 +241,35 @@ export function useAuth() {
     }
   }, [apiUrl, pendingOtpEmail]);
 
+  const handleVerify2FA = useCallback(async (code: string) => {
+    if (!pending2FAEmail) return;
+    setTwofaLoading(true);
+    setTwofaError('');
+    try {
+      const response = await fetch(`${apiUrl}/auth/verify-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pending2FAEmail, code, rememberMe: pending2FARemember }),
+        credentials: 'include',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error === 'INVALID_TOTP_CODE'
+          ? 'Código incorrecto. Revisa la hora de tu teléfono y el código actual.'
+          : payload.message || 'Error al verificar');
+      }
+      const { user: userData, session: sessionData } = payload.data;
+      setUser(userData);
+      setSession(sessionData);
+      persistSession(sessionData.token, sessionData.expires_at, pending2FARemember);
+      setPending2FAEmail(null);
+    } catch (err) {
+      setTwofaError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setTwofaLoading(false);
+    }
+  }, [apiUrl, pending2FAEmail, pending2FARemember, persistSession]);
+
   const handleLogout = useCallback(async () => {
     if (session) {
       try {
@@ -286,6 +328,12 @@ export function useAuth() {
     setOtpError,
     handleVerifyOtp,
     handleResendOtp,
+    pending2FAEmail,
+    twofaLoading,
+    twofaError,
+    setPending2FAEmail,
+    setTwofaError,
+    handleVerify2FA,
     decodeTokenRole,
     hasAdminAccess,
   };

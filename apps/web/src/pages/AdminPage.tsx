@@ -35,7 +35,6 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [requires2FA, setRequires2FA] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const [totpError, setTotpError] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
@@ -78,7 +77,6 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         const data = await res.json();
         if (data.data?.enabled) {
           setTotpEnabled(true);
-          setRequires2FA(true);
         }
       } catch (err) {
         console.error('Error checking TOTP status:', err);
@@ -86,38 +84,6 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     };
     checkTotpStatus();
   }, [apiUrl, sessionToken]);
-
-  const handleVerify2FA = async () => {
-    if (!totpCode || totpCode.length !== 6) {
-      setTotpError('Introduce un código de 6 dígitos');
-      return;
-    }
-    setTotpLoading(true);
-    setTotpError('');
-    try {
-      const res = await fetch(`${apiUrl}/auth/me/totp/verify`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code: totpCode }),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setRequires2FA(false);
-        setTotpEnabled(true);
-        setTotpCode('');
-      } else {
-        setTotpError(data.error === 'INVALID_TOTP_CODE' ? 'Código incorrecto' : 'Error de verificación');
-      }
-    } catch (err) {
-      setTotpError('Error de conexión');
-    } finally {
-      setTotpLoading(false);
-    }
-  };
 
   const handleSetup2FA = async () => {
     setTotpLoading(true);
@@ -338,50 +304,15 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   };
 
   const tabs = [
-    { id: 'stats', label: '📊 Dashboard', icon: '📊' },
-    { id: 'products', label: '📦 Productos', icon: '📦' },
-    { id: 'users', label: '👥 Usuarios', icon: '👥' },
-    { id: 'orders', label: '📋 Órdenes', icon: '📋' },
-    { id: 'settings', label: '⚙️ Configuración', icon: '⚙️' },
+    { id: 'stats', label: 'Dashboard', icon: '📊' },
+    { id: 'products', label: 'Productos', icon: '📦' },
+    { id: 'users', label: 'Usuarios', icon: '👥' },
+    { id: 'orders', label: 'Órdenes', icon: '📋' },
+    { id: 'settings', label: 'Configuración', icon: '⚙️' },
   ];
 
-  // Show 2FA verification modal if required
-  if (requires2FA) {
-    return (
-      <div className="modal-overlay">
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2>Verificación de Dos Pasos</h2>
-            <button className="close-btn" onClick={onBack}>✕</button>
-          </div>
-          <div className="form">
-            <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
-              Introduce el código de 6 dígitos de tu aplicación de autenticación para continuar.
-            </p>
-            <div className="form-group">
-              <label>Código de Verificación</label>
-              <input
-                type="text"
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                maxLength={6}
-                autoFocus
-                style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
-              />
-            </div>
-            {totpError && <p className="error" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{totpError}</p>}
-            <div className="form-actions">
-              <button className="btn btn-primary btn-glow" onClick={handleVerify2FA} disabled={totpLoading}>
-                {totpLoading ? 'Verificando...' : 'Verificar'}
-              </button>
-              <button className="btn btn-secondary" onClick={onBack}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // NOTA: el 2FA se verifica en el login (POST /auth/verify-2fa), no aquí.
+  // Este panel asume sesión válida (el middleware admin la exige).
 
   // Show 2FA setup modal
   if (showTotpSetup) {

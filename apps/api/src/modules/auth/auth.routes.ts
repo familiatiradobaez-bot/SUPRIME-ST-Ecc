@@ -51,6 +51,7 @@ function checkForgotRateLimit(ip: string): boolean {
 }
 
 const otpVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
+const twofaAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function checkOtpVerifyRateLimit(ip: string): boolean {
   return checkBucket(otpVerifyAttempts, ip, 20, 15 * 60 * 1000); // verify/reset: 20 / 15 min por IP (además del límite por email)
@@ -537,6 +538,18 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'EMAIL_NOT_VERIFIED', message: 'Debes verificar tu correo electrónico antes de iniciar sesión' }, 403);
   }
 
+  // 2FA: si el usuario lo tiene activado, no se crea sesión todavía.
+  // El front pide el código y llama a POST /auth/verify-2fa.
+  const totpEnabled = await context.env.DB.prepare(
+    'SELECT 1 as ok FROM user_totp WHERE user_id = ? AND enabled = 1'
+  ).bind(user.id).first();
+
+  if (totpEnabled) {
+    return context.json({
+      data: { requires2FA: true, email: user.email },
+    });
+  }
+
   const rememberMe = (parsedBody as Record<string, unknown> | null)?.rememberMe === true;
   // Token format: base64(userId:role:timestamp) - usado como Bearer Y como id de sesión en DB.
   // (Antes se guardaba sessionId UUID pero el front enviaba el token -> /auth/me siempre 401.)
@@ -560,6 +573,57 @@ authRoutes.post('/login', async (context) => {
     },
   });
 
+});
+
+// POST /auth/verify-2fa - Segundo factor tras login con contraseña
+authRoutes.post('/verify-2fa', async (context) => {
+  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  if (!checkBucket(twofaAttempts, clientIp, 10, 15 * 60 * 1000)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+  const rememberMe = body?.rememberMe === true;
+
+  if (!email || !/^\d{6}$/.test(code)) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email y código de 6 dígitos requeridos' }, 400);
+  }
+
+  const user = await context.env.DB.prepare(
+    `SELECT id, username, email, display_name, role_id FROM users
+     WHERE email = ? AND is_active = 1`
+  ).bind(email).first();
+
+  if (!user) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+  }
+
+  const totpRecord = await context.env.DB.prepare(
+    'SELECT secret FROM user_totp WHERE user_id = ? AND enabled = 1'
+  ).bind(user.id).first() as { secret: string } | null;
+
+  if (!totpRecord || !verifyTOTP(code, totpRecord.secret as string)) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+  }
+
+  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
+  const sessionDurationDays = rememberMe ? 30 : 7;
+  const expiresAt = Math.floor(Date.now() / 1000) + sessionDurationDays * 24 * 60 * 60;
+
+  await context.env.DB.prepare(
+    'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
+  ).bind(token, user.id, expiresAt).run();
+
+  context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${sessionDurationDays * 24 * 60 * 60}`);
+
+  return context.json({
+    data: {
+      user,
+      session: { id: token, token, expires_at: expiresAt },
+    },
+  });
 });
 
 // POST /auth/logout

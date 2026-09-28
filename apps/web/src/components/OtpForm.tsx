@@ -3,14 +3,16 @@ import { useState, useEffect } from 'react';
 type OtpFormProps = {
   email: string;
   onVerify: (code: string) => void;
-  onResend: () => void;
+  onResend?: () => void;
   onBack: () => void;
   loading?: boolean;
   resending?: boolean;
   error?: string;
+  title?: string;
+  subtitle?: React.ReactNode;
 };
 
-export function OtpForm({ email, onVerify, onResend, onBack, loading, resending, error }: OtpFormProps) {
+export function OtpForm({ email, onVerify, onResend, onBack, loading, resending, error, title, subtitle }: OtpFormProps) {
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState('');
   const [cooldown, setCooldown] = useState(0);
@@ -32,6 +34,7 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
   };
 
   const handleResend = () => {
+    if (!onResend) return;
     setCooldown(60);
     onResend();
   };
@@ -39,8 +42,10 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
   return (
     <form onSubmit={handleSubmit} className="form">
       <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-        Enviamos un código de 6 dígitos a <strong>{email}</strong>. Caduca en 15 minutos.
-        Sin este paso no podrás acceder a tu cuenta.
+        {subtitle || (
+          <>Enviamos un código de 6 dígitos a <strong>{email}</strong>. Caduca en 15 minutos.
+          Sin este paso no podrás acceder a tu cuenta.</>
+        )}
       </p>
       {(localError || error) && (
         <p className="error" style={{ color: '#a3422b', marginBottom: '1rem' }}>{localError || error}</p>
@@ -66,14 +71,18 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
         <button type="button" className="btn btn-secondary" onClick={onBack} disabled={loading}>Atrás</button>
       </div>
       <p className="form-text" style={{ textAlign: 'center' }}>
-        ¿No llegó?{' '}
-        <a
-          href="#resend"
-          onClick={(e) => { e.preventDefault(); if (cooldown <= 0 && !resending) handleResend(); }}
-          style={{ color: '#c65d35', cursor: cooldown > 0 ? 'not-allowed' : 'pointer', opacity: cooldown > 0 ? 0.6 : 1 }}
-        >
-          {resending ? 'Enviando...' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar código'}
-        </a>
+        {onResend ? (
+          <>¿No llegó?{' '}
+          <a
+            href="#resend"
+            onClick={(e) => { e.preventDefault(); if (cooldown <= 0 && !resending) handleResend(); }}
+            style={{ color: '#c65d35', cursor: cooldown > 0 ? 'not-allowed' : 'pointer', opacity: cooldown > 0 ? 0.6 : 1 }}
+          >
+            {resending ? 'Enviando...' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar código'}
+          </a></>
+        ) : (
+          <>Abre tu app de autenticación (Google Authenticator, Authy) y usa el código actual de SUPRIME.</>
+        )}
       </p>
     </form>
   );
