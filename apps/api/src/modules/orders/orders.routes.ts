@@ -5,12 +5,12 @@ import type { Bindings } from '../../app';
 const checkoutSchema = z.object({
   items: z.array(z.object({
     product_id: z.string().min(1),
-    quantity: z.number().int().positive(),
-  })).min(1),
-  shipping_name: z.string().min(1),
+    quantity: z.number().int().positive().max(99),
+  })).min(1).max(50),
+  shipping_name: z.string().min(1).max(100),
   shipping_email: z.string().email(),
-  shipping_phone: z.string().min(1),
-  shipping_address: z.string().min(1),
+  shipping_phone: z.string().min(1).max(20),
+  shipping_address: z.string().min(1).max(200),
   payment_method: z.enum(['card', 'paypal', 'bank']),
   card_number: z.string().optional(),
   card_expiry: z.string().optional(),

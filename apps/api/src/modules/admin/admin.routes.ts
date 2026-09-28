@@ -20,13 +20,27 @@ function canAccess(userRole: string, minimum: string): boolean {
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>();
 
-// No middleware needed - frontend handles auth check
-// Admin routes are open but require valid session token
+// Admin routes require valid session AND admin role
 adminRoutes.use('*', async (context, next) => {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
+
+  const token = authHeader.slice(7);
+  const session = await context.env.DB.prepare(
+    `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?`
+  ).bind(token).first();
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
+  if (!adminRoles.includes(session.role_id as string)) {
+    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
+  }
+
   await next();
 });
 

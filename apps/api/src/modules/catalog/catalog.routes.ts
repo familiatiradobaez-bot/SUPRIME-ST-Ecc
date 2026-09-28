@@ -15,10 +15,17 @@ catalogRoutes.get('/products', async (context) => {
 
 // GET /products/:slug - Get single product by slug
 catalogRoutes.get('/products/:slug', async (context) => {
+  const slug = context.req.param('slug');
+
+  // Validar slug para prevenir inyección SQL
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return context.json({ error: 'INVALID_SLUG' }, 400);
+  }
+
   const product = await context.env.DB.prepare(
     `SELECT id, name, slug, description, image_url, price_cents, stock_quantity
      FROM products WHERE slug = ? AND status = ?`,
-  ).bind(context.req.param('slug'), 'active').first();
+  ).bind(slug, 'active').first();
 
   if (!product) return context.json({ error: 'PRODUCT_NOT_FOUND' }, 404);
   return context.json({ data: product });
