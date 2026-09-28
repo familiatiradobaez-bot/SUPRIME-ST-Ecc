@@ -5,18 +5,73 @@ type ImageManagerProps = {
   onChange: (images: string[]) => void;
   maxImages?: number;
   apiUrl: string;
+  /** Token de sesión admin: habilita la galería de imágenes ya subidas */
+  authToken?: string;
 };
 
 type UploadingState = {
   [key: string]: 'uploading' | 'success' | 'error';
 };
 
-export function ImageManager({ images, onChange, maxImages = 10, apiUrl }: ImageManagerProps) {
+type GalleryItem = {
+  fileId: string;
+  name: string;
+  url: string;
+  thumbnail: string;
+};
+
+export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authToken }: ImageManagerProps) {
   const [uploading, setUploading] = useState<UploadingState>({});
   const [manualUrl, setManualUrl] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Galería: lista lo ya subido a /products para reutilizar sin resubir
+  const loadGallery = useCallback(async () => {
+    setGalleryLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${apiUrl}/upload/images`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error === 'SESSION_EXPIRED' || data.error === 'UNAUTHORIZED'
+          ? 'Sesión expirada: recarga e inicia sesión de nuevo para ver la galería'
+          : data.message || 'No se pudo cargar la galería');
+        return;
+      }
+      setGalleryItems(data.data || []);
+    } catch {
+      setError('Error de conexión al cargar la galería');
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, [apiUrl, authToken]);
+
+  const toggleGallery = useCallback(() => {
+    const next = !galleryOpen;
+    setGalleryOpen(next);
+    if (next && galleryItems.length === 0) loadGallery();
+  }, [galleryOpen, galleryItems.length, loadGallery]);
+
+  const reuseFromGallery = useCallback((url: string) => {
+    setError('');
+    if (images.includes(url)) {
+      setError('Esta imagen ya está en el producto');
+      return;
+    }
+    if (images.length >= maxImages) {
+      setError(`Máximo ${maxImages} imágenes permitidas`);
+      return;
+    }
+    onChange([...images, url]);
+  }, [images, maxImages, onChange]);
 
   // Subida global: navegador -> Worker (`POST /upload/imagekit`) -> ImageKit.
   // La private key nunca sale del servidor. Mantiene validación local
@@ -218,6 +273,50 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl }: Image
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Galería de imágenes ya subidas */}
+      <div className="gallery-section">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={toggleGallery}
+        >
+          {galleryOpen ? '🔼 Ocultar galería' : '🖼️ Ver galería (reutilizar)'}
+        </button>
+        {galleryOpen && (
+          <div className="gallery-grid-wrapper">
+            {galleryLoading && <p>Cargando galería...</p>}
+            {!galleryLoading && galleryItems.length === 0 && (
+              <p className="gallery-empty">No hay imágenes subidas todavía. Sube la primera con el botón de arriba.</p>
+            )}
+            {!galleryLoading && galleryItems.length > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <small>{galleryItems.length} imágenes en /products — clic para agregar al producto</small>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={loadGallery}>↻ Actualizar</button>
+                </div>
+                <div className="gallery-grid">
+                  {galleryItems.map((item) => {
+                    const used = images.includes(item.url);
+                    return (
+                      <button
+                        key={item.fileId}
+                        type="button"
+                        className={`gallery-item${used ? ' used' : ''}`}
+                        onClick={() => reuseFromGallery(item.url)}
+                        title={used ? `${item.name} (ya agregada)` : `Agregar ${item.name}`}
+                      >
+                        <img src={item.thumbnail} alt={item.name} loading="lazy" />
+                        {used && <span className="gallery-used-badge">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error message */}

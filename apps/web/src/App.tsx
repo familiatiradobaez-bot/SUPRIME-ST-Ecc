@@ -15,7 +15,7 @@ import { AdminPage } from './pages/AdminPage';
 
 export function App() {
   const apiUrl = useApiUrl();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
 
@@ -55,7 +55,22 @@ export function App() {
     }
   };
 
+  // Carrito exige login: sin sesión se abre el login y no se pierde nada
+  // (el carrito ya persiste en localStorage entre recargas)
+  const handleAddToCartGated = useCallback((productId: string) => {
+    if (!user) {
+      setShowLogin(true);
+      return;
+    }
+    handleAddToCart(productId);
+  }, [user, handleAddToCart]);
+
   const handleCheckout = () => {
+    if (!user) {
+      setShowCart(false);
+      setShowLogin(true);
+      return;
+    }
     setShowCart(false);
     setShowCheckout(true);
   };
@@ -76,16 +91,20 @@ export function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Handle Google Auth redirect with success indicator
+  // Handle Google Auth redirect with token handoff
+  // (el servidor redirige con ?login=success&provider=google&token=... porque
+  // la cookie HttpOnly no es legible cross-subdominio; se limpia la URL enseguida)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const loginSuccess = params.get('login') === 'success';
     const provider = params.get('provider');
-    
-    if (loginSuccess && provider === 'google') {
-      // Cookie was set by server, fetch user data
+    const token = params.get('token');
+
+    if (loginSuccess && provider === 'google' && token) {
+      persistSession(token, String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), true);
+      setSession({ id: token, token, expires_at: String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) });
       fetch(`${apiUrl}/auth/me`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}` },
         credentials: 'include',
       })
         .then(r => r.json())
@@ -95,8 +114,8 @@ export function App() {
           }
         })
         .catch(() => {});
-      
-      // Clean URL
+
+      // Clean URL (quita el token del historial visible)
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [apiUrl]);
@@ -212,7 +231,7 @@ export function App() {
                         <ProductCard
                           key={product.id}
                           product={product}
-                          onAddToCart={handleAddToCart}
+                          onAddToCart={handleAddToCartGated}
                           isAdded={addedToCartId === product.id}
                         />
                       ))}
@@ -283,6 +302,7 @@ export function App() {
               mode={loginMode}
               onToggleMode={() => { setLoginMode(prev => prev === 'login' ? 'register' : 'login'); setActionError(''); }}
               loading={actionLoading}
+              apiUrl={apiUrl}
             />
           </div>
         </div>

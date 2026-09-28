@@ -6,9 +6,10 @@ type LoginFormProps = {
   mode: 'login' | 'register';
   onToggleMode: () => void;
   loading?: boolean;
+  apiUrl: string;
 };
 
-export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading }: LoginFormProps) {
+export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -116,8 +117,6 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading }: L
           className="btn btn-secondary"
           style={{ width: '100%' }}
           onClick={() => {
-            const config = (window as any).__APP_CONFIG__;
-            const apiUrl = config?.API_URL || `${window.location.protocol}//${window.location.hostname}:8789/api/v1`;
             window.location.href = `${apiUrl}/auth/google/login`;
           }}
         >

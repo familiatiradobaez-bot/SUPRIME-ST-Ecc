@@ -7,19 +7,15 @@ const FRONTEND_URLS = [
   'https://suprime-st-ecc.pages.dev',
 ];
 
-// Determine redirect URI based on request origin
-function getRedirectUri(context: { req: { header: (name: string) => string | undefined } }, baseUrl: string): string {
-  const origin = context.req.header('Origin') || context.req.header('Referer');
-  
-  if (origin && origin.includes('suprime.xyz')) {
-    return 'https://suprime.xyz/api/v1/auth/google/callback';
+// El callback SIEMPRE vive en el Worker (api.suprime.xyz), nunca en el front.
+// El front solo recibe el redirect final. En local se usa el Host de la petición.
+function getRedirectUri(context: { req: { header: (name: string) => string | undefined } }): string {
+  const host = context.req.header('Host') || '';
+  if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('192.168')) {
+    const proto = host.includes('localhost') ? 'http' : 'http';
+    return `${proto}://${host}/api/v1/auth/google/callback`;
   }
-  if (origin && origin.includes('pages.dev')) {
-    return 'https://suprime-st-ecc.pages.dev/api/v1/auth/google/callback';
-  }
-  
-  // Fallback to provided base URL
-  return `${baseUrl}/api/v1/auth/google/callback`;
+  return 'https://api.suprime.xyz/api/v1/auth/google/callback';
 }
 
 function getFrontendUrl(context: { req: { header: (name: string) => string | undefined } }): string {
@@ -46,11 +42,7 @@ googleRoutes.get('/login', (context) => {
   }
 
   const state = crypto.randomUUID();
-  const baseUrl = context.req.header('Host') 
-    ? `https://${context.req.header('Host')}`
-    : 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev';
-  
-  const redirectUri = getRedirectUri(context, baseUrl);
+  const redirectUri = getRedirectUri(context);
   
   const params = new URLSearchParams({
     client_id: clientId,
@@ -80,10 +72,7 @@ googleRoutes.get('/callback', async (context) => {
   }
 
   try {
-    const baseUrl = context.req.header('Host') 
-      ? `https://${context.req.header('Host')}`
-      : 'https://suprime-st-ecc-api.familia-tirado-baez.workers.dev';
-    const redirectUri = getRedirectUri(context, baseUrl);
+    const redirectUri = getRedirectUri(context);
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -138,22 +127,22 @@ googleRoutes.get('/callback', async (context) => {
       user = { id: userId, username, email: googleUser.email, display_name: googleUser.name, role_id: 'role-customer' };
     }
 
-    // Create session
-    const sessionId = crypto.randomUUID();
+    // Create session (el token es el id de sesión, igual que en login)
     const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
     const token = btoa(tokenData);
     const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
     await context.env.DB.prepare(
       'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-    ).bind(sessionId, user.id, expiresAt).run();
+    ).bind(token, user.id, expiresAt).run();
 
     // Set HttpOnly cookie
     context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`);
 
-    // Redirect to frontend with success indicator
+    // Redirect al front con el token (la cookie HttpOnly no es legible cross-subdominio,
+    // el front lo guarda y limpia la URL inmediatamente)
     const frontendUrl = getFrontendUrl(context);
-    return context.redirect(`${frontendUrl}?login=success&provider=google`);
+    return context.redirect(`${frontendUrl}?login=success&provider=google&token=${encodeURIComponent(token)}`);
   } catch (error) {
     console.error('Google OAuth error:', error);
     return context.json({ error: 'GOOGLE_AUTH_FAILED' }, 500);

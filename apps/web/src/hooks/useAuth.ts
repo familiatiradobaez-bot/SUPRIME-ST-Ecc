@@ -21,6 +21,8 @@ function hasAdminAccess(roleId: string | null): boolean {
   return adminRoles.includes(roleId);
 }
 
+const SESSION_STORAGE_KEY = 'suprime_session';
+
 export function useAuth() {
   const apiUrl = useApiUrl();
   const [user, setUser] = useState<User | null>(null);
@@ -29,31 +31,71 @@ export function useAuth() {
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Restore session from cookie on mount
-  useEffect(() => {
-    const getCookie = (name: string): string | null => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-      return null;
-    };
-
-    const token = getCookie('session_token');
-    if (token) {
-      fetch(`${apiUrl}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        credentials: 'include',
-      })
-        .then(r => r.json())
-        .then(payload => {
-          if (payload.data) {
-            setUser(payload.data);
-            setSession({ id: token, token, expires_at: String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) });
-          }
-        })
-        .catch(() => {});
+  // Persistencia: rememberMe -> localStorage (30 días), si no -> sessionStorage (cierra al cerrar pestaña).
+  // (La cookie HttpOnly del servidor no es legible cross-subdominio, por eso se guarda el token aquí.)
+  const persistSession = useCallback((token: string, expires_at: string | number, remember: boolean) => {
+    const value = JSON.stringify({ token, expires_at: String(expires_at) });
+    try {
+      if (remember) {
+        localStorage.setItem(SESSION_STORAGE_KEY, value);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      } else {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, value);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage errors
     }
-  }, [apiUrl]);
+  }, []);
+
+  const clearPersistedSession = useCallback(() => {
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  // Restore session on mount (valida contra /auth/me, que comprueba expiración en DB)
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      saved = null;
+    }
+    if (!saved) return;
+
+    let parsed: { token: string; expires_at: string } | null = null;
+    try {
+      parsed = JSON.parse(saved);
+    } catch {
+      parsed = null;
+    }
+    if (!parsed?.token) return;
+
+    // Expiración local rápida (la DB tiene la última palabra vía /auth/me)
+    if (parsed.expires_at && Number(parsed.expires_at) * 1000 < Date.now()) {
+      clearPersistedSession();
+      return;
+    }
+
+    fetch(`${apiUrl}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${parsed.token}` },
+      credentials: 'include',
+    })
+      .then(r => r.json())
+      .then(payload => {
+        if (payload.data) {
+          setUser(payload.data);
+          setSession({ id: parsed.token, token: parsed.token, expires_at: parsed.expires_at });
+        } else {
+          clearPersistedSession();
+        }
+      })
+      .catch(() => {});
+  }, [apiUrl, clearPersistedSession]);
 
   const handleLogin = useCallback(async (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean }) => {
     setActionLoading(true);
@@ -91,6 +133,8 @@ export function useAuth() {
       const { user: userData, session: sessionData } = payload.data;
       setUser(userData);
       setSession(sessionData);
+      // Persistir sesión: rememberMe -> localStorage, si no -> sessionStorage
+      persistSession(sessionData.token, sessionData.expires_at, extra?.rememberMe === true);
       // Cargar datos de envío al iniciar sesión
       fetch(`${apiUrl}/auth/me`, {
         headers: { 'Authorization': `Bearer ${sessionData.token}` },
@@ -108,7 +152,7 @@ export function useAuth() {
     } finally {
       setActionLoading(false);
     }
-  }, [apiUrl, loginMode]);
+  }, [apiUrl, loginMode, persistSession]);
 
   const handleLogout = useCallback(async () => {
     if (session) {
@@ -124,9 +168,10 @@ export function useAuth() {
     }
     setUser(null);
     setSession(null);
+    clearPersistedSession();
     // Clear cookie
-    document.cookie = 'session_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
-  }, [apiUrl, session]);
+    document.cookie = 'session_token=; Path=/; Max-Age=0';
+  }, [apiUrl, session, clearPersistedSession]);
 
   const saveShipping = useCallback(async (data: { full_name: string; phone: string; address: string; city: string; postal_code: string }) => {
     if (!session) throw new Error('No session');
@@ -157,6 +202,8 @@ export function useAuth() {
     handleLogin,
     handleLogout,
     saveShipping,
+    persistSession,
+    clearPersistedSession,
     decodeTokenRole,
     hasAdminAccess,
   };

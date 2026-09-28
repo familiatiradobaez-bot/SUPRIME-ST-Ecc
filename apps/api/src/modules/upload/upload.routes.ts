@@ -50,6 +50,71 @@ const manualUrlSchema = z.object({
 
 export const uploadRoutes = new Hono<{ Bindings: UploadBindings }>();
 
+const GALLERY_ADMIN_ROLES = ['role-admin', 'role-owner', 'role-stock-manager'];
+
+// Galería: requiere sesión admin válida (el token es el id de sesión)
+uploadRoutes.use('/images', async (context, next) => {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+  let roleId: string | null = null;
+  try {
+    const parts = atob(authHeader.slice(7)).split(':');
+    if (parts.length >= 2) roleId = parts[1];
+  } catch {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+  if (!roleId || !GALLERY_ADMIN_ROLES.includes(roleId)) {
+    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
+  }
+  const sess = await context.env.DB.prepare(
+    'SELECT id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
+  ).bind(authHeader.slice(7)).first();
+  if (!sess) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+  await next();
+});
+
+// GET /upload/images - Listar imágenes subidas (galería reutilizable)
+uploadRoutes.get('/images', async (context) => {
+  if (!context.env.IMAGEKIT_PRIVATE_KEY) {
+    return context.json({ error: 'SERVER_CONFIG_ERROR', message: 'Image upload service not configured (missing IMAGEKIT_PRIVATE_KEY on server)' }, 500);
+  }
+
+  try {
+    const credentials = btoa(`${context.env.IMAGEKIT_PRIVATE_KEY}:`);
+    const params = new URLSearchParams({ path: '/products', limit: '100', sort: 'DESC_CREATED' });
+    const response = await fetch(`https://api.imagekit.io/v1/files?${params}`, {
+      headers: { Authorization: `Basic ${credentials}` },
+    });
+
+    if (!response.ok) {
+      console.error('ImageKit list failed:', await response.text());
+      return context.json({ error: 'GALLERY_FAILED', message: 'Failed to list images' }, 502);
+    }
+
+    const files = await response.json() as Array<{
+      fileId: string; name: string; url: string; thumbnailUrl?: string; filePath: string; size?: number;
+    }>;
+
+    return context.json({
+      data: files.map(f => ({
+        fileId: f.fileId,
+        name: f.name,
+        url: f.url,
+        thumbnail: f.thumbnailUrl || f.url,
+        filePath: f.filePath,
+        size: f.size,
+      })),
+    });
+  } catch (err) {
+    console.error('ImageKit list error:', err);
+    return context.json({ error: 'GALLERY_ERROR', message: 'Failed to list images' }, 502);
+  }
+});
+
 // POST /upload/imgbb - Upload image to ImgBB via server
 uploadRoutes.post('/imgbb', async (context) => {
   const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';

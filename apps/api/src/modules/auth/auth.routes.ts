@@ -379,9 +379,9 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'EMAIL_NOT_VERIFIED', message: 'Debes verificar tu correo electrónico antes de iniciar sesión' }, 403);
   }
 
-  const sessionId = generateId();
   const rememberMe = (parsedBody as Record<string, unknown> | null)?.rememberMe === true;
-  // Token format: base64(userId:role:timestamp) - self-contained, no DB verification needed
+  // Token format: base64(userId:role:timestamp) - usado como Bearer Y como id de sesión en DB.
+  // (Antes se guardaba sessionId UUID pero el front enviaba el token -> /auth/me siempre 401.)
   const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
   const token = btoa(tokenData);
   // 30 days if rememberMe, 7 days otherwise
@@ -390,7 +390,7 @@ authRoutes.post('/login', async (context) => {
 
   await context.env.DB.prepare(
     'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-  ).bind(sessionId, user.id, expiresAt).run();
+  ).bind(token, user.id, expiresAt).run();
 
   // Set HttpOnly cookie with session token
   context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${sessionDurationDays * 24 * 60 * 60}`);
@@ -398,7 +398,7 @@ authRoutes.post('/login', async (context) => {
   return context.json({
     data: {
       user,
-      session: { id: sessionId, token, expires_at: expiresAt },
+      session: { id: token, token, expires_at: expiresAt },
     },
   });
 
@@ -441,7 +441,7 @@ authRoutes.get('/me', async (context) => {
   const session = await context.env.DB.prepare(
     `SELECT s.id, s.expires_at, u.id as user_id, u.username, u.email, u.display_name, u.role_id
      FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ?`
+     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
   ).bind(token).first();
 
   if (!session) {

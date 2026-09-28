@@ -50,6 +50,15 @@ adminRoutes.use('*', async (context, next) => {
     return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
   }
 
+  // Verificar que la sesión existe en DB y no expiró (el token es el id de sesión)
+  const sessionToken = authHeader.slice(7);
+  const sess = await context.env.DB.prepare(
+    'SELECT id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
+  ).bind(sessionToken).first();
+  if (!sess) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
   await next();
 });
 

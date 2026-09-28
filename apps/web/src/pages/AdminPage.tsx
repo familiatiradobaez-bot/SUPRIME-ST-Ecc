@@ -551,6 +551,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                     onChange={setProductImages}
                     maxImages={10}
                     apiUrl={apiUrl}
+                    authToken={sessionToken}
                   />
                 </div>
                 <div className="form-group">
