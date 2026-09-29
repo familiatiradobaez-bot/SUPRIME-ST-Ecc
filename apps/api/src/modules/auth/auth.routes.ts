@@ -4,6 +4,22 @@ import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
 
+// Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
+// Sin SMS de momento: valida formato, no titularidad (ver post-lanzamiento).
+function normalizePhone(input: string): string {
+  return input.replace(/[\s.\-()]/g, '');
+}
+
+const phoneSchema = z.string().min(1).max(20).refine((v) => {
+  const n = normalizePhone(v);
+  return /^\+?[0-9]{9,15}$/.test(n);
+}, { message: 'Invalid phone number (9-15 digits)' });
+
+const postalSchema = z.string().min(1).max(10).refine((v) => {
+  const t = v.trim();
+  return /^\d{5}$/.test(t);
+}, { message: 'Invalid postal code (5 digits)' });
+
 const loginSchema = z.object({
   email: z.string().optional(),
   username: z.string().optional(),
@@ -885,6 +901,42 @@ authRoutes.get('/me/totp/status', async (context) => {
   });
 });
 
+// PUT /auth/me - Editar perfil (display_name). El username es inmutable:
+// es la identidad interna en BD (pedidos, auditoría) aunque el nombre cambie.
+authRoutes.put('/me', async (context) => {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const token = authHeader.slice(7);
+  const session = await context.env.DB.prepare(
+    `SELECT user_id FROM sessions WHERE id = ?`
+  ).bind(token).first();
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const parsed = z.object({
+    display_name: z.string().trim().min(1).max(100),
+  }).safeParse(body);
+  if (!parsed.success) {
+    return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
+  }
+
+  await context.env.DB.prepare(
+    'UPDATE users SET display_name = ? WHERE id = ?'
+  ).bind(parsed.data.display_name, session.user_id).run();
+
+  const user = await context.env.DB.prepare(
+    'SELECT id, username, email, display_name, role_id FROM users WHERE id = ?'
+  ).bind(session.user_id).first();
+
+  return context.json({ data: user });
+});
+
 // PUT /auth/me/shipping
 authRoutes.put('/me/shipping', async (context) => {
   const authHeader = context.req.header('Authorization');
@@ -902,11 +954,21 @@ authRoutes.put('/me/shipping', async (context) => {
   }
 
   const body = await context.req.json().catch(() => null);
-  if (!body) {
-    return context.json({ error: 'INVALID_INPUT' }, 400);
+  // Checkout bloqueado sin estos campos: se validan aquí también (el front
+  // los exige, pero la API es la que manda).
+  const parsed = z.object({
+    full_name: z.string().trim().min(1).max(100),
+    phone: phoneSchema,
+    address: z.string().trim().min(1).max(200),
+    city: z.string().trim().min(1).max(100),
+    postal_code: postalSchema,
+    country: z.string().trim().min(1).max(60).optional(),
+  }).safeParse(body);
+  if (!parsed.success) {
+    return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
   }
 
-  const { full_name, phone, address, city, postal_code, country } = body;
+  const { full_name, phone, address, city, postal_code, country } = parsed.data;
 
   await context.env.DB.prepare(
     `INSERT INTO user_shipping (user_id, full_name, phone, address, city, postal_code, country, updated_at)
@@ -919,7 +981,7 @@ authRoutes.put('/me/shipping', async (context) => {
        postal_code = excluded.postal_code,
        country = excluded.country,
        updated_at = datetime('now')`
-  ).bind(session.user_id, full_name || '', phone || '', address || '', city || '', postal_code || '', country || 'España').run();
+  ).bind(session.user_id, full_name, normalizePhone(phone), address, city, postal_code.trim(), country?.trim() || 'España').run();
 
   return context.json({ data: { saved: true } });
 });

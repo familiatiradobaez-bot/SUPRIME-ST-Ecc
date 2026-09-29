@@ -4,15 +4,28 @@ import type { Bindings } from '../../app';
 import { sendEmail, orderEmailHtml, orderStatusEmailHtml } from '../../lib/email';
 import { calcShipping } from '../../lib/pricing';
 
+function normalizePhone(input: string): string {
+  return input.replace(/[\s.\-()]/g, '');
+}
+
+const phoneSchema = z.string().min(1).max(20).refine((v) => /^\+?[0-9]{9,15}$/.test(normalizePhone(v)), {
+  message: 'Invalid phone number (9-15 digits)',
+});
+
 const checkoutSchema = z.object({
   items: z.array(z.object({
     product_id: z.string().min(1),
     quantity: z.number().int().positive().max(99),
   })).min(1).max(50),
-  shipping_name: z.string().min(1).max(100),
+  shipping_name: z.string().trim().min(1).max(100),
   shipping_email: z.string().email(),
-  shipping_phone: z.string().min(1).max(20),
-  shipping_address: z.string().min(1).max(200),
+  shipping_phone: phoneSchema,
+  shipping_address: z.string().trim().min(1).max(200),
+  shipping_city: z.string().trim().min(1).max(100),
+  shipping_postal_code: z.string().trim().min(1).max(10).refine((v) => /^\d{5}$/.test(v.trim()), {
+    message: 'Invalid postal code (5 digits)',
+  }),
+  shipping_country: z.string().trim().min(1).max(60).optional(),
   payment_method: z.enum(['card', 'paypal', 'bank']),
   card_number: z.string().optional(),
   card_expiry: z.string().optional(),
@@ -33,15 +46,8 @@ export const ordersRoutes = new Hono<{ Bindings: Bindings }>();
 
 // POST /orders
 ordersRoutes.post('/', async (context) => {
-  const body = await context.req.json().catch(() => null);
-  const parsed = checkoutSchema.safeParse(body);
-  if (!parsed.success) {
-    return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
-  }
-
-  const { items, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method } = parsed.data;
-
-  // La compra exige sesión válida (el front la pide antes del checkout).
+  // La compra exige sesión válida. Se comprueba ANTES de validar el body:
+  // sin auth no se revela detalle de validación (401, no 400).
   // Sin esto, user_id sería null y viola el NOT NULL de orders.user_id.
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -56,6 +62,18 @@ ordersRoutes.post('/', async (context) => {
   if (!session) {
     return context.json({ error: 'SESSION_EXPIRED', message: 'Sesión expirada. Inicia sesión de nuevo.' }, 401);
   }
+
+  const body = await context.req.json().catch(() => null);
+  const parsed = checkoutSchema.safeParse(body);
+  if (!parsed.success) {
+    return context.json({ error: 'INVALID_INPUT', details: parsed.error.flatten() }, 400);
+  }
+
+  const { items, shipping_name, shipping_email, shipping_phone, shipping_address, shipping_city, shipping_postal_code, shipping_country, payment_method } = parsed.data;
+  const shippingCity = shipping_city.trim();
+  const shippingPostal = shipping_postal_code.trim();
+  const shippingCountry = shipping_country?.trim() || 'España';
+  const shippingPhone = normalizePhone(shipping_phone);
 
   const userId = session.user_id as string;
 
@@ -98,9 +116,9 @@ ordersRoutes.post('/', async (context) => {
   // Escritura atómica: orden + items + decremento condicional de stock
   const statements = [
     context.env.DB.prepare(
-      `INSERT INTO orders (id, user_id, status, total_cents, shipping_cents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method)
-       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(orderId, userId, totalCents, shippingCents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method),
+      `INSERT INTO orders (id, user_id, status, total_cents, shipping_cents, shipping_name, shipping_email, shipping_phone, shipping_address, shipping_city, shipping_postal_code, shipping_country, payment_method)
+       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(orderId, userId, totalCents, shippingCents, shipping_name, shipping_email, shippingPhone, shipping_address, shippingCity, shippingPostal, shippingCountry, payment_method),
     ...orderItems.map((item) =>
       context.env.DB.prepare(
         'INSERT INTO order_items (id, order_id, product_id, quantity, price_cents) VALUES (?, ?, ?, ?, ?)'

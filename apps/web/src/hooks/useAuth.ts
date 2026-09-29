@@ -258,8 +258,28 @@ export function useAuth() {
       body: JSON.stringify(data),
       credentials: 'include',
     });
-    if (!response.ok) throw new Error('Error al guardar');
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error === 'INVALID_INPUT' ? 'Revisa los datos: nombre, teléfono (9-15 dígitos), dirección, ciudad y CP (5 dígitos).' : 'Error al guardar');
+    }
     setUser(prev => prev ? { ...prev, shipping: { ...data, country: 'España' } } : prev);
+  }, [apiUrl, session]);
+
+  // El nombre visible se puede cambiar; el username es inmutable (identidad en BD).
+  const saveProfile = useCallback(async (display_name: string) => {
+    if (!session) throw new Error('No session');
+    const response = await fetch(`${apiUrl}/auth/me`, {
+      method: 'PUT',
+      headers: {
+        ...getAuthHeaders(session),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ display_name }),
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Error al guardar el nombre');
+    const payload = await response.json();
+    if (payload.data) setUser(prev => prev ? { ...prev, display_name: payload.data.display_name } : prev);
   }, [apiUrl, session]);
 
   return {
@@ -276,6 +296,7 @@ export function useAuth() {
     handleLogin,
     handleLogout,
     saveShipping,
+    saveProfile,
     persistSession,
     clearPersistedSession,
     pendingOtpEmail,

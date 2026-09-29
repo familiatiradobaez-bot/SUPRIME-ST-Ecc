@@ -9,6 +9,7 @@ type UserPanelProps = {
   onClose: () => void;
   onLogout: () => void;
   onSaveShipping: (data: { full_name: string; phone: string; address: string; city: string; postal_code: string }) => Promise<void>;
+  onSaveProfile: (displayName: string) => Promise<void>;
 };
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -30,12 +31,19 @@ type OrderDetail = OrderSummary & {
   items: Array<{ product_id: string; product_name: string; quantity: number; price_cents: number }>;
 };
 
-export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSaveShipping }: UserPanelProps) {
+const SPANISH_PROVINCES = ['Álava','Albacete','Alicante','Almería','Asturias','Ávila','Badajoz','Barcelona','Burgos','Cáceres','Cádiz','Cantabria','Castellón','Ceuta','Ciudad Real','Córdoba','Cuenca','Girona','Granada','Guadalajara','Guipúzcoa','Huelva','Huesca','Islas Baleares','Jaén','La Coruña','La Rioja','Las Palmas','León','Lleida','Lugo','Madrid','Málaga','Melilla','Murcia','Navarra','Orense','Palencia','Pontevedra','Salamanca','Santa Cruz de Tenerife','Segovia','Sevilla','Soria','Tarragona','Teruel','Toledo','Valencia','Valladolid','Vizcaya','Zamora','Zaragoza'];
+
+export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSaveShipping, onSaveProfile }: UserPanelProps) {
+  const [displayName, setDisplayName] = useState(user.display_name || '');
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
   const [name, setName] = useState(user.shipping?.full_name || '');
   const [phone, setPhone] = useState(user.shipping?.phone || '');
   const [address, setAddress] = useState(user.shipping?.address || '');
   const [city, setCity] = useState(user.shipping?.city || '');
   const [postal, setPostal] = useState(user.shipping?.postal_code || '');
+  const [locating, setLocating] = useState(false);
+  const [locateMsg, setLocateMsg] = useState('');
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
@@ -52,6 +60,57 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
       .finally(() => setOrdersLoading(false));
   }, [apiUrl, sessionToken]);
 
+  // Rellena ciudad/CP con la ubicación actual (el portal solo pide permiso;
+  // la calle se completa a mano). Falla silenciosamente sin GPS o sin red.
+  const useMyLocation = () => {
+    if (!('geolocation' in navigator)) {
+      setLocateMsg('Tu dispositivo no ofrece geolocalización.');
+      return;
+    }
+    setLocating(true);
+    setLocateMsg('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
+          );
+          const geo = await res.json();
+          if (geo?.city) setCity(geo.city);
+          if (geo?.postcode) setPostal(String(geo.postcode));
+          setLocateMsg(geo?.city ? `Ubicación: ${geo.city}${geo.postcode ? ` (${geo.postcode})` : ''}. Revisa la calle.` : 'Ubicación obtenida. Completa la calle.');
+        } catch {
+          setLocateMsg('No se pudo resolver la dirección. Introdúcela a mano.');
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        setLocateMsg('Permiso de ubicación denegado. Introdúcela a mano.');
+      },
+      { timeout: 10000, maximumAge: 600000 }
+    );
+  };
+
+  const saveName = async () => {
+    const clean = displayName.trim();
+    if (!clean || clean === user.display_name) {
+      setEditingName(false);
+      setDisplayName(user.display_name || '');
+      return;
+    }
+    setSavingName(true);
+    try {
+      await onSaveProfile(clean);
+      setEditingName(false);
+    } catch {
+      alert('No se pudo guardar el nombre.');
+    } finally {
+      setSavingName(false);
+    }
+  };
   const loadOrderDetail = async (id: string) => {
     if (openOrder?.id === id) {
       setOpenOrder(null);
@@ -81,7 +140,31 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
             <h3 style={{ marginBottom: '0.5rem' }}>Información de la cuenta</h3>
             <p><strong>Usuario:</strong> {user.username}</p>
             <p><strong>Email:</strong> {user.email}</p>
-            <p><strong>Nombre:</strong> {user.display_name}</p>
+            {editingName ? (
+              <p>
+                <strong>Nombre:</strong>{' '}
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  maxLength={100}
+                  style={{ maxWidth: '180px' }}
+                  aria-label="Nombre visible"
+                />{' '}
+                <button className="btn btn-secondary btn-sm" onClick={saveName} disabled={savingName}>
+                  {savingName ? '…' : 'Guardar'}
+                </button>{' '}
+                <button className="btn btn-secondary btn-sm" onClick={() => { setEditingName(false); setDisplayName(user.display_name || ''); }}>
+                  Cancelar
+                </button>
+              </p>
+            ) : (
+              <p><strong>Nombre:</strong> {user.display_name}{' '}
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditingName(true)} aria-label="Editar nombre">
+                  ✏️
+                </button>
+              </p>
+            )}
             {(user.role_id === 'role-owner' || user.role_id === 'role-admin' || user.role_id === 'role-stock-manager') && (
               <p><strong>Rol:</strong> {user.role_id.replace('role-', '').replace('_', ' ')}</p>
             )}
@@ -100,27 +183,36 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
           <div style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ marginBottom: '0.5rem' }}>Datos de envío</h3>
             <p style={{ color: '#68736b', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-              Estos datos se usarán automáticamente en el checkout
+              Estos datos se usarán automáticamente en el checkout. Sin ellos completos no podrás comprar.
             </p>
+            <button className="btn btn-secondary" style={{ width: '100%', marginBottom: '0.75rem' }} onClick={useMyLocation} disabled={locating}>
+              {locating ? '📍 Localizando…' : '📍 Usar mi ubicación actual'}
+            </button>
+            {locateMsg && (
+              <p style={{ color: '#68736b', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{locateMsg}</p>
+            )}
             <div className="form-group">
               <label>Nombre completo:</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoComplete="name" />
             </div>
             <div className="form-group">
               <label>Teléfono:</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 123 456 789" />
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
             </div>
             <div className="form-group">
               <label>Dirección:</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, Madrid" />
+              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, 2ºB" autoComplete="street-address" />
             </div>
             <div className="form-group">
               <label>Ciudad:</label>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" />
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" list="suprime-provinces" autoComplete="address-level2" />
+              <datalist id="suprime-provinces">
+                {SPANISH_PROVINCES.map((p) => <option key={p} value={p} />)}
+              </datalist>
             </div>
             <div className="form-group">
               <label>Código postal:</label>
-              <input type="text" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" />
+              <input type="text" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} inputMode="numeric" autoComplete="postal-code" />
             </div>
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={async () => {
               // Verificar si ya se editó hoy
@@ -130,7 +222,16 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
                 alert('Solo puedes editar tus datos de envío una vez al día. Vuelve mañana.');
                 return;
               }
-              await onSaveShipping({ full_name: name, phone, address, city, postal_code: postal });
+              if (!name.trim() || !phone.trim() || !address.trim() || !city.trim() || !postal.trim()) {
+                alert('Completa nombre, teléfono, dirección, ciudad y código postal.');
+                return;
+              }
+              try {
+                await onSaveShipping({ full_name: name.trim(), phone: phone.trim(), address: address.trim(), city: city.trim(), postal_code: postal.trim() });
+              } catch (err) {
+                alert(err instanceof Error ? err.message : 'No se pudo guardar.');
+                return;
+              }
               localStorage.setItem('su_prime_shipping_last_edit', today);
               alert('Datos de envío guardados en la nube');
             }}>

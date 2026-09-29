@@ -10,11 +10,16 @@ type CheckoutFormProps = {
   defaultEmail?: string;
   defaultPhone?: string;
   defaultAddress?: string;
+  defaultCity?: string;
+  defaultPostalCode?: string;
   onSubmit: (shippingInfo: {
     shipping_name: string;
     shipping_email: string;
     shipping_phone: string;
     shipping_address: string;
+    shipping_city: string;
+    shipping_postal_code: string;
+    shipping_country: string;
     payment_method: string;
     card_number?: string;
     card_expiry?: string;
@@ -23,11 +28,14 @@ type CheckoutFormProps = {
   onCancel: () => void;
 };
 
-export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defaultName, defaultEmail, defaultPhone, defaultAddress, onSubmit, onCancel }: CheckoutFormProps) {
+// Sin ciudad + CP + teléfono válidos no hay checkout (lo exige también la API).
+export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defaultName, defaultEmail, defaultPhone, defaultAddress, defaultCity, defaultPostalCode, onSubmit, onCancel }: CheckoutFormProps) {
   const [name, setName] = useState(defaultName || '');
   const [email, setEmail] = useState(defaultEmail || '');
   const [phone, setPhone] = useState(defaultPhone || '');
   const [address, setAddress] = useState(defaultAddress || '');
+  const [city, setCity] = useState(defaultCity || '');
+  const [postalCode, setPostalCode] = useState(defaultPostalCode || '');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -35,7 +43,7 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name, shipping_email: email, shipping_phone: phone, shipping_address: address, payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name.trim(), shipping_email: email.trim(), shipping_phone: phone.trim(), shipping_address: address.trim(), shipping_city: city.trim(), shipping_postal_code: postalCode.trim(), shipping_country: 'España', payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
       <div className="checkout-summary">
         <p><strong>Artículos:</strong> {itemCount}</p>
         <p><strong>Subtotal:</strong> {formatPrice(total, currency)}</p>
@@ -46,7 +54,7 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
       <h3>Información de Envío</h3>
       <div className="form-group">
         <label htmlFor="co-name">Nombre Completo:</label>
-        <input id="co-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" required autoComplete="name" />
+        <input id="co-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" required minLength={2} maxLength={100} autoComplete="name" />
       </div>
       <div className="form-group">
         <label htmlFor="co-email">Correo Electrónico:</label>
@@ -54,11 +62,19 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
       </div>
       <div className="form-group">
         <label htmlFor="co-phone">Teléfono:</label>
-        <input id="co-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 123 456 789" required pattern="[+]?[0-9\s]{9,15}" title="Introduce un número de teléfono válido (9-15 dígitos)" autoComplete="tel" />
+        <input id="co-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" required pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
       </div>
       <div className="form-group">
-        <label htmlFor="co-address">Dirección de Envío:</label>
-        <input id="co-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, Madrid" required autoComplete="street-address" />
+        <label htmlFor="co-address">Dirección:</label>
+        <input id="co-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, 2ºB" required minLength={3} maxLength={200} autoComplete="street-address" />
+      </div>
+      <div className="form-group">
+        <label htmlFor="co-city">Ciudad:</label>
+        <input id="co-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" required minLength={2} maxLength={100} autoComplete="address-level2" />
+      </div>
+      <div className="form-group">
+        <label htmlFor="co-postal">Código postal:</label>
+        <input id="co-postal" type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="28001" required pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} inputMode="numeric" autoComplete="postal-code" />
       </div>
 
       <h3>Método de Pago</h3>

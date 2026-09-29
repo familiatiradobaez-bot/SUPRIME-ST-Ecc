@@ -36,7 +36,7 @@ export function App() {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, removedNotice, clearRemovedNotice, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
   const { wishlist, toggleWishlist, isWished } = useWishlist();
@@ -501,6 +501,7 @@ export function App() {
           onClose={() => setShowUserPanel(false)}
           onLogout={handleLogout}
           onSaveShipping={saveShipping}
+          onSaveProfile={saveProfile}
         />
       )}
 
@@ -520,6 +521,8 @@ export function App() {
               defaultEmail={user?.email || ''}
               defaultPhone={user?.shipping?.phone || ''}
               defaultAddress={user?.shipping?.address || ''}
+              defaultCity={user?.shipping?.city || ''}
+              defaultPostalCode={user?.shipping?.postal_code || ''}
               onSubmit={async (shippingInfo) => {
                 setActionLoading(true);
                 try {

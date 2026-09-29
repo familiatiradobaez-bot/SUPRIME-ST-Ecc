@@ -57,6 +57,8 @@ const H = token ? { 'Authorization': `Bearer ${token}` } : {};
 r = await F(`${API}/auth/me`, { headers: H });
 const me = await j(r);
 checkOrSkip(authed, 'me 200 + role owner', r.status === 200 && me.data?.role_id === 'role-owner', r.status);
+r = await F(`${API}/auth/me`, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ display_name: '' }) });
+checkOrSkip(authed, 'me PUT nombre vacío 400', r.status === 400, r.status);
 r = await F(`${API}/auth/me`, { headers: { 'Authorization': 'Bearer ZmFrZTpyb2xlLW93bmVyOjEyMw==' } });
 check('me token falso 401', r.status === 401, r.status);
 
@@ -106,7 +108,7 @@ if (r.status === 200) {
 
 console.log('== Órdenes/stock (sin mutar) ==');
 const OH = { ...H, 'Content-Type': 'application/json' };
-r = await F(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+r = await F(`${API}/orders`, { method: 'POST', headers: OH, body: JSON.stringify({}) });
 check('orders body vacío 400', r.status === 400, r.status);
 r = await F(`${API}/admin/orders/00000000-0000-0000-0000-000000000000/status`, { method: 'PUT', headers: UH, body: JSON.stringify({ status: 'paid' }) });
 if (r.status === 404) { check('order status inexistente 404 (grant vigente)', true); }
@@ -118,8 +120,10 @@ r = await F(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'appli
 check('orders sin auth 401 (login requerido)', r.status === 401, r.status);
 if (products.length) {
   const p = products.find(x => x.stock_quantity >= 0);
-  r = await F(`${API}/orders`, { method: 'POST', headers: OH, body: JSON.stringify({ items: [{ product_id: p.id, quantity: (p.stock_quantity || 0) + 50 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: '1', shipping_address: 'X', payment_method: 'paypal' }) });
+  r = await F(`${API}/orders`, { method: 'POST', headers: OH, body: JSON.stringify({ items: [{ product_id: p.id, quantity: (p.stock_quantity || 0) + 50 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: '+34612345678', shipping_address: 'X', shipping_city: 'Madrid', shipping_postal_code: '28001', payment_method: 'paypal' }) });
   check('orders stock insuficiente 400 (rollback)', r.status === 400, r.status);
+  r = await F(`${API}/orders`, { method: 'POST', headers: OH, body: JSON.stringify({ items: [{ product_id: p.id, quantity: 1 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: 'mal', shipping_address: 'X', shipping_city: 'Madrid', shipping_postal_code: '28001', payment_method: 'paypal' }) });
+  check('orders teléfono malo 400', r.status === 400, r.status);
 }
 
 console.log('== PDP y secciones ==');
