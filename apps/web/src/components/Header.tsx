@@ -1,10 +1,15 @@
-import type { User } from '../types';
+import { useState } from 'react';
+import type { User, Product } from '../types';
+import { formatPrice } from '../lib/api';
 import { CategoryNav } from './CategoryNav';
 
 type HeaderProps = {
   user: User | null;
   cartCount: number;
   searchTerm: string;
+  suggestions: Product[];
+  currency: string;
+  onSelectProduct: (product: Product) => void;
   onSearch: (term: string) => void;
   onCartClick: () => void;
   onMenuClick: () => void;
@@ -21,7 +26,16 @@ type HeaderProps = {
   wishlistCount?: number;
 };
 
-export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect, onLogoClick, onWishlistClick, wishlistCount }: HeaderProps) {
+export function Header({ user, cartCount, searchTerm, suggestions, currency, onSelectProduct, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect, onLogoClick, onWishlistClick, wishlistCount }: HeaderProps) {
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const trimmed = searchTerm.trim().toLowerCase();
+  const matches = trimmed.length >= 2
+    ? suggestions.filter(p =>
+        p.name.toLowerCase().includes(trimmed) ||
+        p.description.toLowerCase().includes(trimmed)
+      ).slice(0, 6)
+    : [];
+
   return (
     <header className="header">
       <div className="header-content">
@@ -39,9 +53,32 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
             type="text"
             placeholder="Buscar..."
             value={searchTerm}
-            onChange={(e) => onSearch(e.target.value)}
+            onChange={(e) => { onSearch(e.target.value); setSuggestOpen(true); }}
+            onFocus={() => setSuggestOpen(true)}
+            onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setSuggestOpen(false); }}
             className="search-input"
+            role="combobox"
+            aria-expanded={suggestOpen && matches.length > 0}
+            aria-label="Buscar productos"
+            autoComplete="off"
           />
+          {suggestOpen && matches.length > 0 && (
+            <div className="search-suggest" role="listbox" aria-label="Sugerencias">
+              {matches.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="search-suggest-item"
+                  onMouseDown={(e) => { e.preventDefault(); setSuggestOpen(false); onSelectProduct(p); }}
+                >
+                  <img src={p.image_url} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <span className="search-suggest-name">{p.name}</span>
+                  <span className="search-suggest-price">{formatPrice(p.price_cents, currency)}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="header-right">
           <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick}>

@@ -4,6 +4,7 @@ import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
 import { formatPrice } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
+import { SkeletonPdp } from '../components/Skeletons';
 
 type ProductPageProps = {
   addedToCartId: string | null;
@@ -21,6 +22,7 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
   const [related, setRelated] = useState<Product[]>([]);
   const [selectedImg, setSelectedImg] = useState(0);
   const [qty, setQty] = useState(1);
+  const [lightbox, setLightbox] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
     return (
       <div className="layout-main">
         <div className="container">
-          <div className="loading"><div className="spinner"></div><span style={{ marginLeft: '1rem' }}>Cargando producto...</span></div>
+          <section className="products-section">
+            <SkeletonPdp />
+          </section>
         </div>
       </div>
     );
@@ -96,13 +100,21 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
           <div className="pdp-gallery">
             <div className="pdp-main-image">
               {gallery.length > 0 ? (
-                <img
-                  src={gallery[Math.min(selectedImg, gallery.length - 1)]}
-                  alt={product.name}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23333" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="20"%3ESin imagen%3C/text%3E%3C/svg%3E';
-                  }}
-                />
+                <button
+                  type="button"
+                  className="pdp-zoom-btn"
+                  onClick={() => setLightbox(true)}
+                  aria-label="Ampliar imagen del producto"
+                >
+                  <img
+                    src={gallery[Math.min(selectedImg, gallery.length - 1)]}
+                    alt={product.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23333" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="20"%3ESin imagen%3C/text%3E%3C/svg%3E';
+                    }}
+                  />
+                  <span className="pdp-zoom-hint" aria-hidden="true">🔍</span>
+                </button>
               ) : (
                 <div className="pdp-no-image">📦</div>
               )}
@@ -171,8 +183,30 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
                 <p>{product.description}</p>
               </div>
             )}
+
+            <ul className="pdp-trust">
+              <li>🚚 Envío en 24-48h</li>
+              <li>🛡️ Garantía total</li>
+              <li>↩️ Devolución 30 días</li>
+            </ul>
           </div>
         </section>
+
+        {lightbox && gallery.length > 0 && (
+          <div className="lightbox-overlay" onClick={() => setLightbox(false)}>
+            <div className="lightbox-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Imagen ampliada de ${product.name}`}>
+              <button className="close-btn lightbox-close" onClick={() => setLightbox(false)} aria-label="Cerrar imagen ampliada">✕</button>
+              <img src={gallery[Math.min(selectedImg, gallery.length - 1)]} alt={product.name} />
+              {gallery.length > 1 && (
+                <div className="lightbox-nav">
+                  <button onClick={() => setSelectedImg(i => (i - 1 + gallery.length) % gallery.length)} aria-label="Imagen anterior">←</button>
+                  <span>{Math.min(selectedImg, gallery.length - 1) + 1} / {gallery.length}</span>
+                  <button onClick={() => setSelectedImg(i => (i + 1) % gallery.length)} aria-label="Imagen siguiente">→</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {related.length > 0 && (
           <section className="products-section">

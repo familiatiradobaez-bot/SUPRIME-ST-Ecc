@@ -28,7 +28,7 @@ export function Footer() {
         </div>
       </div>
       <div className="footer-bottom">
-        <p>&copy; 2024 SUPRIME. Todos los derechos reservados.</p>
+        <p>&copy; {new Date().getFullYear()} SUPRIME. Todos los derechos reservados.</p>
       </div>
     </footer>
   );

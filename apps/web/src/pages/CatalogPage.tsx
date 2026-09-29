@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
 import { ProductCard } from '../components/ProductCard';
+import { SkeletonGrid } from '../components/Skeletons';
 
 type CatalogPageProps = {
   kind: 'categoria' | 'departamento' | 'subdepartamento';
@@ -100,9 +101,7 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishli
             <h2 style={{ textTransform: 'capitalize' }}>{title}</h2>
             {subtitle && <p className="section-subtitle">{subtitle}</p>}
           </div>
-          {status === 'loading' && (
-            <div className="loading"><div className="spinner"></div></div>
-          )}
+          {status === 'loading' && <SkeletonGrid count={8} />}
           {status === 'error' && (
             <div className="error-message">❌ No encontramos esta sección.</div>
           )}

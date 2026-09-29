@@ -4,6 +4,7 @@ import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
 import { CURRENCIES } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
+import { SkeletonGrid } from '../components/Skeletons';
 
 type Department = {
   id: string;
@@ -151,12 +152,7 @@ export function HomePage({
             </div>
           </div>
 
-          {status === 'loading' && (
-            <div className="loading">
-              <div className="spinner"></div>
-              <span style={{ marginLeft: '1rem' }}>Cargando catálogo...</span>
-            </div>
-          )}
+          {status === 'loading' && <SkeletonGrid count={8} />}
 
           {status === 'error' && (
             <div className="error-message">

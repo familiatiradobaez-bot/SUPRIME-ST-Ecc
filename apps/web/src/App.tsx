@@ -229,6 +229,9 @@ export function App() {
         user={user}
         cartCount={cartCount}
         searchTerm={searchTerm}
+        suggestions={products}
+        currency={currency}
+        onSelectProduct={(p) => { if (p.slug) navigate(`/producto/${p.slug}`); }}
         onSearch={handleSearchNav}
         onCartClick={() => setShowCart(!showCart)}
         onMenuClick={() => setShowMenu(!showMenu)}
