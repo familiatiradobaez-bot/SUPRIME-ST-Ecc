@@ -62,7 +62,30 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
       </div>
       <div className="form-group">
         <label htmlFor="co-phone">Teléfono:</label>
-        <input id="co-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" required pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
+        <input
+          id="co-phone"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => {
+            // Simple phone mask: allow digits, spaces, +, -, (), auto-format Spanish format
+            let val = e.target.value.replace(/[^\d+]/g, '');
+            if (val.startsWith('34') && !val.startsWith('+')) val = '+' + val;
+            if (val.startsWith('+34')) {
+              const rest = val.slice(3).replace(/\D/g, '');
+              if (rest.length <= 3) val = '+34 ' + rest;
+              else if (rest.length <= 6) val = '+34 ' + rest.slice(0, 3) + ' ' + rest.slice(3);
+              else if (rest.length <= 9) val = '+34 ' + rest.slice(0, 3) + ' ' + rest.slice(3, 6) + ' ' + rest.slice(6);
+              else val = '+34 ' + rest.slice(0, 3) + ' ' + rest.slice(3, 6) + ' ' + rest.slice(6, 9);
+            }
+            setPhone(val);
+          }}
+          placeholder="+34 612 345 678"
+          required
+          pattern="\+?[0-9\s.\-()]{9,20}"
+          title="9-15 dígitos, p. ej. +34 612 345 678"
+          autoComplete="tel"
+        />
       </div>
       <div className="form-group">
         <label htmlFor="co-address">Dirección:</label>

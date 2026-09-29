@@ -119,7 +119,7 @@ export function HomePage({
             <div className="category-cards">
               {categories.map(c => (
                 <button key={c.id} className="category-card" onClick={() => navigate(`/categoria/${c.slug}`)}>
-                  {c.image_url && <img src={c.image_url} alt={c.name} loading="lazy" className="category-card-img" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                  {c.image_url && <img src={c.image_url} alt={c.name} loading="lazy" className="category-card-img" width="320" height="180" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
                   <div className="category-card-body">
                     <strong>{c.name}</strong>
                     <small>{c.department_name}</small>

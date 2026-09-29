@@ -70,10 +70,13 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         onBack();
         return;
       }
+      // 403 es esperado (step-up requerido), no es error de consola
       const data = await res.json().catch(() => ({}));
       if (data.error === 'ADMIN_2FA_SETUP_REQUIRED') {
         setStepUp('setup');
         handleSetup2FA();
+      } else if (res.status === 403) {
+        setStepUp('code');
       } else {
         setStepUp('code');
       }

@@ -230,6 +230,8 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
                     alt={product.name}
                     fetchPriority="high"
                     decoding="async"
+                    width="800"
+                    height="600"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23333" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="20"%3ESin imagen%3C/text%3E%3C/svg%3E';
                     }}
@@ -257,6 +259,8 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
                       src={url}
                       alt=""
                       loading="lazy"
+                      width="72"
+                      height="72"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </button>
@@ -321,6 +325,27 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
               >
                 WhatsApp
               </a>
+              {navigator.share && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.share({
+                        title: product.name,
+                        text: product.description?.slice(0, 150),
+                        url: window.location.href,
+                      });
+                    } catch (err) {
+                      const e = err as Error;
+                      if (e.name !== 'AbortError') console.warn('Share failed:', e);
+                    }
+                  }}
+                  aria-label="Compartir con..."
+                >
+                  📤 Compartir
+                </button>
+              )}
             </div>
           </div>
         </section>

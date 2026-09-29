@@ -5490,10 +5490,9 @@ button, .btn {
 .category-card-img {
   width: 100%;
   aspect-ratio: 16 / 9;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
   background: var(--pill-bg);
-  padding: 0.5rem;
 }
 
 .category-card-body {
