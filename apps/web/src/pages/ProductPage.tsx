@@ -7,7 +7,6 @@ import { formatPrice } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonPdp } from '../components/Skeletons';
 
-// Genera JSON-LD Product schema para SEO
 function generateProductJsonLd(product: Product, gallery: string[], currency: string) {
   const base = 'https://suprime.xyz';
   const price = (product.price_cents / 100).toFixed(2);
@@ -38,6 +37,36 @@ function generateProductJsonLd(product: Product, gallery: string[], currency: st
           reviewCount: product.review_count || 0,
         }
       : undefined,
+  };
+}
+
+// Genera JSON-LD BreadcrumbList para SEO
+function generateBreadcrumbJsonLd(product: Product) {
+  const base = 'https://suprime.xyz';
+  const items = [
+    { '@type': 'ListItem', position: 1, item: { '@id': `${base}/`, name: 'Inicio' } },
+  ];
+  let pos = 2;
+  if (product.department_name && product.department_slug) {
+    items.push({ '@type': 'ListItem', position: pos++, item: { '@id': `${base}/departamento/${product.department_slug}`, name: product.department_name } });
+  }
+  if (product.subdepartment_slug) {
+    items.push({ '@type': 'ListItem', position: pos++, item: { '@id': `${base}/subdepartamento/${product.subdepartment_slug}`, name: 'Subdepartamento' } });
+  }
+  // category_slug no existe en el tipo Product, omitimos
+  items.push({ '@type': 'ListItem', position: pos, item: { '@id': `${base}/producto/${product.slug}`, name: product.name } });
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items,
+  };
+items.push({ '@type': 'ListItem', position: pos, item: { '@id': `${base}/producto/${product.slug}`, name: product.name } });
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items,
   };
 }
 
@@ -87,6 +116,16 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
           const old = document.getElementById('product-json-ld');
           if (old) old.remove();
           document.head.appendChild(script);
+
+          // Breadcrumb JSON-LD
+          const breadcrumbLd = generateBreadcrumbJsonLd(payload.data);
+          const bcScript = document.createElement('script');
+          bcScript.type = 'application/ld+json';
+          bcScript.text = JSON.stringify(breadcrumbLd);
+          bcScript.id = 'breadcrumb-json-ld';
+          const oldBc = document.getElementById('breadcrumb-json-ld');
+          if (oldBc) oldBc.remove();
+          document.head.appendChild(bcScript);
         }
         fetch(`${apiUrl}/catalog/products/${slug}/related?limit=8`)
           .then(r => r.json())
@@ -104,6 +143,8 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
     return () => {
       const script = document.getElementById('product-json-ld');
       if (script) script.remove();
+      const bcScript = document.getElementById('breadcrumb-json-ld');
+      if (bcScript) bcScript.remove();
     };
   }, []);
 
