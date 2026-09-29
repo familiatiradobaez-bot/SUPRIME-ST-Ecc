@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { LastAccount } from '../hooks/useAuth';
 
 type LoginFormProps = {
   onSubmit: (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean; terms?: boolean }) => void;
@@ -8,10 +9,11 @@ type LoginFormProps = {
   loading?: boolean;
   apiUrl: string;
   onForgotPassword?: () => void;
+  lastAccount?: LastAccount | null;
 };
 
-export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl, onForgotPassword }: LoginFormProps) {
-  const [email, setEmail] = useState('');
+export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl, onForgotPassword, lastAccount }: LoginFormProps) {
+  const [email, setEmail] = useState(lastAccount?.email ?? '');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -44,6 +46,16 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
   return (
     <form onSubmit={handleSubmit} className="form">
       {error && <p className="error" style={{ marginBottom: '1rem' }}>{error}</p>}
+      {mode === 'login' && lastAccount && email !== lastAccount.email && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ width: '100%', marginBottom: '1rem' }}
+          onClick={() => setEmail(lastAccount.email)}
+        >
+          ↩️ Última cuenta: {lastAccount.display_name} ({lastAccount.email})
+        </button>
+      )}
       {mode === 'register' && (
         <>
           <div className="form-group">

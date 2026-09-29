@@ -36,10 +36,12 @@ export function App() {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess, lastAccount, rememberLastAccount } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
-  const { cart, addedToCartId, cartTotal, cartCount, removedNotice, clearRemovedNotice, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
-  const { wishlist, toggleWishlist, isWished } = useWishlist();
+  // Carrito y favoritos ligados a la cuenta ('guest' sin sesión)
+  const accountKey = user?.id ?? 'guest';
+  const { cart, addedToCartId, cartTotal, cartCount, removedNotice, clearRemovedNotice, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products, accountKey);
+  const { wishlist, toggleWishlist, isWished } = useWishlist(accountKey);
   const { currency, setCurrency } = useCurrency();
 
   const [showCart, setShowCart] = useState(false);
@@ -266,7 +268,10 @@ export function App() {
             ?? (Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60));
           persistSession(sessionToken, expiresAt, true);
           setSession({ id: sessionToken, token: sessionToken, expires_at: expiresAt });
-          if (payload.data.user) setUser(payload.data.user);
+          if (payload.data.user) {
+            setUser(payload.data.user);
+            rememberLastAccount(payload.data.user.email, payload.data.user.display_name || payload.data.user.username);
+          }
           else {
             fetch(`${apiUrl}/auth/me`, {
               headers: { 'Authorization': `Bearer ${sessionToken}` },
@@ -508,6 +513,7 @@ export function App() {
               loading={actionLoading}
               apiUrl={apiUrl}
               onForgotPassword={() => setShowPasswordReset(true)}
+              lastAccount={lastAccount}
             />
             )}
           </div>

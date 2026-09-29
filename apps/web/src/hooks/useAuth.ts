@@ -22,6 +22,21 @@ function hasAdminAccess(roleId: string | null): boolean {
 }
 
 const SESSION_STORAGE_KEY = 'suprime_session';
+const LAST_ACCOUNT_KEY = 'suprime_last_account';
+
+export type LastAccount = { email: string; display_name: string };
+
+function loadLastAccount(): LastAccount | null {
+  try {
+    const saved = localStorage.getItem(LAST_ACCOUNT_KEY);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    if (typeof parsed?.email === 'string' && parsed.email.includes('@')) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function useAuth() {
   const apiUrl = useApiUrl();
@@ -35,6 +50,18 @@ export function useAuth() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpResending, setOtpResending] = useState(false);
   const [otpError, setOtpError] = useState('');
+  // Última cuenta usada en este dispositivo (reconexión rápida: pre-rellena el email)
+  const [lastAccount, setLastAccount] = useState<LastAccount | null>(loadLastAccount);
+
+  const rememberLastAccount = useCallback((email: string, display_name: string) => {
+    const entry = { email, display_name: display_name || email };
+    setLastAccount(entry);
+    try {
+      localStorage.setItem(LAST_ACCOUNT_KEY, JSON.stringify(entry));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
 
   // Persistencia: rememberMe -> localStorage (30 días), si no -> sessionStorage (cierra al cerrar pestaña).
   // (La cookie HttpOnly del servidor no es legible cross-subdominio, por eso se guarda el token aquí.)
@@ -150,6 +177,7 @@ export function useAuth() {
       setSession(sessionData);
       // Persistir sesión: rememberMe -> localStorage, si no -> sessionStorage
       persistSession(sessionData.token, sessionData.expires_at, extra?.rememberMe === true);
+      rememberLastAccount(userData.email, userData.display_name || userData.username);
       // Cargar datos de envío al iniciar sesión
       fetch(`${apiUrl}/auth/me`, {
         headers: { 'Authorization': `Bearer ${sessionData.token}` },
@@ -167,7 +195,7 @@ export function useAuth() {
     } finally {
       setActionLoading(false);
     }
-  }, [apiUrl, loginMode, persistSession]);
+  }, [apiUrl, loginMode, persistSession, rememberLastAccount]);
 
   const handleVerifyOtp = useCallback(async (code: string) => {
     if (!pendingOtpEmail) return;
@@ -198,13 +226,14 @@ export function useAuth() {
       setUser(userData);
       setSession(sessionData);
       persistSession(sessionData.token, sessionData.expires_at, false);
+      rememberLastAccount(userData.email, userData.display_name || userData.username);
       setPendingOtpEmail(null);
     } catch (err) {
       setOtpError(err instanceof Error ? err.message : 'Error de conexión');
     } finally {
       setOtpLoading(false);
     }
-  }, [apiUrl, pendingOtpEmail, persistSession]);
+  }, [apiUrl, pendingOtpEmail, persistSession, rememberLastAccount]);
 
   const handleResendOtp = useCallback(async () => {
     if (!pendingOtpEmail) return;
@@ -309,5 +338,7 @@ export function useAuth() {
     handleResendOtp,
     decodeTokenRole,
     hasAdminAccess,
+    lastAccount,
+    rememberLastAccount,
   };
 }
