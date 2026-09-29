@@ -116,10 +116,17 @@
 
 .admin-sidebar-footer {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.admin-sidebar-footer .admin-sidebar-item {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 44px;
 }
 
 .admin-sidebar-user {
@@ -417,6 +424,43 @@
 
 .admin-table tr:hover {
   background: var(--pill-hover-bg);
+}
+
+/* Scroll horizontal en móvil sin romper la estructura de tabla */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrapper .admin-table {
+  min-width: 620px;
+}
+
+.table-wrapper .admin-table th,
+.table-wrapper .admin-table td {
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .table-wrapper .admin-table thead {
+    display: table-header-group;
+  }
+
+  .table-wrapper .admin-table tbody {
+    display: table-row-group;
+  }
+
+  .table-wrapper .admin-table tr {
+    display: table-row;
+    width: auto;
+    table-layout: auto;
+  }
+
+  .table-wrapper .admin-table th,
+  .table-wrapper .admin-table td {
+    display: table-cell;
+    width: auto;
+  }
 }
 
 .role-select {

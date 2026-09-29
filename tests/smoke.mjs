@@ -156,6 +156,9 @@ if (products.length && products[0].slug) {
   r = await F(`${API}/catalog/products/no-existe-xyz`);
   check('detail inexistente 404', r.status === 404, r.status);
 }
+r = await F(`${API}/catalog/store-settings`);
+const st = await j(r);
+check('store-settings 200 + portes + maintenance off', r.status === 200 && st.data?.shipping_cost != null && st.data?.maintenance_mode === '0', r.status);
 
 console.log('== Google OAuth ==');
 

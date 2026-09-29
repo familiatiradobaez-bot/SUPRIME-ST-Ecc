@@ -7,7 +7,7 @@ import { useWishlist } from './hooks/useWishlist';
 import { useProducts } from './hooks/useProducts';
 import { useCurrency } from './hooks/useCurrency';
 import { useApiUrl } from './hooks/useApiUrl';
-import { getAuthHeaders } from './lib/api';
+import { getAuthHeaders, loadStoreSettings } from './lib/api';
 import { Header } from './components/Header';
 import { CookieBanner } from './components/CookieBanner';
 import { Footer } from './components/Footer';
@@ -52,7 +52,17 @@ export function App() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [cartNotice, setCartNotice] = useState('');
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
   const placingRef = useRef(false);
+
+  // Ajustes públicos (portes + mantenimiento). Sin esto rigen los valores por defecto.
+  useEffect(() => {
+    loadStoreSettings(apiUrl).then((s) => {
+      setMaintenanceMode(s.maintenance_mode);
+      // Re-render para aplicar portes frescos en los cálculos mostrados
+      setProducts((prev) => [...prev]);
+    }).catch(() => {});
+  }, [apiUrl]);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [pendingGoogle2FA, setPendingGoogle2FA] = useState<string | null>(null);
@@ -137,15 +147,23 @@ export function App() {
   // Carrito exige login: sin sesión se abre el login y no se pierde nada
   // (el carrito ya persiste en localStorage entre recargas)
   const handleAddToCartGated = useCallback((productId: string, qty: number = 1) => {
+    if (maintenanceMode) {
+      alert('Tienda en mantenimiento. Volvemos enseguida.');
+      return;
+    }
     if (!user) {
       setLoginNotice('Inicia sesión para agregar productos a tu carrito. Tu carrito se guarda automáticamente.');
       setShowLogin(true);
       return;
     }
     handleAddToCart(productId, qty);
-  }, [user, handleAddToCart]);
+  }, [user, handleAddToCart, maintenanceMode]);
 
   const handleCheckout = async () => {
+    if (maintenanceMode) {
+      setCartNotice('Tienda en mantenimiento. Volvemos enseguida.');
+      return;
+    }
     if (!user) {
       setShowCart(false);
       setLoginNotice('Inicia sesión para continuar con tu compra. Tu carrito seguirá aquí.');
@@ -325,6 +343,11 @@ export function App() {
   return (
     <div className="layout">
       <ScrollToTop />
+      {maintenanceMode && (
+        <p role="status" style={{ background: 'var(--warning)', color: '#1a1a00', textAlign: 'center', padding: '0.5rem 1rem', margin: 0, fontWeight: 600 }}>
+          🔧 Tienda en mantenimiento: puedes mirar, pero no comprar. Volvemos enseguida.
+        </p>
+      )}
       <Header
         user={user}
         cartCount={cartCount}
@@ -406,7 +429,7 @@ export function App() {
           element={
             <ProductPage
               addedToCartId={addedToCartId}
-              onAddToCart={(id, qty) => { handleAddToCartGated(id, qty ?? 1); setShowCart(true); }}
+              onAddToCart={handleAddToCartGated}
               currency={currency}
               wishedIds={wishlist}
               onToggleWishlist={toggleWishlist}

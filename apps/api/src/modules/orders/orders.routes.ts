@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { sendEmail, orderEmailHtml, orderStatusEmailHtml } from '../../lib/email';
-import { calcShipping } from '../../lib/pricing';
+import { calcShipping, isMaintenanceMode } from '../../lib/pricing';
 
 function normalizePhone(input: string): string {
   return input.replace(/[\s.\-()]/g, '');
@@ -77,6 +77,11 @@ ordersRoutes.post('/', async (context) => {
 
   const userId = session.user_id as string;
 
+  // Tienda en mantenimiento: no se aceptan pedidos nuevos
+  if (await isMaintenanceMode(context.env)) {
+    return context.json({ error: 'MAINTENANCE_MODE', message: 'Tienda en mantenimiento. Vuelve pronto.' }, 503);
+  }
+
   // Validate products and calculate total.
   // D1 no soporta BEGIN/COMMIT raw: se valida con SELECTs y se escribe con
   // db.batch() (atómico). El UPDATE de stock es condicional (>= qty) y se
@@ -110,7 +115,7 @@ ordersRoutes.post('/', async (context) => {
     });
   }
 
-  const shippingCents = calcShipping(subtotalCents);
+  const shippingCents = await calcShipping(context.env, subtotalCents);
   const totalCents = subtotalCents + shippingCents;
 
   // Escritura atómica: orden + items + decremento condicional de stock

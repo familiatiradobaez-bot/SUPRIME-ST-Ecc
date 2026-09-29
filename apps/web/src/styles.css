@@ -4939,6 +4939,16 @@ button, .btn {
   transform: scale(1.03);
 }
 
+/* Sin anillo morado pegado tras clic con ratón; con teclado se mantiene */
+.gallery-item:focus {
+  outline: none;
+}
+
+.gallery-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .gallery-item img {
   width: 100%;
   height: 100%;
@@ -5478,8 +5488,10 @@ button, .btn {
 .category-card-img {
   width: 100%;
   aspect-ratio: 16 / 9;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
+  background: var(--pill-bg);
+  padding: 0.5rem;
 }
 
 .category-card-body {
@@ -5564,14 +5576,16 @@ button, .btn {
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--pill-bg);
-  aspect-ratio: 1;
 }
 
+/* La foto se muestra entera, sin recortes (contain, no cover) */
 .pdp-main-image img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  max-height: 60vh;
+  object-fit: contain;
   display: block;
+  margin: 0 auto;
 }
 
 .pdp-no-image {

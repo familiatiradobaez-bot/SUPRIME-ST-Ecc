@@ -3,6 +3,25 @@ import type { Bindings } from '../../app';
 
 export const catalogRoutes = new Hono<{ Bindings: Bindings }>();
 
+// GET /store-settings - Ajustes públicos de la tienda (solo claves seguras).
+// El front los usa para mostrar portes y el modo mantenimiento.
+catalogRoutes.get('/store-settings', async (context) => {
+  const rows = await context.env.DB.prepare(
+    'SELECT key, value FROM store_settings WHERE key IN (\'store_name\',\'store_description\',\'shipping_cost\',\'free_shipping_threshold\',\'maintenance_mode\')'
+  ).all();
+  const settings: Record<string, string> = {
+    store_name: 'SUPRIME',
+    store_description: '',
+    shipping_cost: '490',
+    free_shipping_threshold: '6000',
+    maintenance_mode: '0',
+  };
+  for (const row of (rows.results || []) as Array<{ key: string; value: string }>) {
+    settings[row.key] = row.value;
+  }
+  return context.json({ data: settings });
+});
+
 const PRODUCT_SELECT = `p.id, p.name, p.slug, p.description, p.image_url, p.price_cents,
   p.stock_quantity, sd.slug as subdepartment_slug, d.slug as department_slug, d.name as department_name`;
 const PRODUCT_JOINS = `FROM products p

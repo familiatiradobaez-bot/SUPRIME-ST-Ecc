@@ -289,18 +289,55 @@ adminRoutes.get('/settings', async (context) => {
   return context.json({ data: settings });
 });
 
-// PUT /admin/settings - Update store settings
+// PUT /admin/settings - Update store settings (solo owner/admin; stock_manager no)
+const SETTABLE_KEYS = ['store_name', 'store_description', 'currency', 'tax_rate', 'shipping_cost', 'free_shipping_threshold', 'maintenance_mode'];
+
 adminRoutes.put('/settings', async (context) => {
+  const roleId = context.get('authRoleId') as string;
+  if (!canAccess(roleId, 'admin')) {
+    return context.json({ error: 'FORBIDDEN', message: 'Solo owner/admin' }, 403);
+  }
+
   const body = await context.req.json().catch(() => null);
-  if (!body) {
+  if (!body || typeof body !== 'object') {
     return context.json({ error: 'INVALID_INPUT' }, 400);
   }
 
-  for (const [key, value] of Object.entries(body)) {
+  const entries = Object.entries(body).filter(([key, value]) =>
+    SETTABLE_KEYS.includes(key) && typeof value === 'string' && value.length <= 200
+  );
+  if (entries.length === 0) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Sin claves válidas' }, 400);
+  }
+
+  // Validación por clave: euros (2 decimales) -> céntimos; resto texto acotado
+  const toStore: Array<[string, string]> = [];
+  for (const [key, value] of entries as Array<[string, string]>) {
+    if (key === 'shipping_cost' || key === 'free_shipping_threshold') {
+      const cents = Math.round(parseFloat(value.replace(',', '.')) * 100);
+      if (!Number.isFinite(cents) || cents < 0 || cents > 100000) {
+        return context.json({ error: 'INVALID_INPUT', message: `Valor inválido para ${key}` }, 400);
+      }
+      toStore.push([key, String(cents)]);
+    } else if (key === 'maintenance_mode') {
+      if (value !== '0' && value !== '1') {
+        return context.json({ error: 'INVALID_INPUT', message: 'maintenance_mode: 0 o 1' }, 400);
+      }
+      toStore.push([key, value]);
+    } else {
+      const clean = value.trim();
+      if (!clean) {
+        return context.json({ error: 'INVALID_INPUT', message: `Valor vacío para ${key}` }, 400);
+      }
+      toStore.push([key, clean]);
+    }
+  }
+
+  for (const [key, value] of toStore) {
     await context.env.DB.prepare(
       `INSERT INTO store_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
-    ).bind(key, value as string).run();
+    ).bind(key, value).run();
   }
 
   return context.json({ data: { updated: true } });

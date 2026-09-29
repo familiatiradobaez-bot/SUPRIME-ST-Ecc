@@ -158,6 +158,9 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   }, [apiUrl, sessionToken]);
 
   const handleSetup2FA = async () => {
+    // Con 2FA activo no se regenera (evita secuestro si la sesión se filtra;
+    // para cambiarlo, desactívalo primero con step-up vigente).
+    if (totpEnabled) return;
     setTotpLoading(true);
     try {
       const res = await fetch(`${apiUrl}/auth/me/totp/setup`, {
@@ -173,6 +176,27 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       }
     } catch (err) {
       console.error('Error setting up 2FA:', err);
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    if (!window.confirm('¿Desactivar la verificación en dos pasos de esta cuenta? Podrás activarla de nuevo después.')) return;
+    setTotpLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/auth/me/totp/disable`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setTotpEnabled(false);
+      } else {
+        alert('No se pudo desactivar. Revalida tu código 2FA entrando de nuevo al panel.');
+      }
+    } catch {
+      alert('Error de conexión.');
     } finally {
       setTotpLoading(false);
     }
@@ -416,6 +440,61 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     { id: 'settings', label: 'Configuración', icon: '⚙️' },
   ];
 
+  // Jerarquía: stock_manager gestiona catálogo y pedidos; usuarios y ajustes
+  // de tienda son owner/admin (el servidor lo exige igual: PUT /settings 403).
+  const canManageStore = user.role_id === 'role-owner' || user.role_id === 'role-admin';
+  const visibleTabs = tabs.filter((t) =>
+    (t.id === 'users' || t.id === 'settings') ? canManageStore : true
+  );
+
+  // Ajustes de tienda (owner/admin)
+  const [settings, setSettings] = useState<Record<string, string> | null>(null);
+  const [settingsMsg, setSettingsMsg] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'settings' || !canManageStore || settings) return;
+    fetch(`${apiUrl}/admin/settings`, {
+      headers: { 'Authorization': `Bearer ${sessionToken}` },
+      credentials: 'include',
+    })
+      .then((r) => r.json())
+      .then((payload) => { if (payload.data) setSettings(payload.data); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, apiUrl, sessionToken]);
+
+  const saveSettings = async () => {
+    if (!settings) return;
+    setSavingSettings(true);
+    setSettingsMsg('');
+    try {
+      const res = await fetch(`${apiUrl}/admin/settings`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          store_name: settings.store_name ?? '',
+          store_description: settings.store_description ?? '',
+          shipping_cost: settings.shipping_cost ?? '',
+          free_shipping_threshold: settings.free_shipping_threshold ?? '',
+          tax_rate: settings.tax_rate ?? '',
+          maintenance_mode: settings.maintenance_mode ?? '0',
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSettingsMsg(payload.message || 'No se pudo guardar (¿permisos?)');
+        return;
+      }
+      setSettingsMsg('✓ Configuración guardada. Los portes aplican al instante.');
+    } catch {
+      setSettingsMsg('Error de conexión.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   // NOTA: el 2FA se verifica en el login (POST /auth/verify-2fa), no aquí.
   // Este panel asume sesión válida (el middleware admin la exige).
 
@@ -444,15 +523,17 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               Esta verificación vale por 1 hora.
             </p>
             <div className="form-group">
-              <label>Código de tu app de autenticación</label>
+              <label htmlFor="admin-stepup-code">Código de tu app de autenticación</label>
               <input
+                id="admin-stepup-code"
                 type="text"
+                inputMode="numeric"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="000000"
                 maxLength={6}
-                autoFocus
-                style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+                autoComplete="one-time-code"
+                className="otp-input"
               />
             </div>
             {totpError && <p className="error" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{totpError}</p>}
@@ -509,15 +590,17 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               />
             </div>
             <div className="form-group">
-              <label>Código de Verificación</label>
+              <label htmlFor="admin-totp-verify">Código de Verificación</label>
               <input
+                id="admin-totp-verify"
                 type="text"
+                inputMode="numeric"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="000000"
                 maxLength={6}
-                autoFocus
-                style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+                autoComplete="one-time-code"
+                className="otp-input"
               />
             </div>
             {totpError && <p className="error" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{totpError}</p>}
@@ -558,7 +641,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         </div>
 
         <nav className="admin-sidebar-nav">
-          {tabs.map(tab => (
+          {visibleTabs.map(tab => (
             <button
               key={tab.id}
               className={`admin-sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
@@ -583,12 +666,24 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           </div>
           <button
             className={`admin-sidebar-item ${totpEnabled ? 'active' : ''}`}
-            onClick={handleSetup2FA}
+            onClick={totpEnabled ? undefined : handleSetup2FA}
+            disabled={totpEnabled}
+            title={totpEnabled ? '2FA ya activado en esta cuenta' : 'Configurar verificación en dos pasos'}
             style={{ marginTop: '0.5rem' }}
           >
             <span className="admin-sidebar-icon">{totpEnabled ? '✅' : '🔐'}</span>
             <span className="admin-sidebar-label">{totpEnabled ? '2FA Activado' : 'Configurar 2FA'}</span>
           </button>
+          {totpEnabled && (
+            <button
+              className="admin-sidebar-item"
+              onClick={handleDisable2FA}
+              title="Desactivar 2FA (exige step-up vigente)"
+            >
+              <span className="admin-sidebar-icon">🚫</span>
+              <span className="admin-sidebar-label">Desactivar 2FA</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -864,11 +959,58 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           </div>
         )}
 
-        {/* SETTINGS TAB */}
-        {activeTab === 'settings' && (
+        {/* SETTINGS TAB (owner/admin) */}
+        {activeTab === 'settings' && canManageStore && (
           <div className="admin-settings">
             <h2>Configuración de la Tienda</h2>
-            <p>La configuración de la tienda se mostrará aquí</p>
+            {!settings && <p>Cargando…</p>}
+            {settings && (
+              <>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                  Los portes se aplican al instante en el checkout. El modo mantenimiento
+                  cierra la compra (la tienda se puede mirar, pero no pedir).
+                </p>
+                <div className="form-group">
+                  <label htmlFor="set-name">Nombre de la tienda:</label>
+                  <input id="set-name" type="text" value={settings.store_name ?? ''} onChange={(e) => setSettings({ ...settings, store_name: e.target.value })} maxLength={60} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="set-desc">Descripción:</label>
+                  <input id="set-desc" type="text" value={settings.store_description ?? ''} onChange={(e) => setSettings({ ...settings, store_description: e.target.value })} maxLength={200} />
+                </div>
+                <div className="form-row-2col">
+                  <div className="form-group">
+                    <label htmlFor="set-ship">Envío (€):</label>
+                    <input id="set-ship" type="number" inputMode="decimal" step="0.01" min="0" value={((parseInt(settings.shipping_cost ?? '490', 10) || 0) / 100).toFixed(2)} onChange={(e) => setSettings({ ...settings, shipping_cost: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="set-threshold">Gratis desde (€):</label>
+                    <input id="set-threshold" type="number" inputMode="decimal" step="1" min="0" value={((parseInt(settings.free_shipping_threshold ?? '6000', 10) || 0) / 100).toFixed(0)} onChange={(e) => setSettings({ ...settings, free_shipping_threshold: e.target.value })} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="set-tax">IVA (%):</label>
+                  <input id="set-tax" type="number" inputMode="decimal" step="1" min="0" max="100" value={settings.tax_rate ?? ''} onChange={(e) => setSettings({ ...settings, tax_rate: e.target.value })} />
+                </div>
+                <div className="form-group remember-me">
+                  <label className="checkbox-label" htmlFor="set-maint" style={{ minHeight: '44px' }}>
+                    <input
+                      id="set-maint"
+                      type="checkbox"
+                      checked={settings.maintenance_mode === '1'}
+                      onChange={(e) => setSettings({ ...settings, maintenance_mode: e.target.checked ? '1' : '0' })}
+                    />
+                    <span>🔧 Modo mantenimiento (cierra la compra)</span>
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="btn btn-primary" onClick={saveSettings} disabled={savingSettings}>
+                    {savingSettings ? 'Guardando…' : '💾 Guardar configuración'}
+                  </button>
+                </div>
+                {settingsMsg && <p style={{ marginTop: '0.75rem' }}>{settingsMsg}</p>}
+              </>
+            )}
           </div>
         )}
         </div>
