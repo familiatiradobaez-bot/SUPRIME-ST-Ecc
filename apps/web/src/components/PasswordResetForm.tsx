@@ -77,7 +77,7 @@ export function PasswordResetForm({ apiUrl, onDone, onBack }: PasswordResetFormP
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Introduce el código enviado a <strong>{email}</strong> y tu nueva contraseña.
         </p>
-        {error && <p className="error" style={{ color: '#a3422b', marginBottom: '1rem' }}>{error}</p>}
+        {error && <p className="error" style={{ marginBottom: '1rem' }}>{error}</p>}
         {info && <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{info}</p>}
         <div className="form-group">
           <label>Código (6 dígitos)</label>
@@ -111,7 +111,7 @@ export function PasswordResetForm({ apiUrl, onDone, onBack }: PasswordResetFormP
           <button type="button" className="btn btn-secondary" onClick={onBack} disabled={loading}>Atrás</button>
         </div>
         <p className="form-text" style={{ textAlign: 'center' }}>
-          {cooldown > 0 ? `Reenviar en ${cooldown}s` : <a href="#r" onClick={(e) => { e.preventDefault(); setStep('email'); }} style={{ color: '#c65d35', cursor: 'pointer' }}>Reenviar código</a>}
+          {cooldown > 0 ? `Reenviar en ${cooldown}s` : <a href="#r" onClick={(e) => { e.preventDefault(); setStep('email'); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>Solicitar un código nuevo</a>}
         </p>
       </form>
     );
@@ -122,7 +122,7 @@ export function PasswordResetForm({ apiUrl, onDone, onBack }: PasswordResetFormP
       <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
         Te enviaremos un código de 6 dígitos (15 min) para restablecer tu contraseña.
       </p>
-      {error && <p className="error" style={{ color: '#a3422b', marginBottom: '1rem' }}>{error}</p>}
+      {error && <p className="error" style={{ marginBottom: '1rem' }}>{error}</p>}
       <div className="form-group">
         <label>Correo Electrónico:</label>
         <input

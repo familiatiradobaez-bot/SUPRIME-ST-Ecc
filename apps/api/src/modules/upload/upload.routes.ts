@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
+import { getClientIp } from '../../lib/request';
 
 export type UploadBindings = Bindings & {
   IMAGEKIT_PRIVATE_KEY: string;
@@ -52,27 +53,31 @@ export const uploadRoutes = new Hono<{ Bindings: UploadBindings }>();
 const GALLERY_ADMIN_ROLES = ['role-admin', 'role-owner', 'role-stock-manager'];
 
 // Subir y ver galería requieren sesión admin válida (el token es el id de sesión).
-// Sin esto cualquiera consumiría la cuota de ImageKit (solo había rate-limit).
+// El rol se lee de DB, nunca del token. Sin esto cualquiera consumiría la cuota de ImageKit.
 async function requireUploadAdmin(context: any, next: () => Promise<void>) {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return context.json({ error: 'UNAUTHORIZED', message: 'Inicia sesión como admin para gestionar imágenes' }, 401);
   }
-  let roleId: string | null = null;
+  let userId: string | null = null;
   try {
     const parts = atob(authHeader.slice(7)).split(':');
-    if (parts.length >= 2) roleId = parts[1];
+    if (parts.length >= 2) userId = parts[0];
   } catch {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
-  if (!roleId || !GALLERY_ADMIN_ROLES.includes(roleId)) {
-    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
+  if (!userId) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
   const sess = await context.env.DB.prepare(
-    'SELECT id, user_id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
-  ).bind(authHeader.slice(7)).first() as { id: string; user_id: string } | null;
+    `SELECT u.role_id, s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = ? AND s.user_id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(authHeader.slice(7), userId).first() as { role_id: string; user_id: string } | null;
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+  if (!GALLERY_ADMIN_ROLES.includes(sess.role_id)) {
+    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
   }
 
   // Step-up 2FA también para subir/ver galería (son acciones de admin)
@@ -138,7 +143,7 @@ uploadRoutes.get('/images', async (context) => {
 
 // POST /upload/imagekit - Upload image to ImageKit via server (ruta global)
 uploadRoutes.post('/imagekit', async (context) => {
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
 
   if (!checkRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many upload attempts' }, 429);
@@ -234,7 +239,7 @@ uploadRoutes.post('/validate-url', async (context) => {
 
 // GET /upload/rate-limit-status - Check rate limit status
 uploadRoutes.get('/rate-limit-status', async (context) => {
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   const attempt = uploadAttempts.get(clientIp);
 
   if (!attempt || attempt.resetAt < Date.now()) {

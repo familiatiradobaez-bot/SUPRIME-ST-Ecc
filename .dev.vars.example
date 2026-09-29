@@ -1,3 +1,8 @@
 # Copiar a .dev.vars (no commitear) para desarrollo local con `wrangler dev`
 # .dev.vars es leído automáticamente por wrangler.
 IMAGEKIT_PRIVATE_KEY=pega_aqui_tu_private_key_de_imagekit
+GOOGLE_CLIENT_ID=pega_aqui_tu_google_client_id
+GOOGLE_CLIENT_SECRET=pega_aqui_tu_google_client_secret
+# Opcional: callback OAuth local (si no, se deriva del Host)
+# GOOGLE_REDIRECT_URI=http://localhost:8789/api/v1/auth/google/callback
+RESEND_API_KEY=pega_aqui_tu_resend_key_solo_si_email_service_sin_onboard

@@ -94,7 +94,13 @@ export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPag
           <div className="pdp-gallery">
             <div className="pdp-main-image">
               {gallery.length > 0 ? (
-                <img src={gallery[Math.min(selectedImg, gallery.length - 1)]} alt={product.name} />
+                <img
+                  src={gallery[Math.min(selectedImg, gallery.length - 1)]}
+                  alt={product.name}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23333" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="20"%3ESin imagen%3C/text%3E%3C/svg%3E';
+                  }}
+                />
               ) : (
                 <div className="pdp-no-image">📦</div>
               )}
@@ -112,7 +118,12 @@ export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPag
                     onClick={() => setSelectedImg(i)}
                     aria-label={`Ver imagen ${i + 1}`}
                   >
-                    <img src={url} alt="" loading="lazy" />
+                    <img
+                      src={url}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
                   </button>
                 ))}
               </div>
@@ -128,9 +139,9 @@ export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPag
 
             <div className="pdp-buy-row">
               <div className="pdp-qty">
-                <button onClick={() => setQty(q => Math.max(1, q - 1))} disabled={outOfStock} aria-label="Quitar uno">−</button>
-                <span>{qty}</span>
-                <button onClick={() => setQty(q => Math.min(maxQty, q + 1))} disabled={outOfStock} aria-label="Agregar uno">+</button>
+                <button onClick={() => setQty(q => Math.max(1, q - 1))} disabled={outOfStock || qty <= 1} aria-label="Quitar uno">−</button>
+                <span aria-live="polite" aria-label={`Cantidad: ${qty}`}>{qty}</span>
+                <button onClick={() => setQty(q => Math.min(maxQty, q + 1))} disabled={outOfStock || qty >= maxQty} aria-label="Agregar uno">+</button>
               </div>
               <button
                 className="btn btn-primary btn-glow"

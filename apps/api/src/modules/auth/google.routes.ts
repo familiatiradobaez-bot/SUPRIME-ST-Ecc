@@ -8,12 +8,13 @@ const FRONTEND_URLS = [
 ];
 
 // El callback SIEMPRE vive en el Worker (api.suprime.xyz), nunca en el front.
-// El front solo recibe el redirect final. En local se usa el Host de la petición.
-function getRedirectUri(context: { req: { header: (name: string) => string | undefined } }): string {
+// GOOGLE_REDIRECT_URI (secret/var opcional) lo fija explícitamente; si no,
+// canónico de producción; en local se usa el Host de la petición.
+function getRedirectUri(context: { req: { header: (name: string) => string | undefined }; env: { GOOGLE_REDIRECT_URI?: string } }): string {
+  if (context.env.GOOGLE_REDIRECT_URI) return context.env.GOOGLE_REDIRECT_URI;
   const host = context.req.header('Host') || '';
   if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('192.168')) {
-    const proto = host.includes('localhost') ? 'http' : 'http';
-    return `${proto}://${host}/api/v1/auth/google/callback`;
+    return `http://${host}/api/v1/auth/google/callback`;
   }
   return 'https://api.suprime.xyz/api/v1/auth/google/callback';
 }
@@ -119,6 +120,7 @@ googleRoutes.get('/callback', async (context) => {
     const googleUser = await userResponse.json() as {
       id: string;
       email: string;
+      verified_email?: boolean;
       name: string;
       picture: string;
       error?: string;
@@ -128,21 +130,33 @@ googleRoutes.get('/callback', async (context) => {
       return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Failed to get user info' }, 502);
     }
 
+    // Solo emails verificados por Google (evita takeover por re-link)
+    if (googleUser.verified_email === false) {
+      return context.json({ error: 'GOOGLE_AUTH_FAILED', message: 'Google email not verified' }, 403);
+    }
+
     // Find or create user
     let user = await context.env.DB.prepare(
       'SELECT id, username, email, display_name, role_id FROM users WHERE google_subject = ? OR email = ?'
-    ).bind(googleUser.id, googleUser.email).first();
+    ).bind(googleUser.id, googleUser.email).first() as {
+      id: string; username: string; email: string; display_name: string; role_id: string;
+    } | null;
 
     if (!user) {
       const userId = crypto.randomUUID();
       const username = googleUser.email.split('@')[0] + '_' + Math.random().toString(36).substring(2, 8);
 
       await context.env.DB.prepare(
-        `INSERT INTO users (id, role_id, username, email, google_subject, display_name)
-         VALUES (?, 'role-customer', ?, ?, ?, ?)`
+        `INSERT INTO users (id, role_id, username, email, google_subject, display_name, email_verified)
+         VALUES (?, 'role-customer', ?, ?, ?, ?, 1)`
       ).bind(userId, username, googleUser.email, googleUser.id, googleUser.name).run();
 
       user = { id: userId, username, email: googleUser.email, display_name: googleUser.name, role_id: 'role-customer' };
+    } else {
+      // Fijar el link Google en el primer login (anti take-over por email)
+      await context.env.DB.prepare(
+        'UPDATE users SET google_subject = COALESCE(google_subject, ?), email_verified = 1 WHERE id = ?'
+      ).bind(googleUser.id, user.id).run();
     }
 
     // Create session (el token es el id de sesión, igual que en login)

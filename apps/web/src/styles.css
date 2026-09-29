@@ -1428,6 +1428,14 @@ button, .btn {
   20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
 
+.character-shake {
+  animation: character-shake 0.4s ease;
+}
+
+.character-bounce-in {
+  animation: character-bounce-in 0.5s ease;
+}
+
 /* Character pulse */
 @keyframes character-pulse {
   0%, 100% { transform: scale(1); }
@@ -4010,12 +4018,6 @@ button, .btn {
   100% { transform: translateX(0) translateY(0); opacity: 1; }
 }
 
-/* Character shake in up right left */
-@keyframes character-sh</longcat_think>
-The file has been updated successfully. Now I need to add the login animations to the LoginForm component. Let me add character animations to the login modal.
-</longcat_think>
-Ahora agrego las animaciones de personajes al modal de login en App.tsx:
-
 /* Mobile Styles */
 @media (max-width: 768px) {
   body {
@@ -4820,6 +4822,60 @@ Ahora agrego las animaciones de personajes al modal de login en App.tsx:
   justify-content: center;
 }
 
+/* Botón de tarjeta de producto (antes estilos inline) */
+.product-card-btn {  margin: 1rem;
+  width: calc(100% - 2rem);
+  border-radius: 8px;
+  transition: background-color 0.3s ease;
+}
+
+.product-card-btn.btn-success {
+  background-color: var(--success);
+  color: #fff;
+}
+
+/* Aviso dentro del carrito */
+.cart-notice {
+  background: var(--pill-bg);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+/* Foco visible de teclado (a11y) */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Respeto a movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Paginación reutilizable */
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  align-items: center;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  color: var(--text-secondary);
+}
+
 /* Selector de moneda (tienda) */
 .currency-select {
   background: var(--pill-bg);
@@ -4829,6 +4885,11 @@ Ahora agrego las animaciones de personajes al modal de login en App.tsx:
   padding: 0.35rem 0.6rem;
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+/* Clase genérica de error (antes solo inline) */
+.error {
+  color: var(--error);
 }
 
 /* Breadcrumbs */
@@ -5018,7 +5079,7 @@ Ahora agrego las animaciones de personajes al modal de login en App.tsx:
 .pdp-price {
   font-size: clamp(1.5rem, 5vw, 2rem);
   font-weight: 700;
-  color: var(--primary);
+  color: var(--accent);
   margin-bottom: 0.5rem;
 }
 
@@ -5028,7 +5089,7 @@ Ahora agrego las animaciones de personajes al modal de login en App.tsx:
 }
 
 .pdp-stock.ok {
-  color: #2d8a4e;
+  color: var(--success);
 }
 
 .pdp-stock.low {

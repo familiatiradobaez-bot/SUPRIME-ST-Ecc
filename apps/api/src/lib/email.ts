@@ -1,4 +1,5 @@
 import type { Bindings } from '../app';
+import { escapeHtml } from './request';
 
 // Envío con fallback: 1) Cloudflare Email Service (nativo, sin keys),
 // 2) Resend. Devuelve true si alguno lo aceptó. Nunca lanza.
@@ -53,13 +54,13 @@ export async function sendEmail(env: Bindings, toEmail: string, subject: string,
 export function orderEmailHtml(orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, totalCents: number, shippingName: string): string {
   const rows = items.map((i) => `
     <tr>
-      <td style="padding: 8px; border-bottom: 1px solid #eee;">${i.name} × ${i.quantity}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(i.name)} × ${i.quantity}</td>
       <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${((i.price_cents * i.quantity) / 100).toFixed(2)}€</td>
     </tr>`).join('');
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #6366f1;">¡Gracias por tu compra, ${shippingName}!</h1>
-      <p>Tu pedido <strong>${orderId}</strong> está en preparación.</p>
+      <h1 style="color: #6366f1;">¡Gracias por tu compra, ${escapeHtml(shippingName)}!</h1>
+      <p>Tu pedido <strong>${escapeHtml(orderId)}</strong> está en preparación.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">${rows}
         <tr>
           <td style="padding: 8px; font-weight: bold;">Total</td>

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
+import { getClientIp } from '../../lib/request';
 
 const loginSchema = z.object({
   email: z.string().optional(),
@@ -135,13 +136,14 @@ async function issueOtp(env: Bindings, email: string): Promise<{ sent: boolean; 
 
   const code = generateOtpCode();
   const codeHash = await sha256Hex(code);
+  // Reenviar NO resetea attempts (evita eludir el lockout de 5 intentos
+  // pidiendo códigos nuevos; solo un registro fresco empieza en 0).
   await env.DB.prepare(
     `INSERT INTO email_otps (email, code_hash, expires_at, attempts, last_sent_at)
      VALUES (?, ?, ?, 0, ?)
      ON CONFLICT(email) DO UPDATE SET
        code_hash = excluded.code_hash,
        expires_at = excluded.expires_at,
-       attempts = 0,
        last_sent_at = excluded.last_sent_at`
   ).bind(email, codeHash, now + OTP_TTL_SECONDS, now).run();
 
@@ -149,7 +151,7 @@ async function issueOtp(env: Bindings, email: string): Promise<{ sent: boolean; 
   return { sent, cooldown: 0 };
 }
 
-import { verifyTOTP as verifyTotpLib, generateTotpSecret } from '../../lib/totp';
+import { verifyTOTP as verifyTotpLib, verifyTOTPWithCounter, generateTotpSecret } from '../../lib/totp';
 
 // Acepta secretos nuevos (base32) y legacy (hex de 64 chars, tratados como UTF-8).
 // Los legacy se validan con el algoritmo antiguo inline para no romper 2FA existentes.
@@ -325,7 +327,7 @@ authRoutes.post('/register', async (context) => {
 
 // POST /auth/verify-otp - Validar código OTP y activar cuenta (con auto-login)
 authRoutes.post('/verify-otp', async (context) => {
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   if (!checkOtpVerifyRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
@@ -390,8 +392,16 @@ authRoutes.post('/verify-otp', async (context) => {
   });
 });
 
-// POST /auth/resend-otp - Reenviar código OTP (cooldown 60s)
+// POST /auth/resend-otp - Reenviar código OTP (cooldown 60s por email + bucket por IP).
+// Respuesta genérica salvo cooldown: no revela si la cuenta existe ni su estado.
+const resendAttempts = new Map<string, { count: number; resetAt: number }>();
+
 authRoutes.post('/resend-otp', async (context) => {
+  const clientIp = getClientIp(context.req);
+  if (!checkBucket(resendAttempts, clientIp, 10, 15 * 60 * 1000)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
   const body = await context.req.json().catch(() => null);
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
 
@@ -403,19 +413,13 @@ authRoutes.post('/resend-otp', async (context) => {
     'SELECT email_verified FROM users WHERE email = ?'
   ).bind(email).first() as { email_verified: number } | null;
 
-  if (!user) {
-    return context.json({ error: 'USER_NOT_FOUND', message: 'No hay cuenta con ese correo' }, 404);
-  }
-  if (user.email_verified) {
-    return context.json({ error: 'ALREADY_VERIFIED', message: 'La cuenta ya está verificada. Inicia sesión.' }, 400);
-  }
-
-  const { sent, cooldown } = await issueOtp(context.env, email);
-  if (cooldown > 0) {
-    return context.json({ error: 'OTP_COOLDOWN', message: `Espera ${cooldown}s antes de pedir otro código`, retryAfter: cooldown }, 429);
-  }
-  if (!sent) {
-    return context.json({ error: 'EMAIL_FAILED', message: 'No se pudo enviar el correo. Intenta más tarde.' }, 502);
+  // Solo se reenvía a cuentas pendientes; la respuesta es idéntica en el resto
+  // de casos para no enumerar cuentas (forgot-password ya hace lo mismo).
+  if (user && !user.email_verified) {
+    const { cooldown } = await issueOtp(context.env, email);
+    if (cooldown > 0) {
+      return context.json({ error: 'OTP_COOLDOWN', message: `Espera ${cooldown}s antes de pedir otro código`, retryAfter: cooldown }, 429);
+    }
   }
 
   return context.json({ data: { sent: true, otpExpiresIn: OTP_TTL_SECONDS } });
@@ -423,7 +427,7 @@ authRoutes.post('/resend-otp', async (context) => {
 
 // POST /auth/forgot-password - Enviar OTP para recuperar contraseña (respuesta genérica anti-enumeración)
 authRoutes.post('/forgot-password', async (context) => {
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   if (!checkForgotRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
@@ -449,7 +453,7 @@ authRoutes.post('/forgot-password', async (context) => {
 
 // POST /auth/reset-password - Restablecer contraseña con OTP
 authRoutes.post('/reset-password', async (context) => {
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   if (!checkOtpVerifyRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
@@ -504,7 +508,7 @@ authRoutes.post('/reset-password', async (context) => {
 // POST /auth/login
 authRoutes.post('/login', async (context) => {
   // Rate limiting check
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   if (!checkRateLimit(clientIp)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
   }
@@ -525,11 +529,15 @@ authRoutes.post('/login', async (context) => {
   const { email, username, password } = parsed.data;
 
   const user = await context.env.DB.prepare(
-    `SELECT id, username, email, display_name, role_id, password_hash, email_verified FROM users
+    `SELECT id, username, email, display_name, role_id, password_hash, email_verified, google_subject FROM users
      WHERE (email = ? OR username = ?) AND is_active = 1`
-  ).bind(email || '', username || '').first();
+  ).bind(email || '', username || '').first() as {
+    id: string; username: string; email: string; display_name: string;
+    role_id: string; password_hash: string | null; email_verified: number; google_subject: string | null;
+  } | null;
 
-  if (!user || !(await verifyPassword(password, user.password_hash as string))) {
+  // Sin password (cuenta solo-Google) -> 401, nunca 500
+  if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
     return context.json({ error: 'INVALID_CREDENTIALS' }, 401);
   }
 
@@ -559,7 +567,13 @@ authRoutes.post('/login', async (context) => {
 
   return context.json({
     data: {
-      user,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        display_name: user.display_name,
+        role_id: user.role_id,
+      },
       session: { id: token, token, expires_at: expiresAt },
     },
   });
@@ -574,7 +588,7 @@ authRoutes.post('/admin-stepup', async (context) => {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
-  const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
+  const clientIp = getClientIp(context.req);
   if (!checkBucket(twofaAttempts, clientIp, 10, 15 * 60 * 1000)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
@@ -601,19 +615,28 @@ authRoutes.post('/admin-stepup', async (context) => {
   }
 
   const totpRecord = await context.env.DB.prepare(
-    'SELECT secret FROM user_totp WHERE user_id = ? AND enabled = 1'
-  ).bind(session.user_id).first() as { secret: string } | null;
+    'SELECT secret, last_counter FROM user_totp WHERE user_id = ? AND enabled = 1'
+  ).bind(session.user_id).first() as { secret: string; last_counter: number } | null;
 
-  if (!totpRecord || !verifyTOTP(code, totpRecord.secret as string)) {
+  if (!totpRecord) {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto. Revisa la hora de tu teléfono y usa el código actual.' }, 401);
   }
 
+  // Anti-replay: rechazar códigos de ventanas ya usadas
+  const check = verifyTOTPWithCounter(code, totpRecord.secret as string);
+  if (!check.ok || check.counter <= (totpRecord.last_counter ?? -1)) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto o ya usado. Usa el código actual.' }, 401);
+  }
+
   const now = Math.floor(Date.now() / 1000);
-  await context.env.DB.prepare(
-    `INSERT INTO admin_stepup (user_id, verified_at, expires_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET verified_at = excluded.verified_at, expires_at = excluded.expires_at`
-  ).bind(session.user_id, now, now + 3600).run();
+  await context.env.DB.batch([
+    context.env.DB.prepare('UPDATE user_totp SET last_counter = ? WHERE user_id = ?').bind(check.counter, session.user_id),
+    context.env.DB.prepare(
+      `INSERT INTO admin_stepup (user_id, verified_at, expires_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET verified_at = excluded.verified_at, expires_at = excluded.expires_at`
+    ).bind(session.user_id, now, now + 3600),
+  ]);
 
   return context.json({ data: { granted: true, validFor: 3600 } });
 });
@@ -702,6 +725,21 @@ authRoutes.post('/me/totp/setup', async (context) => {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
 
+  // Si ya hay 2FA activo, regenerar el secreto exige step-up vigente
+  // (evita que una sesión robada tome el 2FA). Bootstrap libre.
+  const current = await context.env.DB.prepare(
+    'SELECT enabled FROM user_totp WHERE user_id = ?'
+  ).bind(session.user_id).first() as { enabled: number } | null;
+
+  if (current?.enabled === 1) {
+    const grant = await context.env.DB.prepare(
+      'SELECT expires_at FROM admin_stepup WHERE user_id = ?'
+    ).bind(session.user_id).first() as { expires_at: number } | null;
+    if (!grant || grant.expires_at <= Math.floor(Date.now() / 1000)) {
+      return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida para cambiar el secreto' }, 403);
+    }
+  }
+
   // Generate TOTP secret (32 bytes hex = 64 chars)
   // Secreto base32 de 160 bits (estándar otpauth, compatible con Authenticator/Authy)
   const secret = generateTotpSecret();
@@ -760,16 +798,16 @@ authRoutes.post('/me/totp/verify', async (context) => {
     return context.json({ error: 'NO_TOTP_SETUP' }, 400);
   }
 
-  // Verify TOTP code
-  const isValid = verifyTOTP(body.code as string, totpRecord.secret as string);
-  if (!isValid) {
+  // Verify TOTP code (con anti-replay)
+  const enableCheck = verifyTOTPWithCounter(body.code as string, totpRecord.secret as string);
+  if (!enableCheck.ok) {
     return context.json({ error: 'INVALID_TOTP_CODE' }, 401);
   }
 
   // Enable TOTP
   await context.env.DB.prepare(
-    'UPDATE user_totp SET enabled = 1 WHERE user_id = ?'
-  ).bind(session.user_id).run();
+    'UPDATE user_totp SET enabled = 1, last_counter = ? WHERE user_id = ?'
+  ).bind(enableCheck.counter, session.user_id).run();
 
   // Al activar, conceder step-up inmediato (1h) para no pedir el código dos veces
   const nowStep = Math.floor(Date.now() / 1000);
@@ -782,7 +820,7 @@ authRoutes.post('/me/totp/verify', async (context) => {
   return context.json({ data: { enabled: true } });
 });
 
-// POST /auth/me/totp/disable - Disable TOTP
+// POST /auth/me/totp/disable - Disable TOTP (exige step-up si había 2FA activo)
 authRoutes.post('/me/totp/disable', async (context) => {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -796,6 +834,19 @@ authRoutes.post('/me/totp/disable', async (context) => {
 
   if (!session) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  const enrolled = await context.env.DB.prepare(
+    'SELECT enabled FROM user_totp WHERE user_id = ?'
+  ).bind(session.user_id).first() as { enabled: number } | null;
+
+  if (enrolled?.enabled === 1) {
+    const grant = await context.env.DB.prepare(
+      'SELECT expires_at FROM admin_stepup WHERE user_id = ?'
+    ).bind(session.user_id).first() as { expires_at: number } | null;
+    if (!grant || grant.expires_at <= Math.floor(Date.now() / 1000)) {
+      return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida para desactivar 2FA' }, 403);
+    }
   }
 
   await context.env.DB.prepare(

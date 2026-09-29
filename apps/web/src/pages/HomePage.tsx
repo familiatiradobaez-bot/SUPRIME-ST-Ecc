@@ -111,7 +111,7 @@ export function HomePage({
             <div className="category-cards">
               {categories.map(c => (
                 <button key={c.id} className="category-card" onClick={() => navigate(`/categoria/${c.slug}`)}>
-                  {c.image_url && <img src={c.image_url} alt={c.name} loading="lazy" className="category-card-img" />}
+                  {c.image_url && <img src={c.image_url} alt={c.name} loading="lazy" className="category-card-img" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
                   <div className="category-card-body">
                     <strong>{c.name}</strong>
                     <small>{c.department_name}</small>
@@ -162,7 +162,7 @@ export function HomePage({
 
           {status === 'ready' && (
             <>
-              {(searchTerm ? filteredProducts : paginatedProducts).length === 0 ? (
+              {paginatedProducts.length === 0 ? (
                 <div className="empty-state">
                   <h3>No hay productos</h3>
                   <p>{searchTerm ? 'No encontramos productos que coincidan con tu búsqueda.' : 'Aún no hay productos disponibles.'}</p>
@@ -170,7 +170,7 @@ export function HomePage({
               ) : (
                 <>
                   <div className="product-grid">
-                    {(searchTerm ? filteredProducts : paginatedProducts).map((product) => (
+                    {paginatedProducts.map((product) => (
                       <ProductCard
                         key={product.id}
                         product={product}
@@ -181,21 +181,21 @@ export function HomePage({
                       />
                     ))}
                   </div>
-                  {!searchTerm && totalPages > 1 && (
-                    <div className="pagination" style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
+                  {totalPages > 1 && (
+                    <div className="pagination">
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => goToPage(currentPage - 1)}
+                        onClick={() => { goToPage(currentPage - 1); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
                         disabled={currentPage === 1}
                       >
                         ← Anterior
                       </button>
-                      <span style={{ display: 'flex', alignItems: 'center', padding: '0 1rem', color: 'var(--text-secondary)' }}>
+                      <span className="pagination-info">
                         Página {currentPage} de {totalPages}
                       </span>
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => goToPage(currentPage + 1)}
+                        onClick={() => { goToPage(currentPage + 1); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
                         disabled={currentPage === totalPages}
                       >
                         Siguiente →

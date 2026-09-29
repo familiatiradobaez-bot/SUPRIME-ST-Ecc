@@ -46,7 +46,8 @@ export function base32Decode(input: string): Uint8Array | null {
 export function generateTotpSecret(numBytes = 20): string {
   const array = new Uint8Array(numBytes);
   crypto.getRandomValues(array);
-  return base32Encode(array);
+  // Sin padding `=`: la mayoría de apps lo toleran y el QR queda más limpio
+  return base32Encode(array).replace(/=+$/, '');
 }
 
 function sha1(data: Uint8Array): Uint8Array {
@@ -171,10 +172,22 @@ export function hotp(base32Secret: string, counter: number, digits = 6): string 
 }
 
 export function verifyTOTP(code: string, base32Secret: string, digits = 6, window = 1): boolean {
-  if (!new RegExp(`^\\d{${digits}}$`).test(code)) return false;
+  return verifyTOTPWithCounter(code, base32Secret, digits, window).ok;
+}
+
+// Variante anti-replay: devuelve el contador aceptado para guardarlo (last_counter).
+export function verifyTOTPWithCounter(
+  code: string,
+  base32Secret: string,
+  digits = 6,
+  window = 1
+): { ok: boolean; counter: number } {
+  if (!new RegExp(`^\\d{${digits}}$`).test(code)) return { ok: false, counter: -1 };
   const timeStep = Math.floor(Date.now() / 1000 / 30);
   for (let i = -window; i <= window; i++) {
-    if (hotp(base32Secret, timeStep + i, digits) === code) return true;
+    if (hotp(base32Secret, timeStep + i, digits) === code) {
+      return { ok: true, counter: timeStep + i };
+    }
   }
-  return false;
+  return { ok: false, counter: -1 };
 }

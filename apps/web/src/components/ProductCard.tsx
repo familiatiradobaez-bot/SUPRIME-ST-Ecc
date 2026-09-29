@@ -30,7 +30,7 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
           }}
         />
         {product.stock_quantity > 0 && product.stock_quantity <= 5 && (
-          <span className="badge-warning">¡Pocas unidades!</span>
+          <span className="badge-warning">¡Solo {product.stock_quantity}!</span>
         )}
         {product.stock_quantity === 0 && (
           <span className="badge-danger">Agotado</span>
@@ -47,15 +47,7 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
         </div>
       </div>
       <button
-        className={`btn btn-primary ${isAdded ? 'btn-success' : ''}`}
-        style={{
-          margin: '1rem',
-          width: 'calc(100% - 2rem)',
-          borderRadius: '8px',
-          backgroundColor: isAdded ? '#2d8a4e' : undefined,
-          color: isAdded ? '#fff' : undefined,
-          transition: 'background-color 0.3s ease',
-        }}
+        className={`btn btn-primary product-card-btn ${isAdded ? 'btn-success' : ''}`}
         onClick={(e) => { e.stopPropagation(); onAddToCart(product.id); }}
         disabled={product.stock_quantity === 0}
       >

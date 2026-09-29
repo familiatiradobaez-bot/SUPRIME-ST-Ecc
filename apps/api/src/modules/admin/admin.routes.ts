@@ -7,6 +7,7 @@ function generateId(): string {
 }
 
 // Role hierarchy: owner(40) > admin(30) > stock_manager(20) > customer(10)
+// Los role_id en DB llevan prefijo 'role-'; se normaliza antes de comparar.
 const roleRank: Record<string, number> = {
   customer: 10,
   stock_manager: 20,
@@ -14,56 +15,67 @@ const roleRank: Record<string, number> = {
   owner: 40,
 };
 
-function canAccess(userRole: string, minimum: string): boolean {
-  return (roleRank[userRole] || 0) >= (roleRank[minimum] || 0);
+function roleLevel(roleId: string): number {
+  return roleRank[roleId.replace(/^role-/, '')] || 0;
 }
 
-export const adminRoutes = new Hono<{ Bindings: Bindings }>();
+function canAccess(userRole: string, minimum: string): boolean {
+  return roleLevel(userRole) >= roleLevel(minimum);
+}
 
-// Admin routes require valid session AND admin role
+export const adminRoutes = new Hono<{
+  Bindings: Bindings;
+  Variables: { authUserId: string; authRoleId: string };
+}>();
+
+// Admin routes require valid session AND admin role.
+// El rol se lee de DB (JOIN users), NUNCA del token sin firmar: un admin
+// degradado pierde acceso en cuanto cambia su role_id.
 adminRoutes.use('*', async (context, next) => {
   const authHeader = context.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
-  const token = authHeader.slice(7);
+  const sessionToken = authHeader.slice(7);
 
-  // Token format: base64(userId:roleId:timestamp)
-  let roleId: string | null = null;
+  // Token format: base64(userId:roleId:timestamp) — del token solo se usa userId
+  // para localizar la sesión; el rol autoritativo es u.role_id de DB.
+  let userId: string | null = null;
   try {
-    const decoded = atob(token);
-    const parts = decoded.split(':');
-    if (parts.length >= 2) {
-      roleId = parts[1];
-    }
+    const parts = atob(sessionToken).split(':');
+    if (parts.length >= 2) userId = parts[0];
   } catch {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
-  if (!roleId) {
+  if (!userId) {
     return context.json({ error: 'UNAUTHORIZED' }, 401);
   }
 
-  const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
-  if (!adminRoles.includes(roleId)) {
-    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
-  }
-
-  // Verificar que la sesión existe en DB y no expiró (el token es el id de sesión)
-  const sessionToken = authHeader.slice(7);
   const sess = await context.env.DB.prepare(
-    `SELECT s.user_id FROM sessions s WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
-  ).bind(sessionToken).first() as { user_id: string } | null;
+    `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = ? AND s.user_id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(sessionToken, userId).first() as { role_id: string } | null;
+
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
+
+  // Nivel mínimo admin: stock_manager (usa la jerarquía roleRank/canAccess)
+  if (!canAccess(sess.role_id, 'stock_manager')) {
+    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
+  }
+
+  // Identidad verificada para los handlers (jerarquía, auditoría)
+  context.set('authUserId', userId);
+  context.set('authRoleId', sess.role_id);
 
   // Step-up 2FA: entrar al admin exige verificación de ≤1h (no basta la sesión larga).
   // Si el usuario nunca configuró 2FA, se le pide configurarlo primero.
   const totp = await context.env.DB.prepare(
     'SELECT enabled FROM user_totp WHERE user_id = ?'
-  ).bind(sess.user_id).first() as { enabled: number } | null;
+  ).bind(userId).first() as { enabled: number } | null;
 
   if (!totp?.enabled) {
     return context.json({ error: 'ADMIN_2FA_SETUP_REQUIRED', message: 'Configura la verificación en dos pasos para entrar al panel' }, 403);
@@ -71,7 +83,7 @@ adminRoutes.use('*', async (context, next) => {
 
   const grant = await context.env.DB.prepare(
     'SELECT expires_at FROM admin_stepup WHERE user_id = ?'
-  ).bind(sess.user_id).first() as { expires_at: number } | null;
+  ).bind(userId).first() as { expires_at: number } | null;
 
   const nowSec = Math.floor(Date.now() / 1000);
   if (!grant || grant.expires_at <= nowSec) {
@@ -131,6 +143,9 @@ adminRoutes.get('/users', async (context) => {
 });
 
 // PUT /admin/users/:id/role - Update user role
+// Jerarquía: solo owner puede tocar roles; nadie se cambia a sí mismo;
+// no se puede degradar al último owner. Al cambiar rol se invalidan
+// sesiones y step-up del afectado.
 adminRoutes.put('/users/:id/role', async (context) => {
   const userId = context.req.param('id');
   const body = await context.req.json().catch(() => null);
@@ -143,14 +158,47 @@ adminRoutes.put('/users/:id/role', async (context) => {
     return context.json({ error: 'INVALID_ROLE' }, 400);
   }
 
-  await context.env.DB.prepare(
-    'UPDATE users SET role_id = ? WHERE id = ?'
-  ).bind(body.role_id, userId).run();
+  const callerId = context.get('authUserId');
+  const callerRole = context.get('authRoleId');
 
-  // Audit log
+  if (callerRole !== 'role-owner') {
+    return context.json({ error: 'FORBIDDEN', message: 'Solo owner puede cambiar roles' }, 403);
+  }
+  if (userId === callerId) {
+    return context.json({ error: 'FORBIDDEN', message: 'No puedes cambiar tu propio rol' }, 403);
+  }
+
+  const target = await context.env.DB.prepare(
+    'SELECT role_id FROM users WHERE id = ?'
+  ).bind(userId).first() as { role_id: string } | null;
+
+  if (!target) {
+    return context.json({ error: 'USER_NOT_FOUND' }, 404);
+  }
+  if (target.role_id === body.role_id) {
+    return context.json({ data: { updated: false, message: 'Sin cambios' } });
+  }
+
+  // Proteger al último owner
+  if (target.role_id === 'role-owner' && body.role_id !== 'role-owner') {
+    const owners = await context.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM users WHERE role_id = 'role-owner'"
+    ).first() as { count: number } | null;
+    if ((owners?.count || 0) <= 1) {
+      return context.json({ error: 'FORBIDDEN', message: 'No puedes degradar al último owner' }, 403);
+    }
+  }
+
+  await context.env.DB.batch([
+    context.env.DB.prepare('UPDATE users SET role_id = ? WHERE id = ?').bind(body.role_id, userId),
+    context.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    context.env.DB.prepare('DELETE FROM admin_stepup WHERE user_id = ?').bind(userId),
+  ]);
+
+  // Audit log con autor
   await context.env.DB.prepare(
     'INSERT INTO audit_logs (id, user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(generateId(), null, 'UPDATE_ROLE', 'user', userId, JSON.stringify({ new_role: body.role_id })).run();
+  ).bind(generateId(), callerId || null, 'UPDATE_ROLE', 'user', userId, JSON.stringify({ new_role: body.role_id, prev_role: target.role_id })).run();
 
   return context.json({ data: { updated: true } });
 });
@@ -236,9 +284,22 @@ adminRoutes.post('/products', async (context) => {
   if (!name || !description || !image_url || price_cents == null || stock_quantity == null) {
     return context.json({ error: 'MISSING_FIELDS' }, 400);
   }
+  if (!Number.isInteger(price_cents) || price_cents < 0) {
+    return context.json({ error: 'INVALID_PRICE', message: 'price_cents debe ser entero >= 0' }, 400);
+  }
+  if (!Number.isInteger(stock_quantity) || stock_quantity < 0) {
+    return context.json({ error: 'INVALID_STOCK', message: 'stock_quantity debe ser entero >= 0' }, 400);
+  }
 
   const productId = generateId();
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'producto';
+  // Slug único (evita 500 por UNIQUE en renombres/duplicados)
+  let slug = baseSlug;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const taken = await context.env.DB.prepare('SELECT 1 as ok FROM products WHERE slug = ?').bind(slug).first();
+    if (!taken) break;
+    slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+  }
 
   await context.env.DB.prepare(
     `INSERT INTO products (id, subdepartment_id, name, slug, description, image_url, price_cents, stock_quantity, status)
@@ -269,10 +330,21 @@ adminRoutes.put('/products/:id', async (context) => {
 
   const { name, description, image_url, price_cents, stock_quantity } = body;
 
-  await context.env.DB.prepare(
+  if (price_cents != null && (!Number.isInteger(price_cents) || price_cents < 0)) {
+    return context.json({ error: 'INVALID_PRICE', message: 'price_cents debe ser entero >= 0' }, 400);
+  }
+  if (stock_quantity != null && (!Number.isInteger(stock_quantity) || stock_quantity < 0)) {
+    return context.json({ error: 'INVALID_STOCK', message: 'stock_quantity debe ser entero >= 0' }, 400);
+  }
+
+  const updated = await context.env.DB.prepare(
     `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
      WHERE id = ?`
   ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
+
+  if ((updated.meta as { changes?: number } | undefined)?.changes === 0) {
+    return context.json({ error: 'PRODUCT_NOT_FOUND' }, 404);
+  }
 
   // Sincronizar galería si se envía
   if (Array.isArray(body.images)) {

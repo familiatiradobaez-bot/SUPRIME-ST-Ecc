@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { formatPrice } from '../lib/api';
 
 type CheckoutFormProps = {
   total: number;
   itemCount: number;
   loading?: boolean;
+  currency?: string;
   defaultName?: string;
+  defaultEmail?: string;
   defaultPhone?: string;
   defaultAddress?: string;
   onSubmit: (shippingInfo: {
@@ -20,9 +23,9 @@ type CheckoutFormProps = {
   onCancel: () => void;
 };
 
-export function CheckoutForm({ total, itemCount, loading, defaultName, defaultPhone, defaultAddress, onSubmit, onCancel }: CheckoutFormProps) {
+export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defaultName, defaultEmail, defaultPhone, defaultAddress, onSubmit, onCancel }: CheckoutFormProps) {
   const [name, setName] = useState(defaultName || '');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(defaultEmail || '');
   const [phone, setPhone] = useState(defaultPhone || '');
   const [address, setAddress] = useState(defaultAddress || '');
   const [paymentMethod, setPaymentMethod] = useState('card');
@@ -34,25 +37,25 @@ export function CheckoutForm({ total, itemCount, loading, defaultName, defaultPh
     <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name, shipping_email: email, shipping_phone: phone, shipping_address: address, payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
       <div className="checkout-summary">
         <p><strong>Artículos:</strong> {itemCount}</p>
-        <p><strong>Total:</strong> {(total / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+        <p><strong>Total:</strong> {formatPrice(total, currency)}</p>
       </div>
 
       <h3>Información de Envío</h3>
       <div className="form-group">
-        <label>Nombre Completo:</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" required />
+        <label htmlFor="co-name">Nombre Completo:</label>
+        <input id="co-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" required autoComplete="name" />
       </div>
       <div className="form-group">
-        <label>Correo Electrónico:</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" required />
+        <label htmlFor="co-email">Correo Electrónico:</label>
+        <input id="co-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" required autoComplete="email" />
       </div>
       <div className="form-group">
-        <label>Teléfono:</label>
-        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 123 456 789" required pattern="[+]?[0-9\s]{9,15}" title="Introduce un número de teléfono válido (9-15 dígitos)" />
+        <label htmlFor="co-phone">Teléfono:</label>
+        <input id="co-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 123 456 789" required pattern="[+]?[0-9\s]{9,15}" title="Introduce un número de teléfono válido (9-15 dígitos)" autoComplete="tel" />
       </div>
       <div className="form-group">
-        <label>Dirección de Envío:</label>
-        <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, Madrid" required />
+        <label htmlFor="co-address">Dirección de Envío:</label>
+        <input id="co-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, Madrid" required autoComplete="street-address" />
       </div>
 
       <h3>Método de Pago</h3>
@@ -69,16 +72,16 @@ export function CheckoutForm({ total, itemCount, loading, defaultName, defaultPh
       {paymentMethod === 'card' && (
         <>
           <div className="form-group">
-            <label>Número de Tarjeta:</label>
-            <input type="text" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" required maxLength={19} pattern="[0-9\s]{13,19}" />
+            <label htmlFor="co-card">Número de Tarjeta:</label>
+            <input id="co-card" type="text" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" required maxLength={19} pattern="[0-9\s]{13,19}" autoComplete="cc-number" />
           </div>
           <div className="form-group">
-            <label>Fecha de Expiración:</label>
-            <input type="text" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required maxLength={5} pattern="(0[1-9]|1[0-2])/[0-9]{2}" />
+            <label htmlFor="co-exp">Fecha de Expiración:</label>
+            <input id="co-exp" type="text" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required maxLength={5} pattern="(0[1-9]|1[0-2])/[0-9]{2}" autoComplete="cc-exp" />
           </div>
           <div className="form-group">
-            <label>CVV:</label>
-            <input type="text" value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required maxLength={4} pattern="[0-9]{3,4}" />
+            <label htmlFor="co-cvv">CVV:</label>
+            <input id="co-cvv" type="text" value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required maxLength={4} pattern="[0-9]{3,4}" autoComplete="cc-csc" />
           </div>
         </>
       )}

@@ -64,7 +64,13 @@ Response:
 
 Errores: `SERVER_CONFIG_ERROR` (falta private key), `INVALID_INPUT`,
 `FILE_TOO_LARGE` (>5MB), `INVALID_TYPE` (solo JPEG/PNG/GIF/WebP),
-`RATE_LIMIT_EXCEEDED` (20 subidas / 15 min por IP), `UPLOAD_FAILED`.
+`RATE_LIMIT_EXCEEDED` (20 subidas / 15 min por IP), `UPLOAD_FAILED`,
+`ADMIN_2FA_REQUIRED` / `ADMIN_2FA_SETUP_REQUIRED` (step-up 2FA de 1h para admin).
+
+### GET /api/v1/upload/rate-limit-status y POST /api/v1/upload/validate-url
+
+Endpoints públicos intencionales (sin auth): el primero solo expone el conteo
+propio por IP y el segundo valida formato sin efectos. No requieren cambio.
 
 ### GET /api/v1/upload/images (galería, requiere admin)
 

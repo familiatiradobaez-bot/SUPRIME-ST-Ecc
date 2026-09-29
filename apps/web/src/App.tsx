@@ -33,7 +33,7 @@ export function App() {
   const location = useLocation();
   const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
-  const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
+  const { cart, addedToCartId, cartTotal, cartCount, removedNotice, clearRemovedNotice, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
   const { currency, setCurrency } = useCurrency();
 
   const [showCart, setShowCart] = useState(false);
@@ -278,21 +278,22 @@ export function App() {
           cart={cart}
           products={products}
           cartTotal={cartTotal}
-          onClose={() => setShowCart(false)}
+          onClose={() => { setShowCart(false); clearRemovedNotice(); }}
           onRemove={handleRemoveFromCart}
           onCheckout={handleCheckout}
           currency={currency}
+          notice={removedNotice > 0 ? `${removedNotice} ${removedNotice === 1 ? 'producto ya no está disponible y se quitó' : 'productos ya no están disponibles y se quitaron'} del carrito.` : null}
         />
       )}
 
       {showLogin && (
         <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
-          <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Acceso a cuenta">
             <div className="modal-header">
               <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
-              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }}>✕</button>
+              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }} aria-label="Cerrar diálogo">✕</button>
             </div>
-            {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
             {showPasswordReset ? (
               <PasswordResetForm
                 apiUrl={apiUrl}
@@ -335,16 +336,18 @@ export function App() {
 
       {showCheckout && (
         <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Finalizar compra">
             <div className="modal-header">
               <h2>Finalizar Compra</h2>
-              <button className="close-btn" onClick={() => setShowCheckout(false)}>✕</button>
+              <button className="close-btn" onClick={() => setShowCheckout(false)} aria-label="Cerrar diálogo">✕</button>
             </div>
             <CheckoutForm
               total={cartTotal}
               itemCount={cartCount}
               loading={actionLoading}
+              currency={currency}
               defaultName={user?.shipping?.full_name || ''}
+              defaultEmail={user?.email || ''}
               defaultPhone={user?.shipping?.phone || ''}
               defaultAddress={user?.shipping?.address || ''}
               onSubmit={async (shippingInfo) => {

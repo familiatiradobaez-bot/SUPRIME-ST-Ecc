@@ -25,11 +25,14 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency }: Cata
   const [subtitle, setSubtitle] = useState('');
   const [items, setItems] = useState<Product[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
     if (!slug) return;
     setStatus('loading');
     setItems([]);
+    setPage(1);
 
     const load = async () => {
       try {
@@ -79,6 +82,9 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency }: Cata
     load();
   }, [apiUrl, kind, slug]);
 
+  const totalPages = Math.ceil(items.length / PAGE_SIZE);
+  const visible = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="layout-main">
       <div className="container">
@@ -105,18 +111,41 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency }: Cata
             </div>
           )}
           {status === 'ready' && items.length > 0 && (
-            <div className="product-grid">
-              {items.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={onAddToCart}
-                  isAdded={addedToCartId === product.id}
-                  currency={currency}
-                  onOpen={(p) => p.slug && navigate(`/producto/${p.slug}`)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="product-grid">
+                {visible.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={onAddToCart}
+                    isAdded={addedToCartId === product.id}
+                    currency={currency}
+                    onOpen={(p) => p.slug && navigate(`/producto/${p.slug}`)}
+                  />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    ← Anterior
+                  </button>
+                  <span className="pagination-info">
+                    Página {page} de {totalPages}
+                  </span>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>

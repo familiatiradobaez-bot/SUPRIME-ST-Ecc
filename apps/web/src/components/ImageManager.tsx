@@ -49,7 +49,19 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
         return;
       }
       const items = data.data || [];
-      setGalleryItems(prev => append ? [...prev, ...items] : items);
+      // Dedupe por fileId (ImageKit puede mover el listado entre páginas)
+      setGalleryItems(prev => {
+        const base = append ? prev : [];
+        const seen = new Set(base.map(i => i.fileId));
+        const merged = [...base];
+        for (const item of items) {
+          if (!seen.has(item.fileId)) {
+            seen.add(item.fileId);
+            merged.push(item);
+          }
+        }
+        return merged;
+      });
       setGalleryHasMore(items.length >= 100);
     } catch {
       setError('Error de conexión al cargar la galería');
@@ -139,7 +151,7 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
       setError('Error de conexión al subir la imagen');
       return null;
     }
-  }, [apiUrl]);
+  }, [apiUrl, authToken]);
 
   // Handle file selection
   const handleFiles = useCallback(async (files: FileList | null) => {
@@ -247,9 +259,15 @@ export function ImageManager({ images, onChange, maxImages = 10, apiUrl, authTok
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         role="button"
         tabIndex={0}
-        aria-label="Zona de arrastre para subir imágenes"
+        aria-label="Zona de arrastre para subir imágenes. Pulsa Enter para seleccionar archivos."
       >
         <div className="drop-zone-content">
           <span className="drop-zone-icon" aria-hidden="true">📁</span>

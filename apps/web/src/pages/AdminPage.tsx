@@ -64,6 +64,12 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         setStepUp('ok');
         return;
       }
+      if (res.status === 401) {
+        // Sesión muerta: fuera del panel en vez de pedir códigos en bucle
+        alert('Tu sesión expiró. Inicia sesión de nuevo.');
+        onBack();
+        return;
+      }
       const data = await res.json().catch(() => ({}));
       if (data.error === 'ADMIN_2FA_SETUP_REQUIRED') {
         setStepUp('setup');
@@ -396,10 +402,10 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   if (stepUp === 'code') {
     return (
       <div className="modal-overlay">
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
           <div className="modal-header">
             <h2>Verificación de Dos Pasos</h2>
-            <button className="close-btn" onClick={onBack}>✕</button>
+            <button className="close-btn" onClick={onBack} aria-label="Cerrar diálogo">✕</button>
           </div>
           <div className="form">
             <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>

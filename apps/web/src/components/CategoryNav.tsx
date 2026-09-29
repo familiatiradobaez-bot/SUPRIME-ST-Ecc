@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useApiUrl } from '../hooks/useApiUrl';
 
 type Category = {
   id: string;
@@ -15,20 +16,18 @@ type CategoryNavProps = {
 };
 
 export function CategoryNav({ onCategorySelect }: CategoryNavProps) {
+  const apiUrl = useApiUrl();
   const [categories, setCategories] = useState<Category[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    const config = (window as any).__APP_CONFIG__;
-    const apiUrl = config?.API_URL || `${window.location.protocol}//${window.location.hostname}:8789/api/v1`;
-
     fetch(`${apiUrl}/catalog/categories`)
       .then(r => r.json())
       .then(data => {
         if (data.data) setCategories(data.data);
       })
       .catch(() => {});
-  }, []);
+  }, [apiUrl]);
 
   return (
     <div className="category-nav">

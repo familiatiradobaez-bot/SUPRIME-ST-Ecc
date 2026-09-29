@@ -26,6 +26,21 @@ export function useCart(products: Product[]) {
     }
   }, [cart]);
 
+  // Depurar archivados: si el catálogo ya cargó, quitar del carrito lo que
+  // ya no existe (evita total incoherente y error tardío en checkout)
+  const [removedNotice, setRemovedNotice] = useState(0);
+  useEffect(() => {
+    if (products.length === 0) return;
+    setCart(prevCart => {
+      const valid = prevCart.filter(item => products.some(p => p.id === item.id));
+      if (valid.length !== prevCart.length) {
+        setRemovedNotice(prevCart.length - valid.length);
+        return valid;
+      }
+      return prevCart;
+    });
+  }, [products]);
+
   const handleAddToCart = useCallback((productId: string, qty: number = 1) => {
     const product = products.find(p => p.id === productId);
     if (!product || product.stock_quantity === 0) return;
@@ -73,6 +88,8 @@ export function useCart(products: Product[]) {
     addedToCartId,
     cartTotal,
     cartCount,
+    removedNotice,
+    clearRemovedNotice: () => setRemovedNotice(0),
     handleAddToCart,
     handleRemoveFromCart,
     setCart,

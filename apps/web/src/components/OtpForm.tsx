@@ -48,7 +48,7 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
         )}
       </p>
       {(localError || error) && (
-        <p className="error" style={{ color: '#a3422b', marginBottom: '1rem' }}>{localError || error}</p>
+        <p className="error" style={{ marginBottom: '1rem' }}>{localError || error}</p>
       )}
       <div className="form-group">
         <label>Código de verificación</label>
@@ -76,7 +76,7 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
           <a
             href="#resend"
             onClick={(e) => { e.preventDefault(); if (cooldown <= 0 && !resending) handleResend(); }}
-            style={{ color: '#c65d35', cursor: cooldown > 0 ? 'not-allowed' : 'pointer', opacity: cooldown > 0 ? 0.6 : 1 }}
+            style={{ color: 'var(--accent)', cursor: cooldown > 0 ? 'not-allowed' : 'pointer', opacity: cooldown > 0 ? 0.6 : 1 }}
           >
             {resending ? 'Enviando...' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar código'}
           </a></>

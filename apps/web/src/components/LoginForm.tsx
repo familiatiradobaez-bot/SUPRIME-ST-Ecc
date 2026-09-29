@@ -38,7 +38,7 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      {error && <p className="error" style={{ color: '#a3422b', marginBottom: '1rem' }}>{error}</p>}
+      {error && <p className="error" style={{ marginBottom: '1rem' }}>{error}</p>}
       {mode === 'register' && (
         <>
           <div className="form-group">
@@ -64,14 +64,16 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
         </>
       )}
       <div className="form-group">
-        <label>Correo Electrónico:</label>
+        <label htmlFor="login-email">Correo Electrónico:</label>
         <input
+          id="login-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="tu@correo.com"
           required
           autoFocus
+          autoComplete="email"
         />
       </div>
       <div className="form-group">
@@ -85,19 +87,20 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
           minLength={mode === 'register' ? 6 : 1}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
         />
-        {mode === 'register' && <small style={{ color: '#68736b' }}>Mínimo 6 caracteres</small>}
+        {mode === 'register' && <small style={{ color: 'var(--text-secondary)' }}>Mínimo 6 caracteres</small>}
       </div>
+      {mode === 'login' && (
       <div className="form-group remember-me">
         <label className="checkbox-label">
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            disabled={mode === 'register'}
           />
           <span>Permanecer conectado</span>
         </label>
       </div>
+      )}
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary btn-glow btn-truck-drive" disabled={loading}>
@@ -127,14 +130,14 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
 
       <p className="form-text">
         {mode === 'login' ? (
-          <>¿No tienes cuenta? <a href="#signup" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: '#c65d35', cursor: 'pointer' }}>Regístrate aquí</a></>
+          <>¿No tienes cuenta? <a href="#signup" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>Regístrate aquí</a></>
         ) : (
-          <>¿Ya tienes cuenta? <a href="#login" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: '#c65d35', cursor: 'pointer' }}>Inicia sesión</a></>
+          <>¿Ya tienes cuenta? <a href="#login" onClick={(e) => { e.preventDefault(); onToggleMode(); setError(''); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>Inicia sesión</a></>
         )}
       </p>
       {mode === 'login' && onForgotPassword && (
         <p className="form-text" style={{ textAlign: 'center' }}>
-          <a href="#forgot" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} style={{ color: '#c65d35', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</a>
+          <a href="#forgot" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</a>
         </p>
       )}
     </form>

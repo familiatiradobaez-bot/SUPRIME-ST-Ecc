@@ -23,7 +23,15 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
   return (
     <header className="header">
       <div className="header-content">
-        <h1 className="logo" onClick={onLogoClick} style={onLogoClick ? { cursor: 'pointer' } : undefined}>✨ SUPRIME</h1>
+        <h1
+          className="logo"
+          onClick={onLogoClick}
+          style={onLogoClick ? { cursor: 'pointer' } : undefined}
+          role={onLogoClick ? 'link' : undefined}
+          tabIndex={onLogoClick ? 0 : undefined}
+          aria-label="Ir a la portada de SUPRIME"
+          onKeyDown={onLogoClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLogoClick(); } } : undefined}
+        >✨ SUPRIME</h1>
         <div className="search-bar">
           <input
             type="text"

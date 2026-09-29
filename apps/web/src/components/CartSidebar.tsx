@@ -9,9 +9,10 @@ type CartSidebarProps = {
   onRemove: (productId: string) => void;
   onCheckout: () => void;
   currency?: string;
+  notice?: string | null;
 };
 
-export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout, currency = 'EUR' }: CartSidebarProps) {
+export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout, currency = 'EUR', notice }: CartSidebarProps) {
   return (
     <>
       <div className="cart-overlay" onClick={onClose} />
@@ -21,8 +22,16 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
           <button className="close-btn" onClick={onClose} aria-label="Cerrar carrito">✕</button>
         </div>
         <div className="cart-items">
+          {notice && (
+            <p className="cart-notice" role="status">{notice}</p>
+          )}
           {cart.length === 0 ? (
-            <p className="empty-cart">Tu carrito está vacío</p>
+            <>
+              <p className="empty-cart">Tu carrito está vacío</p>
+              <button className="btn btn-secondary" style={{ width: '100%', marginTop: '0.75rem' }} onClick={onClose}>
+                Seguir comprando
+              </button>
+            </>
           ) : (
             <>
               {cart.map(item => {
