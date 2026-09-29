@@ -4138,6 +4138,22 @@ button, .btn {
     min-height: 44px;
   }
 
+  /* Dentro del menú móvil el desplegable es acordeón en flujo (no sheet) */
+  .mobile-menu-cats .category-nav {
+    display: block;
+  }
+
+  .mobile-menu-cats .category-nav-dropdown {
+    position: static;
+    transform: none;
+    max-height: none;
+    background: transparent;
+    backdrop-filter: none;
+    border: none;
+    box-shadow: none;
+    padding: 0 0 0.25rem;
+  }
+
   .mobile-menu {
     display: flex;
   }
