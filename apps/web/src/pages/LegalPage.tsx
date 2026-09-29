@@ -17,7 +17,7 @@ const PAGES: Record<string, { title: string; updated: string; body: React.ReactN
         <h3>Conservación</h3>
         <p>Datos de cuenta mientras esté activa; pedidos el plazo legal exigible; sesiones caducadas y códigos OTP se purgan automáticamente.</p>
         <h3>Tus derechos</h3>
-        <p>Acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a privacy@suprime.xyz. Reclamación ante la AEPD (aepd.es).</p>
+        <p>Acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a <a href="mailto:privacy@suprime.xyz">privacy@suprime.xyz</a>. Reclamación ante la AEPD (aepd.es).</p>
       </>
     ),
   },
@@ -56,7 +56,7 @@ const PAGES: Record<string, { title: string; updated: string; body: React.ReactN
     body: (
       <>
         <p>Escríbenos y te respondemos en 24-48h laborables.</p>
-        <p><strong>Email:</strong> hola@suprime.xyz</p>
+        <p><strong>Email:</strong> <a href="mailto:hola@suprime.xyz">hola@suprime.xyz</a></p>
         <p><strong>Pedidos:</strong> indica tu número de pedido (lo verás en Mi Cuenta → Mis pedidos).</p>
       </>
     ),

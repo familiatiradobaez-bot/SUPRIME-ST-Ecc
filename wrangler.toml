@@ -23,3 +23,12 @@ binding = "DB"
 database_name = "suprime-st-ecc-db"
 database_id = "ec91ad62-2ee4-4a94-a7c8-9ec7ed9052dc"
 migrations_dir = "db/migrations"
+
+# Rate-limit distribuido (pendiente crear namespace):
+#   npx wrangler kv namespace create RATE_LIMIT_KV
+#   npx wrangler kv namespace create RATE_LIMIT_KV --preview
+# y pegar el id abajo. Sin esto el código usa fallback en memoria
+# (ver apps/api/src/lib/rate-limit.ts).
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "PEGAR_ID_AQUI"

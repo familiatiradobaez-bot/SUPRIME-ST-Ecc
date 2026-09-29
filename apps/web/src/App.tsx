@@ -194,9 +194,10 @@ export function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Handle Google Auth redirect with token handoff
-  // (el servidor redirige con ?login=success&provider=google&token=... porque
-  // la cookie HttpOnly no es legible cross-subdominio; se limpia la URL enseguida)
+  // Handle Google Auth redirect con código de un solo uso
+  // (el servidor redirige con ?login=success&provider=google&code=...;
+  // el front lo canjea por POST /auth/google/exchange y limpia la URL.
+  // Se mantiene compatibilidad con ?token=... para despliegues antiguos.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const loginResult = params.get('login');
@@ -223,6 +224,45 @@ export function App() {
     }
 
     const token = params.get('token');
+    const code = params.get('code');
+
+    if (loginResult === 'success' && provider === 'google' && code) {
+      // Limpia la URL primero para que el code no quede en historial
+      window.history.replaceState({}, document.title, window.location.pathname);
+      fetch(`${apiUrl}/auth/google/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+        .then(r => r.json().then(payload => ({ ok: r.ok, payload })))
+        .then(({ ok, payload }) => {
+          const sessionToken = payload?.data?.session?.token;
+          if (!ok || !sessionToken) {
+            setActionError('Sesión de Google caducada. Inténtalo de nuevo.');
+            setShowLogin(true);
+            return;
+          }
+          const expiresAt = String(payload.data.session.expires_at
+            ?? (Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60));
+          persistSession(sessionToken, expiresAt, true);
+          setSession({ id: sessionToken, token: sessionToken, expires_at: expiresAt });
+          if (payload.data.user) setUser(payload.data.user);
+          else {
+            fetch(`${apiUrl}/auth/me`, {
+              headers: { 'Authorization': `Bearer ${sessionToken}` },
+              credentials: 'include',
+            })
+              .then(r => r.json())
+              .then(me => { if (me.data) setUser(me.data); })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          setActionError('Error al completar el inicio con Google.');
+          setShowLogin(true);
+        });
+      return;
+    }
 
     if (loginResult === 'success' && provider === 'google' && token) {
       persistSession(token, String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), true);

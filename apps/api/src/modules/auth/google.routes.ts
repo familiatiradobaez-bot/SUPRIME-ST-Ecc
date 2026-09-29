@@ -1,5 +1,6 @@
 ﻿import { Hono } from 'hono';
 import type { Bindings } from '../../app';
+import { checkRateLimit, rateKey } from '../../lib/rate-limit';
 
 // Frontend URLs for post-login redirect
 const FRONTEND_URLS = [
@@ -185,15 +186,79 @@ googleRoutes.get('/callback', async (context) => {
       'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
     ).bind(token, (user as any).id, expiresAt).run();
 
-    // Limpiar cookie de state + fijar sesión (append: dos Set-Cookie)
-    context.header('Set-Cookie', 'oauth_state=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax', { append: true });
-    context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`, { append: true });
+    // Código de un solo uso (5 min) para el handoff al front.
+    // Evita exponer el token de sesión en la URL (historial/logs).
+    const codeBytes = new Uint8Array(32);
+    crypto.getRandomValues(codeBytes);
+    const singleUseCode = Array.from(codeBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const nowCode = Math.floor(Date.now() / 1000);
+    await context.env.DB.prepare(
+      'INSERT INTO oauth_codes (code, token, user_id, created_at) VALUES (?, ?, ?, ?)'
+    ).bind(singleUseCode, token, (user as any).id, nowCode).run();
+    // Purga oportunista de códigos caducados (>10 min)
+    await context.env.DB.prepare('DELETE FROM oauth_codes WHERE created_at < ?').bind(nowCode - 600).run().catch(() => {});
 
-    // Redirect al front con el token (la cookie HttpOnly no es legible cross-subdominio,
-    // el front lo guarda y limpia la URL inmediatamente)
-    return context.redirect(`${frontendUrl}?login=success&provider=google&token=${encodeURIComponent(token)}`);
+    // Limpiar cookie de state (la sesión viaja vía code -> POST /exchange,
+    // no en URL ni en cookie cross-subdominio)
+    context.header('Set-Cookie', 'oauth_state=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax', { append: true });
+
+    return context.redirect(`${frontendUrl}?login=success&provider=google&code=${encodeURIComponent(singleUseCode)}`);
   } catch (error) {
     console.error('Google OAuth error:', error);
     return context.json({ error: 'GOOGLE_AUTH_FAILED' }, 500);
   }
+});
+
+// POST /auth/google/exchange - Canjear code de un solo uso por la sesión.
+// El front llama aquí tras el redirect con ?code=... (nunca viaja el token en URL).
+
+googleRoutes.post('/exchange', async (context) => {
+  const allowed = await checkRateLimit(context.env, rateKey(context.req, 'google-exchange'), 20, 900);
+  if (!allowed) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED' }, 429);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+  if (!/^[0-9a-f]{32,128}$/i.test(code)) {
+    return context.json({ error: 'INVALID_CODE' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const row = await context.env.DB.prepare(
+    'SELECT code, token, user_id, created_at FROM oauth_codes WHERE code = ?'
+  ).bind(code).first() as { code: string; token: string; user_id: string; created_at: number } | null;
+
+  // Single-use: borrar siempre que exista, aunque esté caducado
+  if (row) {
+    await context.env.DB.prepare('DELETE FROM oauth_codes WHERE code = ?').bind(code).run();
+  }
+  if (!row || now - row.created_at > 5 * 60) {
+    return context.json({ error: 'INVALID_OR_EXPIRED_CODE' }, 410);
+  }
+
+  const session = await context.env.DB.prepare(
+    `SELECT s.expires_at, u.id, u.username, u.email, u.display_name, u.role_id
+     FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = ? AND s.user_id = ?`
+  ).bind(row.token, row.user_id).first() as {
+    expires_at: number; id: string; username: string; email: string; display_name: string; role_id: string;
+  } | null;
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  return context.json({
+    data: {
+      user: {
+        id: session.id,
+        username: session.username,
+        email: session.email,
+        display_name: session.display_name,
+        role_id: session.role_id,
+      },
+      session: { id: row.token, token: row.token, expires_at: session.expires_at },
+    },
+  });
 });

@@ -20,6 +20,7 @@ export type Bindings = {
   DB: D1Database;
   APP_ENV: string;
   EMAIL?: EmailBinding;
+  RATE_LIMIT_KV?: KVNamespace;
   IMAGEKIT_PRIVATE_KEY?: string;
   IMAGEKIT_PUBLIC_KEY?: string;
   IMAGEKIT_URL_ENDPOINT?: string;

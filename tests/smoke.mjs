@@ -157,6 +157,10 @@ const errLoc = r.headers.get('location') || '';
 check('callback state inválido redirige con error', r.status === 302 && errLoc.includes('login=error'), `${r.status} ${errLoc.slice(0, 80)}`);
 r = await F(`${API}/auth/google-2fa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', code: '000000' }) });
 check('google-2fa sin pendiente/código malo 401/410', r.status === 401 || r.status === 410, r.status);
+r = await F(`${API}/auth/google/exchange`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+check('google exchange sin code 400', r.status === 400, r.status);
+r = await F(`${API}/auth/google/exchange`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: '0'.repeat(64) }) });
+check('google exchange code falso 410', r.status === 410, r.status);
 
 console.log('== Password reset ==');
 r = await F(`${API}/auth/admin-stepup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ code: '000000' }) });
