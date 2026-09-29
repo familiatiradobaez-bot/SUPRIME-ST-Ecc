@@ -59,9 +59,8 @@ export function OtpForm({ email, onVerify, onResend, onBack, loading, resending,
           onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
           placeholder="000000"
           maxLength={6}
-          autoFocus
           autoComplete="one-time-code"
-          style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+          className="otp-input"
         />
       </div>
       <div className="form-actions">

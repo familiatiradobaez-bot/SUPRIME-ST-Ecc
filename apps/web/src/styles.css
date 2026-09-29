@@ -70,6 +70,7 @@ body {
   color: var(--text-primary);
   background: var(--gradient-dark);
   min-height: 100vh;
+  min-height: 100dvh;
   font-size: 16px;
 }
 
@@ -912,6 +913,7 @@ button, .btn {
   width: 100%;
   max-width: 400px;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-card);
   border-left: 1px solid var(--border-color);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
@@ -921,6 +923,7 @@ button, .btn {
   animation: slideIn 0.3s ease-out;
   overflow-y: auto;
   padding-top: 3rem;
+  padding-top: max(3rem, env(safe-area-inset-top, 0px));
 }
 
 @keyframes slideIn {
@@ -995,6 +998,7 @@ button, .btn {
 .cart-footer {
   border-top: 1px solid var(--border-color);
   padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   background: var(--bg-sidebar);
   position: sticky;
   bottom: 0;
@@ -1144,6 +1148,7 @@ button, .btn {
   max-width: 500px;
   width: 100%;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   margin: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -1232,6 +1237,41 @@ button, .btn {
   margin-bottom: 0.75rem;
   font-weight: 500;
   color: var(--text-primary);
+  min-height: 48px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* Ciudad + CP en paralelo (ahorra scroll en móvil) */
+.form-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 380px) {
+  .form-row-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Código OTP: sin recorte en pantallas estrechas */
+.otp-input {
+  text-align: center;
+  font-size: 1.5rem;
+  letter-spacing: 0.3rem;
+  text-indent: 0.3rem;
+  max-width: 100%;
+}
+
+@media (max-width: 380px) {
+  .otp-input {
+    font-size: 1.25rem;
+    letter-spacing: 0.15rem;
+    text-indent: 0.15rem;
+  }
 }
 
 .form-actions {
@@ -1242,6 +1282,19 @@ button, .btn {
 
 .form-actions .btn {
   flex: 1;
+  min-height: 48px;
+}
+
+/* Checkout en bottom-sheet: total + CTA siempre visibles */
+.checkout-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  margin: 1.5rem -1.25rem -1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
 }
 
 .form-text {
@@ -4041,11 +4094,40 @@ button, .btn {
 
   .search-input {
     padding: 0.5rem 0.75rem;
-    font-size: 0.95rem;
+    font-size: 1rem;
   }
 
   .menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mobile-menu-link {
     display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1rem;
+    padding: 0.75rem 0;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .mobile-menu-cats {
+    padding: 0.25rem 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    margin: 0.25rem 0;
+  }
+
+  .mobile-menu-cats .category-nav-toggle {
+    width: 100%;
+    min-height: 44px;
   }
 
   .mobile-menu {
@@ -4128,13 +4210,33 @@ button, .btn {
   }
 
   .search-input {
-    font-size: 0.9rem;
+    font-size: 16px;
     padding: 0.45rem 0.65rem;
+  }
+
+  .search-suggest-item {
+    min-height: 44px;
   }
 
   .btn-sm {
     padding: 0.45rem 0.75rem;
     font-size: 0.75rem;
+    min-height: 44px;
+  }
+
+  /* Header 390px: solo icono de cuenta, sin wishlist ni admin (viven en el menú) */
+  .header-username {
+    display: inline-block;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .header-wishlist-btn,
+  .header-admin-btn {
+    display: none;
   }
 
   .hero {
@@ -4564,8 +4666,22 @@ button, .btn {
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 0.4rem 0.6rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
+  min-height: 44px;
   cursor: pointer;
+}
+
+.order-status-select {
+  font-size: 1rem;
+  min-height: 44px;
+}
+
+/* Tablas admin con scroll horizontal en móvil (las 3 envueltas) */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
 }
 
 .role-select:focus {
@@ -4976,8 +5092,10 @@ button, .btn {
 
 .lightbox-close {
   position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
+  top: 0.5rem;
+  right: 0.5rem;
+  min-width: 48px;
+  min-height: 48px;
 }
 
 .lightbox-nav {
@@ -4994,8 +5112,8 @@ button, .btn {
   border: none;
   color: white;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -5004,6 +5122,7 @@ button, .btn {
 .product-card-btn {  margin: 1rem;
   width: calc(100% - 2rem);
   border-radius: 8px;
+  min-height: 44px;
   transition: background-color 0.3s ease;
 }
 
@@ -5074,7 +5193,8 @@ button, .btn {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1rem 1.25rem;
-  z-index: 1200;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 900;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -5107,8 +5227,8 @@ button, .btn {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.55);
@@ -5296,6 +5416,15 @@ button, .btn {
 
 .breadcrumbs a:hover {
   text-decoration: underline;
+}
+
+/* En móvil: Inicio / … / Producto (sin scroll horizontal) */
+@media (max-width: 480px) {
+  .breadcrumbs {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* Tarjetas de categoría (home) */
@@ -5553,6 +5682,25 @@ button, .btn {
   .pdp {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  /* CTA de compra siempre visible al hacer scroll (con safe-area) */
+  .pdp-buy-row {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    margin: 0 -1rem 1rem;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+  }
+
+  .pdp-buy-row .btn-primary {
+    min-height: 48px;
+  }
+
+  .pdp-qty button {
+    width: 48px;
   }
 
   .product-row-item {

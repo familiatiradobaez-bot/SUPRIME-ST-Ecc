@@ -62,19 +62,21 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
       </div>
       <div className="form-group">
         <label htmlFor="co-phone">Teléfono:</label>
-        <input id="co-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" required pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
+        <input id="co-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" required pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
       </div>
       <div className="form-group">
         <label htmlFor="co-address">Dirección:</label>
         <input id="co-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, 2ºB" required minLength={3} maxLength={200} autoComplete="street-address" />
       </div>
+      <div className="form-row-2col">
       <div className="form-group">
         <label htmlFor="co-city">Ciudad:</label>
         <input id="co-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" required minLength={2} maxLength={100} autoComplete="address-level2" />
       </div>
       <div className="form-group">
         <label htmlFor="co-postal">Código postal:</label>
-        <input id="co-postal" type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="28001" required pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} inputMode="numeric" autoComplete="postal-code" />
+        <input id="co-postal" type="text" inputMode="numeric" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="28001" required pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} autoComplete="postal-code" />
+      </div>
       </div>
 
       <h3>Método de Pago</h3>
@@ -92,19 +94,20 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
         <>
           <div className="form-group">
             <label htmlFor="co-card">Número de Tarjeta:</label>
-            <input id="co-card" type="text" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" required maxLength={19} pattern="[0-9\s]{13,19}" autoComplete="cc-number" />
+            <input id="co-card" type="text" inputMode="numeric" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" required maxLength={19} pattern="[0-9\s]{13,19}" autoComplete="cc-number" />
           </div>
           <div className="form-group">
             <label htmlFor="co-exp">Fecha de Expiración:</label>
-            <input id="co-exp" type="text" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required maxLength={5} pattern="(0[1-9]|1[0-2])/[0-9]{2}" autoComplete="cc-exp" />
+            <input id="co-exp" type="text" inputMode="numeric" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required maxLength={5} pattern="(0[1-9]|1[0-2])/[0-9]{2}" autoComplete="cc-exp" />
           </div>
           <div className="form-group">
             <label htmlFor="co-cvv">CVV:</label>
-            <input id="co-cvv" type="text" value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required maxLength={4} pattern="[0-9]{3,4}" autoComplete="cc-csc" />
+            <input id="co-cvv" type="text" inputMode="numeric" value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required maxLength={4} pattern="[0-9]{3,4}" autoComplete="cc-csc" />
           </div>
         </>
       )}
 
+      <div className="checkout-sticky-footer">
       <div className="form-group remember-me">
         <label className="checkbox-label">
           <input
@@ -129,6 +132,7 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
           )}
         </button>
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
+      </div>
       </div>
     </form>
   );

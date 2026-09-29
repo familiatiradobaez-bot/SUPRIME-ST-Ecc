@@ -77,7 +77,6 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
           onChange={(e) => setEmail(e.target.value)}
           placeholder="tu@correo.com"
           required
-          autoFocus
           autoComplete="email"
         />
       </div>

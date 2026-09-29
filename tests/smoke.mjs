@@ -59,6 +59,17 @@ const me = await j(r);
 checkOrSkip(authed, 'me 200 + role owner', r.status === 200 && me.data?.role_id === 'role-owner', r.status);
 r = await F(`${API}/auth/me`, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ display_name: '' }) });
 checkOrSkip(authed, 'me PUT nombre vacío 400', r.status === 400, r.status);
+const shipOk = { full_name: 'Test Owner', phone: '+34612345678', address: 'Calle Test 1', city: 'Madrid', postal_code: '28001' };
+r = await F(`${API}/auth/me/shipping`, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify(shipOk) });
+checkOrSkip(authed, 'me shipping PUT 200', r.status === 200, r.status);
+r = await F(`${API}/auth/me/shipping`, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...shipOk, postal_code: 'XX' }) });
+checkOrSkip(authed, 'me shipping CP malo 400', r.status === 400, r.status);
+r = await F(`${API}/auth/me`, { headers: H });
+if (!authed) { skip('me shipping guardado (requiere sesión)'); }
+else { const m2 = await j(r); check('me trae city+CP guardados', m2.data?.shipping?.city === 'Madrid' && m2.data?.shipping?.postal_code === '28001', r.status); }
+if (authed && me.data?.shipping?.full_name) {
+  await F(`${API}/auth/me/shipping`, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ full_name: me.data.shipping.full_name, phone: me.data.shipping.phone, address: me.data.shipping.address, city: me.data.shipping.city, postal_code: me.data.shipping.postal_code }) });
+}
 r = await F(`${API}/auth/me`, { headers: { 'Authorization': 'Bearer ZmFrZTpyb2xlLW93bmVyOjEyMw==' } });
 check('me token falso 401', r.status === 401, r.status);
 
@@ -187,6 +198,8 @@ console.log('== Front ==');
 r = await F(WEB);
 const html = await r.text();
 check('home 200 + bundle', r.status === 200 && html.includes('/assets/index-'), r.status);
+check('home viewport-fit notch', html.includes('viewport-fit=cover'), 'sin viewport-fit');
+check('home CSP permite bigdatacloud', html.includes('api.bigdatacloud.net'), 'CSP sin bigdatacloud');
 
 console.log('== Logout ==');
 r = await F(`${API}/auth/logout`, { method: 'POST', headers: H });

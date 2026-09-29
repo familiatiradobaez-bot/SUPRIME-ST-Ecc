@@ -50,7 +50,7 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
         >✨ SUPRIME</h1>
         <div className="search-bar">
           <input
-            type="text"
+            type="search"
             placeholder="Buscar..."
             value={searchTerm}
             onChange={(e) => { onSearch(e.target.value); setSuggestOpen(true); }}
@@ -62,6 +62,7 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
             aria-expanded={suggestOpen && matches.length > 0}
             aria-label="Buscar productos"
             autoComplete="off"
+            enterKeyHint="search"
           />
           {suggestOpen && matches.length > 0 && (
             <div className="search-suggest" role="listbox" aria-label="Sugerencias">
@@ -84,16 +85,16 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
           <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick}>
             🛒 ({cartCount})
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={onWishlistClick} aria-label="Ver favoritos">
+          <button className="btn btn-secondary btn-sm header-wishlist-btn" onClick={onWishlistClick} aria-label="Ver favoritos">
             ❤️ ({wishlistCount ?? 0})
           </button>
           {user ? (
             <>
-              <button className="btn btn-secondary btn-sm" onClick={onUserPanelClick}>
-                👤 {user.display_name || user.username}
+              <button className="btn btn-secondary btn-sm" onClick={onUserPanelClick} aria-label="Mi cuenta">
+                👤 <span className="header-username">{user.display_name || user.username}</span>
               </button>
               {isAdmin && (
-                <button className="admin-btn" onClick={onAdminClick}>
+                <button className="admin-btn header-admin-btn" onClick={onAdminClick}>
                   ⚙️ Admin
                 </button>
               )}
@@ -110,10 +111,21 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
       </div>
 
       {showMenu && (
-        <nav className="mobile-menu">
+        <nav className="mobile-menu" aria-label="Menú móvil">
           <a href="#products" onClick={() => { onNavClick('products'); onCloseMenu(); }}>Tienda</a>
+          <div className="mobile-menu-cats">
+            <CategoryNav onCategorySelect={(slug) => { onCloseMenu(); onCategorySelect?.(slug); }} />
+          </div>
           <a href="#about" onClick={() => { onNavClick('about'); onCloseMenu(); }}>Sobre Nosotros</a>
           <a href="#contact" onClick={() => { onNavClick('contact'); onCloseMenu(); }}>Contacto</a>
+          <button className="mobile-menu-link" onClick={() => { onCloseMenu(); onWishlistClick?.(); }}>
+            ❤️ Favoritos ({wishlistCount ?? 0})
+          </button>
+          {isAdmin && (
+            <button className="mobile-menu-link" onClick={() => { onCloseMenu(); onAdminClick?.(); }}>
+              ⚙️ Panel Admin
+            </button>
+          )}
           {!user && (
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => { onCloseMenu(); onLoginClick(); }}>
               👤 Cuenta

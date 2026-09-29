@@ -44,6 +44,9 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
   const [postal, setPostal] = useState(user.shipping?.postal_code || '');
   const [locating, setLocating] = useState(false);
   const [locateMsg, setLocateMsg] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
+  const editedToday = typeof localStorage !== 'undefined'
+    && localStorage.getItem('su_prime_shipping_last_edit') === new Date().toISOString().split('T')[0];
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
@@ -74,7 +77,8 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
         try {
           const { latitude, longitude } = pos.coords;
           const res = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`,
+            { signal: AbortSignal.timeout(8000) }
           );
           const geo = await res.json();
           if (geo?.city) setCity(geo.city);
@@ -86,11 +90,17 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
           setLocating(false);
         }
       },
-      () => {
+      (err) => {
         setLocating(false);
-        setLocateMsg('Permiso de ubicación denegado. Introdúcela a mano.');
+        setLocateMsg(
+          err?.code === 1
+            ? 'Permiso de ubicación denegado. Actívalo en el navegador o introduce la dirección a mano.'
+            : err?.code === 3
+              ? 'La ubicación tardó demasiado (típico en interiores). Introdúcela a mano.'
+              : 'Ubicación no disponible aquí. Introdúcela a mano.'
+        );
       },
-      { timeout: 10000, maximumAge: 600000 }
+      { timeout: 8000, maximumAge: 600000, enableHighAccuracy: false }
     );
   };
 
@@ -173,9 +183,9 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
           <div style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ marginBottom: '0.5rem' }}>Vincular cuenta de Google</h3>
             <p style={{ color: '#68736b', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-              Vincula tu cuenta de Google para iniciar sesión más fácilmente
+              Disponible tras la apertura (el login con Google ya funciona para entrar).
             </p>
-            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => alert('Google OAuth - Próximamente')}>
+            <button className="btn btn-secondary" style={{ width: '100%' }} disabled title="Disponible tras la apertura">
               🔗 Vincular con Google
             </button>
           </div>
@@ -192,36 +202,34 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
               <p style={{ color: '#68736b', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{locateMsg}</p>
             )}
             <div className="form-group">
-              <label>Nombre completo:</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoComplete="name" />
+              <label htmlFor="up-name">Nombre completo:</label>
+              <input id="up-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoComplete="name" />
             </div>
             <div className="form-group">
-              <label>Teléfono:</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
+              <label htmlFor="up-phone">Teléfono:</label>
+              <input id="up-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
             </div>
             <div className="form-group">
-              <label>Dirección:</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, 2ºB" autoComplete="street-address" />
+              <label htmlFor="up-address">Dirección:</label>
+              <input id="up-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle Principal 123, 2ºB" autoComplete="street-address" />
             </div>
             <div className="form-group">
-              <label>Ciudad:</label>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" list="suprime-provinces" autoComplete="address-level2" />
+              <label htmlFor="up-city">Ciudad:</label>
+              <input id="up-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" list="suprime-provinces" autoComplete="address-level2" />
               <datalist id="suprime-provinces">
                 {SPANISH_PROVINCES.map((p) => <option key={p} value={p} />)}
               </datalist>
             </div>
             <div className="form-group">
-              <label>Código postal:</label>
-              <input type="text" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} inputMode="numeric" autoComplete="postal-code" />
+              <label htmlFor="up-postal">Código postal:</label>
+              <input id="up-postal" type="text" inputMode="numeric" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} autoComplete="postal-code" />
             </div>
-            <button className="btn btn-primary" style={{ width: '100%' }} onClick={async () => {
-              // Verificar si ya se editó hoy
-              const lastEdit = localStorage.getItem('su_prime_shipping_last_edit');
-              const today = new Date().toISOString().split('T')[0];
-              if (lastEdit === today) {
-                alert('Solo puedes editar tus datos de envío una vez al día. Vuelve mañana.');
-                return;
-              }
+            {editedToday && (
+              <p style={{ color: '#68736b', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                ⚠️ Ya editaste tus datos hoy. Podrás editarlos mañana.
+              </p>
+            )}
+            <button className="btn btn-primary" style={{ width: '100%' }} disabled={editedToday} onClick={async () => {
               if (!name.trim() || !phone.trim() || !address.trim() || !city.trim() || !postal.trim()) {
                 alert('Completa nombre, teléfono, dirección, ciudad y código postal.');
                 return;
@@ -232,15 +240,13 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
                 alert(err instanceof Error ? err.message : 'No se pudo guardar.');
                 return;
               }
-              localStorage.setItem('su_prime_shipping_last_edit', today);
-              alert('Datos de envío guardados en la nube');
+              localStorage.setItem('su_prime_shipping_last_edit', new Date().toISOString().split('T')[0]);
+              setSavedMsg('Datos de envío guardados en la nube ✓');
             }}>
               💾 Guardar datos de envío
             </button>
-            {localStorage.getItem('su_prime_shipping_last_edit') === new Date().toISOString().split('T')[0] && (
-              <p style={{ color: '#68736b', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                ⚠️ Ya editaste tus datos hoy. Podrás editarlos mañana.
-              </p>
+            {savedMsg && (
+              <p style={{ color: 'var(--accent)', fontSize: '0.85rem', marginTop: '0.5rem' }}>{savedMsg}</p>
             )}
           </div>
 

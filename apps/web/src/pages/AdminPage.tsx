@@ -697,11 +697,11 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 </div>
                 <div className="form-group">
                   <label>Precio (€):</label>
-                  <input type="number" step="0.01" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} placeholder="0.00" />
+                  <input type="number" inputMode="decimal" step="0.01" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} placeholder="0.00" />
                 </div>
                 <div className="form-group">
                   <label>Stock:</label>
-                  <input type="number" value={productStock} onChange={(e) => setProductStock(e.target.value)} placeholder="0" />
+                  <input type="number" inputMode="numeric" value={productStock} onChange={(e) => setProductStock(e.target.value)} placeholder="0" />
                 </div>
                 <div className="form-actions">
                   <button className="btn btn-primary" onClick={editingProduct ? updateProduct : createProduct}>
@@ -714,6 +714,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               </div>
             )}
 
+            <div className="table-wrapper">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -739,6 +740,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
@@ -746,6 +748,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         {activeTab === 'users' && (
           <div className="admin-users">
             <h2>Gestión de Usuarios</h2>
+            <div className="table-wrapper">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -787,6 +790,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

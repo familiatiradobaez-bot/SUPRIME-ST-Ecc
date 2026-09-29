@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import type { Product } from './types';
 import { useAuth } from './hooks/useAuth';
@@ -48,6 +48,9 @@ export function App() {
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [loginNotice, setLoginNotice] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [cartNotice, setCartNotice] = useState('');
+  const placingRef = useRef(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [pendingGoogle2FA, setPendingGoogle2FA] = useState<string | null>(null);
@@ -172,11 +175,24 @@ export function App() {
         setProducts(fresh);
       }
     } catch {
-      // Sin red no se puede garantizar precio/stock: avisar y continuar
+      // Sin red no se puede garantizar precio/stock: bloquear, no abrir el checkout
+      setCartNotice('Sin conexión: no se pudo verificar precio y stock. Reintenta con red.');
+      return;
     }
     setShowCart(false);
+    setLastOrderId(null);
+    setCartNotice('');
     setShowCheckout(true);
   };
+
+  // Scroll-lock: con cualquier modal/sidebar abierto el fondo no hace scroll (iOS)
+  const anyOverlayOpen = showLogin || showCheckout || showCart || showUserPanel || showMenu;
+  useEffect(() => {
+    if (!anyOverlayOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [anyOverlayOpen]);
 
   // Cerrar modales con tecla Escape
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -227,21 +243,25 @@ export function App() {
     const code = params.get('code');
 
     if (loginResult === 'success' && provider === 'google' && code) {
-      // Limpia la URL primero para que el code no quede en historial
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Se canjea PRIMERO y la URL se limpia solo en éxito: si la red móvil
+      // falla, el code (un solo uso) sigue en la URL y recargar reintenta.
+      setActionLoading(true);
       fetch(`${apiUrl}/auth/google/exchange`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
+        signal: AbortSignal.timeout(15000),
       })
         .then(r => r.json().then(payload => ({ ok: r.ok, payload })))
         .then(({ ok, payload }) => {
+          setActionLoading(false);
           const sessionToken = payload?.data?.session?.token;
           if (!ok || !sessionToken) {
-            setActionError('Sesión de Google caducada. Inténtalo de nuevo.');
+            setActionError('Sesión de Google caducada. Recarga e inténtalo de nuevo.');
             setShowLogin(true);
             return;
           }
+          window.history.replaceState({}, document.title, window.location.pathname);
           const expiresAt = String(payload.data.session.expires_at
             ?? (Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60));
           persistSession(sessionToken, expiresAt, true);
@@ -258,7 +278,8 @@ export function App() {
           }
         })
         .catch(() => {
-          setActionError('Error al completar el inicio con Google.');
+          setActionLoading(false);
+          setActionError('Sin conexión al completar Google. Recarga para reintentar.');
           setShowLogin(true);
         });
       return;
@@ -438,7 +459,7 @@ export function App() {
           onRemove={handleRemoveFromCart}
           onCheckout={handleCheckout}
           currency={currency}
-          notice={removedNotice > 0 ? `${removedNotice} ${removedNotice === 1 ? 'producto ya no está disponible y se quitó' : 'productos ya no están disponibles y se quitaron'} del carrito.` : null}
+          notice={cartNotice || (removedNotice > 0 ? `${removedNotice} ${removedNotice === 1 ? 'producto ya no está disponible y se quitó' : 'productos ya no están disponibles y se quitaron'} del carrito.` : null)}
         />
       )}
 
@@ -512,6 +533,17 @@ export function App() {
               <h2>Finalizar Compra</h2>
               <button className="close-btn" onClick={() => setShowCheckout(false)} aria-label="Cerrar diálogo">✕</button>
             </div>
+            {lastOrderId ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '2.5rem' }}>🎉</p>
+                <h3>¡Gracias por tu compra!</h3>
+                <p>Tu pedido <strong>{lastOrderId.slice(0, 8)}</strong> está en preparación.</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Te avisaremos por email de cada cambio de estado.</p>
+                <button className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={() => { setLastOrderId(null); setShowCheckout(false); }}>
+                  Seguir comprando
+                </button>
+              </div>
+            ) : (
             <CheckoutForm
               total={cartTotal}
               itemCount={cartCount}
@@ -524,6 +556,10 @@ export function App() {
               defaultCity={user?.shipping?.city || ''}
               defaultPostalCode={user?.shipping?.postal_code || ''}
               onSubmit={async (shippingInfo) => {
+                // Guard anti-doble-tap: en 4G lento el segundo tap llegaría
+                // antes de pintar el spinner y duplicaría el pedido.
+                if (placingRef.current) return;
+                placingRef.current = true;
                 setActionLoading(true);
                 try {
                   const response = await fetch(`${apiUrl}/orders`, {
@@ -564,17 +600,17 @@ export function App() {
                   }));
 
                   setCart([]);
-                  setShowCheckout(false);
-                  setShowCart(false);
-                  alert(`¡Gracias por tu compra! Orden: ${payload.data.id}`);
+                  setLastOrderId(payload.data.id);
                 } catch (err) {
                   alert(err instanceof Error ? err.message : 'Error al procesar la compra');
                 } finally {
+                  placingRef.current = false;
                   setActionLoading(false);
                 }
               }}
               onCancel={() => setShowCheckout(false)}
             />
+            )}
           </div>
         </div>
       )}

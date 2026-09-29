@@ -1,0 +1,15 @@
+{
+  "name": "SUPRIME - Tienda Premium",
+  "short_name": "SUPRIME",
+  "description": "Productos premium con envío en 24-48h.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a14",
+  "theme_color": "#0a0a14",
+  "lang": "es",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
