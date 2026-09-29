@@ -1,5 +1,5 @@
 import type { Product } from '../types';
-import { formatPrice } from '../lib/api';
+import { formatPrice, thumb } from '../lib/api';
 
 type ProductCardProps = {
   product: Product;
@@ -23,7 +23,7 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
     >
       <div className="product-image-wrapper">
         <img
-          src={product.image_url}
+          src={thumb(product.image_url)}
           alt={product.name}
           className="product-image"
           loading="lazy"

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { CURRENCIES } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonGrid } from '../components/Skeletons';
@@ -50,6 +51,8 @@ export function HomePage({
   const navigate = useNavigate();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  useDocumentTitle(searchTerm ? `Buscar ${searchTerm}` : undefined);
 
   useEffect(() => {
     fetch(`${apiUrl}/catalog/departments`)

@@ -8,6 +8,13 @@ export function getAuthHeaders(session: Session | null): HeadersInit {
   return headers;
 }
 
+// Miniatura: en ImageKit aplica transformación de ancho (menos peso en tarjetas);
+// otras URLs (Unsplash, etc.) se devuelven tal cual.
+export function thumb(url: string, width = 400): string {
+  if (!url || !url.includes('ik.imagekit.io')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}tr=w-${width}`;
+}
 export function formatPrice(cents: number, currency: string = 'EUR'): string {
   const meta = CURRENCIES[currency] || CURRENCIES.EUR;
   const converted = (cents / 100) * meta.rate;

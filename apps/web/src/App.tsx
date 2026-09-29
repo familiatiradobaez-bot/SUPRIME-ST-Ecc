@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import type { Product } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
 import { useWishlist } from './hooks/useWishlist';
@@ -17,6 +18,7 @@ import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
 import { AdminPage } from './pages/AdminPage';
 import { HomePage } from './pages/HomePage';
+import { LegalPage } from './pages/LegalPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { ProductPage } from './pages/ProductPage';
 import { CatalogPage } from './pages/CatalogPage';
@@ -43,6 +45,7 @@ export function App() {
   const [showMenu, setShowMenu] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [loginNotice, setLoginNotice] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -58,6 +61,7 @@ export function App() {
       setOtpError('');
       setPendingGoogle2FA(null);
       setGoogle2faError('');
+      setLoginNotice('');
     }
   }, [user, showLogin]);
 
@@ -128,17 +132,46 @@ export function App() {
   // (el carrito ya persiste en localStorage entre recargas)
   const handleAddToCartGated = useCallback((productId: string, qty: number = 1) => {
     if (!user) {
+      setLoginNotice('Inicia sesión para agregar productos a tu carrito. Tu carrito se guarda automáticamente.');
       setShowLogin(true);
       return;
     }
     handleAddToCart(productId, qty);
   }, [user, handleAddToCart]);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!user) {
       setShowCart(false);
+      setLoginNotice('Inicia sesión para continuar con tu compra. Tu carrito seguirá aquí.');
       setShowLogin(true);
       return;
+    }
+    // Revalidar precio/stock contra el servidor antes de pagar
+    try {
+      const res = await fetch(`${apiUrl}/catalog/products`);
+      if (res.ok) {
+        const payload = await res.json();
+        const fresh: Product[] = payload.data || [];
+        const changes: string[] = [];
+        for (const item of cart) {
+          const f = fresh.find(p => p.id === item.id);
+          const local = products.find(p => p.id === item.id);
+          if (!f) {
+            changes.push('un producto ya no está disponible');
+          } else {
+            if (local && f.price_cents !== local.price_cents) changes.push(`nuevo precio en "${f.name}"`);
+            if (f.stock_quantity < item.quantity) changes.push(`stock insuficiente en "${f.name}" (quedan ${f.stock_quantity})`);
+          }
+        }
+        if (changes.length > 0) {
+          setProducts(fresh);
+          alert('El catálogo cambió antes de pagar:\n- ' + [...new Set(changes)].join('\n- '));
+          return;
+        }
+        setProducts(fresh);
+      }
+    } catch {
+      // Sin red no se puede garantizar precio/stock: avisar y continuar
     }
     setShowCart(false);
     setShowCheckout(true);
@@ -296,6 +329,11 @@ export function App() {
             />
           }
         />
+        <Route path="/privacidad" element={<LegalPage slug="privacidad" />} />
+        <Route path="/terminos" element={<LegalPage slug="terminos" />} />
+        <Route path="/envios" element={<LegalPage slug="envios" />} />
+        <Route path="/contacto" element={<LegalPage slug="contacto" />} />
+        <Route path="/faq" element={<LegalPage slug="faq" />} />
         <Route
           path="/producto/:slug"
           element={
@@ -368,9 +406,12 @@ export function App() {
           <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Acceso a cuenta">
             <div className="modal-header">
               <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingGoogle2FA ? 'Verificación en dos pasos' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
-              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }} aria-label="Cerrar diálogo">✕</button>
+              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); setLoginNotice(''); }} aria-label="Cerrar diálogo">✕</button>
             </div>
             {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {loginNotice && !pendingOtpEmail && !showPasswordReset && !pendingGoogle2FA && (
+              <p className="login-notice" role="status">{loginNotice}</p>
+            )}
             {showPasswordReset ? (
               <PasswordResetForm
                 apiUrl={apiUrl}

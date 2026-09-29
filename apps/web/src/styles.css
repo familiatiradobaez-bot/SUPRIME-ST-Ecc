@@ -4883,6 +4883,30 @@ button, .btn {
   white-space: nowrap;
 }
 
+.pdp-share {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.legal-page h1 {
+  margin-bottom: 0.25rem;
+}
+
+.legal-body h3 {
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text-primary);
+}
+
+.legal-body p {
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0.5rem 0;
+}
+
 /* Zoom PDP (lightbox) */
 .pdp-zoom-btn {
   padding: 0;
@@ -5017,6 +5041,17 @@ button, .btn {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Aviso de por qué se pide login */
+.login-notice {
+  margin: 0 1.5rem 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid var(--primary);
+  font-size: 0.85rem;
+  color: var(--text-primary);
 }
 
 /* Wishlist */

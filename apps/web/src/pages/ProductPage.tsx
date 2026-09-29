@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { formatPrice } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonPdp } from '../components/Skeletons';
@@ -23,6 +24,8 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
   const [selectedImg, setSelectedImg] = useState(0);
   const [qty, setQty] = useState(1);
   const [lightbox, setLightbox] = useState(false);
+
+  useDocumentTitle(product?.name || undefined, product?.description?.slice(0, 150));
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -189,6 +192,18 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
               <li>🛡️ Garantía total</li>
               <li>↩️ Devolución 30 días</li>
             </ul>
+
+            <div className="pdp-share">
+              <span>Compartir:</span>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`${product.name} - ${window.location.href}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm"
+              >
+                WhatsApp
+              </a>
+            </div>
           </div>
         </section>
 

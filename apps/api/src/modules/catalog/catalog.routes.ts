@@ -126,6 +126,54 @@ catalogRoutes.get('/departments/:slug/products', async (context) => {
   return context.json({ data: { department: dept, products: await withImages(context.env, result.results) } });
 });
 
+// GET /sitemap.xml - Sitemap para buscadores (home + secciones + productos)
+catalogRoutes.get('/sitemap.xml', async (context) => {
+  const base = 'https://suprime.xyz';
+  const urls: string[] = [
+    `${base}/`,
+    `${base}/favoritos`,
+    `${base}/privacidad`,
+    `${base}/terminos`,
+    `${base}/envios`,
+    `${base}/contacto`,
+    `${base}/faq`,
+  ];
+
+  const departments = await context.env.DB.prepare(
+    'SELECT slug FROM departments WHERE is_active = 1'
+  ).all();
+  for (const d of (departments.results || []) as Array<{ slug: string }>) {
+    urls.push(`${base}/departamento/${d.slug}`);
+  }
+
+  const categories = await context.env.DB.prepare(
+    'SELECT slug FROM categories WHERE is_active = 1'
+  ).all();
+  for (const c of (categories.results || []) as Array<{ slug: string }>) {
+    urls.push(`${base}/categoria/${c.slug}`);
+  }
+
+  const products = await context.env.DB.prepare(
+    "SELECT slug, image_url FROM products WHERE status = 'active' ORDER BY created_at DESC LIMIT 5000"
+  ).all();
+  const items = (products.results || []) as Array<{ slug: string; image_url: string }>;
+  for (const p of items) {
+    urls.push(`${base}/producto/${p.slug}`);
+  }
+
+  const firstImage = items[0]?.image_url || '';
+  const xml =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+    urls.map((u) => `  <url><loc>${u}</loc></url>`).join('\n') +
+    (firstImage ? `\n  <!-- image sample: ${firstImage} -->` : '') +
+    `\n</urlset>`;
+
+  return new Response(xml, {
+    headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+  });
+});
+
 // GET /departments - List all departments with subdepartments
 catalogRoutes.get('/departments', async (context) => {
   const departments = await context.env.DB.prepare(

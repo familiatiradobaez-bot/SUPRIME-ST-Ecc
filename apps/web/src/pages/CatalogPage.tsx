@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonGrid } from '../components/Skeletons';
 
@@ -30,6 +31,8 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishli
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
+
+  useDocumentTitle(title || undefined);
 
   useEffect(() => {
     if (!slug) return;

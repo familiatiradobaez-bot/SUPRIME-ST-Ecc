@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function Footer() {
   return (
     <footer className="footer">
@@ -5,25 +7,25 @@ export function Footer() {
         <div className="footer-section">
           <h4>Sobre SUPRIME</h4>
           <ul>
-            <li><a href="#about">Acerca de nosotros</a></li>
-            <li><a href="#blog">Blog</a></li>
-            <li><a href="#careers">Trabaja con nosotros</a></li>
+            <li><Link to="/contacto">Acerca de nosotros</Link></li>
+            <li><Link to="/faq">Preguntas frecuentes</Link></li>
+            <li><Link to="/contacto">Contacto</Link></li>
           </ul>
         </div>
         <div className="footer-section">
           <h4>Ayuda</h4>
           <ul>
-            <li><a href="#faq">Preguntas frecuentes</a></li>
-            <li><a href="#contact">Contacto</a></li>
-            <li><a href="#support">Soporte</a></li>
+            <li><Link to="/faq">Preguntas frecuentes</Link></li>
+            <li><Link to="/contacto">Contacto</Link></li>
+            <li><Link to="/envios">Envíos y Devoluciones</Link></li>
           </ul>
         </div>
         <div className="footer-section">
           <h4>Legal</h4>
           <ul>
-            <li><a href="#privacy">Política de Privacidad</a></li>
-            <li><a href="#terms">Términos y Condiciones</a></li>
-            <li><a href="#shipping">Envíos y Devoluciones</a></li>
+            <li><Link to="/privacidad">Política de Privacidad</Link></li>
+            <li><Link to="/terminos">Términos y Condiciones</Link></li>
+            <li><Link to="/envios">Envíos y Devoluciones</Link></li>
           </ul>
         </div>
       </div>
