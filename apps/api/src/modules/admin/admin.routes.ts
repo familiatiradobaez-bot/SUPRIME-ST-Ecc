@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { sendEmail, orderStatusEmailHtml } from '../../lib/email';
+import { isSafetyLockOn } from '../../lib/pricing';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -290,7 +291,7 @@ adminRoutes.get('/settings', async (context) => {
 });
 
 // PUT /admin/settings - Update store settings (solo owner/admin; stock_manager no)
-const SETTABLE_KEYS = ['store_name', 'store_description', 'currency', 'tax_rate', 'shipping_cost', 'free_shipping_threshold', 'maintenance_mode'];
+const SETTABLE_KEYS = ['store_name', 'store_description', 'currency', 'tax_rate', 'shipping_cost', 'free_shipping_threshold', 'maintenance_mode', 'safety_lock'];
 
 adminRoutes.put('/settings', async (context) => {
   const roleId = context.get('authRoleId') as string;
@@ -319,9 +320,9 @@ adminRoutes.put('/settings', async (context) => {
         return context.json({ error: 'INVALID_INPUT', message: `Valor inválido para ${key}` }, 400);
       }
       toStore.push([key, String(cents)]);
-    } else if (key === 'maintenance_mode') {
+    } else if (key === 'maintenance_mode' || key === 'safety_lock') {
       if (value !== '0' && value !== '1') {
-        return context.json({ error: 'INVALID_INPUT', message: 'maintenance_mode: 0 o 1' }, 400);
+        return context.json({ error: 'INVALID_INPUT', message: `${key}: 0 o 1` }, 400);
       }
       toStore.push([key, value]);
     } else {
@@ -447,8 +448,11 @@ adminRoutes.put('/products/:id', async (context) => {
   return context.json({ data: { updated: true } });
 });
 
-// DELETE /admin/products/:id - Delete product
+// DELETE /admin/products/:id - Delete product (archiva; bloqueado con modo seguro)
 adminRoutes.delete('/products/:id', async (context) => {
+  if (await isSafetyLockOn(context.env)) {
+    return context.json({ error: 'SAFETY_LOCKED', message: 'Modo seguro activo: desactívalo en Configuración para borrar' }, 403);
+  }
   const productId = context.req.param('id');
 
   await context.env.DB.prepare(

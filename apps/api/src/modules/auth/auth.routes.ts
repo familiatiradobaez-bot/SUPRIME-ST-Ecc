@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
+import { isSafetyLockOn } from '../../lib/pricing';
 
 // Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
 // Sin SMS de momento: valida formato, no titularidad (ver post-lanzamiento).
@@ -756,6 +757,10 @@ authRoutes.post('/me/totp/setup', async (context) => {
     if (!grant || grant.expires_at <= Math.floor(Date.now() / 1000)) {
       return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida para cambiar el secreto' }, 403);
     }
+    // Modo seguro: con 2FA activo no se regenera (apágalo en Configuración si toca rotar)
+    if (await isSafetyLockOn(context.env)) {
+      return context.json({ error: 'SAFETY_LOCKED', message: 'Modo seguro activo: desactívalo en Configuración para regenerar el 2FA' }, 403);
+    }
   }
 
   // Generate TOTP secret (32 bytes hex = 64 chars)
@@ -864,6 +869,10 @@ authRoutes.post('/me/totp/disable', async (context) => {
     ).bind(session.user_id).first() as { expires_at: number } | null;
     if (!grant || grant.expires_at <= Math.floor(Date.now() / 1000)) {
       return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida para desactivar 2FA' }, 403);
+    }
+    // Modo seguro: con 2FA activo no se desactiva (apágalo en Configuración si toca)
+    if (await isSafetyLockOn(context.env)) {
+      return context.json({ error: 'SAFETY_LOCKED', message: 'Modo seguro activo: desactívalo en Configuración para tocar el 2FA' }, 403);
     }
   }
 

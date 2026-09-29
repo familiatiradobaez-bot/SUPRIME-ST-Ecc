@@ -193,7 +193,10 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       if (res.ok) {
         setTotpEnabled(false);
       } else {
-        alert('No se pudo desactivar. Revalida tu código 2FA entrando de nuevo al panel.');
+        const payload = await res.json().catch(() => ({}));
+        alert(payload.error === 'SAFETY_LOCKED'
+          ? '🔒 Modo seguro activo: apágalo en Configuración para tocar el 2FA.'
+          : 'No se pudo desactivar. Revalida tu código 2FA entrando de nuevo al panel.');
       }
     } catch {
       alert('Error de conexión.');
@@ -480,6 +483,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           free_shipping_threshold: settings.free_shipping_threshold ?? '',
           tax_rate: settings.tax_rate ?? '',
           maintenance_mode: settings.maintenance_mode ?? '0',
+          safety_lock: settings.safety_lock ?? '1',
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -1001,6 +1005,17 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                       onChange={(e) => setSettings({ ...settings, maintenance_mode: e.target.checked ? '1' : '0' })}
                     />
                     <span>🔧 Modo mantenimiento (cierra la compra)</span>
+                  </label>
+                </div>
+                <div className="form-group remember-me">
+                  <label className="checkbox-label" htmlFor="set-safe" style={{ minHeight: '44px' }}>
+                    <input
+                      id="set-safe"
+                      type="checkbox"
+                      checked={(settings.safety_lock ?? '1') === '1'}
+                      onChange={(e) => setSettings({ ...settings, safety_lock: e.target.checked ? '1' : '0' })}
+                    />
+                    <span>🔒 Modo seguro (bloquea regenerar/desactivar 2FA y borrar productos)</span>
                   </label>
                 </div>
                 <div className="form-actions">

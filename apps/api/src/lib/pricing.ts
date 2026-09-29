@@ -46,3 +46,16 @@ export async function isMaintenanceMode(env: Bindings): Promise<boolean> {
     return false;
   }
 }
+
+// Modo seguro: '1' = bloquea operaciones destructivas (regenerar/desactivar
+// 2FA, borrar productos). Se apaga desde Configuración cuando haga falta.
+export async function isSafetyLockOn(env: Bindings): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare(
+      "SELECT value FROM store_settings WHERE key = 'safety_lock'"
+    ).first() as { value: string } | null;
+    return row?.value !== '0';
+  } catch {
+    return true;
+  }
+}

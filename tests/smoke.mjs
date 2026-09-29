@@ -187,11 +187,16 @@ r = await F(`${API}/auth/me/totp/status`, { headers: H });
 if (!authed) { skip('totp status (requiere sesión; owner con 2FA)'); }
 else {
   const st = await j(r);
-  check('owner 2FA sigue activado (smoke no lo toca)', r.status === 200 && st.data?.enabled === true, `${r.status} enabled=${st.data?.enabled}`);
-  // Con 2FA activo y sin step-up, regenerar exige 403 (no muta nada)
-  r = await F(`${API}/auth/me/totp/setup`, { method: 'POST', headers: H });
-  const e = await j(r);
-  check('totp setup sin step-up 403 (no destructivo)', r.status === 403 && e.error === 'ADMIN_2FA_REQUIRED', `${r.status} ${e.error}`);
+  const enabled = r.status === 200 && st.data?.enabled === true;
+  check('owner 2FA sigue activado (smoke no lo toca)', enabled, `${r.status} enabled=${st.data?.enabled}`);
+  if (enabled) {
+    // Con 2FA activo y sin step-up, regenerar exige 403 (no muta nada)
+    r = await F(`${API}/auth/me/totp/setup`, { method: 'POST', headers: H });
+    const e = await j(r);
+    check('totp setup sin step-up 403 (no destructivo)', r.status === 403 && e.error === 'ADMIN_2FA_REQUIRED', `${r.status} ${e.error}`);
+  } else {
+    skip('totp setup (sin 2FA no se toca para no regenerar el secreto)');
+  }
 }
 r = await F(`${API}/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'nadie-xyz-123@example.com' }) });
 check('forgot genérico 200 (anti-enumeración)', r.status === 200, r.status);
