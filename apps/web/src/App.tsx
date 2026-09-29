@@ -9,6 +9,7 @@ import { useCurrency } from './hooks/useCurrency';
 import { useApiUrl } from './hooks/useApiUrl';
 import { getAuthHeaders } from './lib/api';
 import { Header } from './components/Header';
+import { CookieBanner } from './components/CookieBanner';
 import { Footer } from './components/Footer';
 import { LoginForm } from './components/LoginForm';
 import { OtpForm } from './components/OtpForm';
@@ -536,6 +537,7 @@ export function App() {
       )}
 
       <Footer />
+      <CookieBanner />
     </div>
   );
 }

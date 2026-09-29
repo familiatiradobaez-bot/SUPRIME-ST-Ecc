@@ -5019,7 +5019,26 @@ button, .btn {
   color: var(--text-secondary);
   margin: 0.6rem 0 0;
 }
-.cart-notice {  background: var(--pill-bg);
+
+.cart-shipping {
+  font-size: 0.9rem;
+}
+
+.cart-grand {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.cart-free-shipping {
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin: 0.4rem 0 0;
+  text-align: right;
+}
+
+.cart-notice {
+  background: var(--pill-bg);
   border: 1px solid var(--warning);
   border-radius: var(--radius-md);
   padding: 0.6rem 0.75rem;
@@ -5041,6 +5060,35 @@ button, .btn {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Banner de cookies RGPD */
+.cookie-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  z-index: 1200;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.cookie-banner a {
+  color: var(--accent);
+}
+
+.cookie-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 /* Aviso de por qué se pide login */

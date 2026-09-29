@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { sendEmail, orderEmailHtml, orderStatusEmailHtml } from '../../lib/email';
+import { calcShipping } from '../../lib/pricing';
 
 const checkoutSchema = z.object({
   items: z.array(z.object({
@@ -62,7 +63,8 @@ ordersRoutes.post('/', async (context) => {
   // D1 no soporta BEGIN/COMMIT raw: se valida con SELECTs y se escribe con
   // db.batch() (atómico). El UPDATE de stock es condicional (>= qty) y se
   // verifica por changes; si falla, se compensa borrando orden + restaurando stock.
-  let totalCents = 0;
+  // El envío lo calcula el SERVIDOR (ignora cualquier cifra del front).
+  let subtotalCents = 0;
   const orderItems: Array<{ product_id: string; name: string; quantity: number; price_cents: number }> = [];
 
   const orderId = generateId();
@@ -81,7 +83,7 @@ ordersRoutes.post('/', async (context) => {
     }
 
     const priceCents = product.price_cents as number;
-    totalCents += priceCents * item.quantity;
+    subtotalCents += priceCents * item.quantity;
     orderItems.push({
       product_id: item.product_id,
       name: (product.name as string) || item.product_id,
@@ -90,12 +92,15 @@ ordersRoutes.post('/', async (context) => {
     });
   }
 
+  const shippingCents = calcShipping(subtotalCents);
+  const totalCents = subtotalCents + shippingCents;
+
   // Escritura atómica: orden + items + decremento condicional de stock
   const statements = [
     context.env.DB.prepare(
-      `INSERT INTO orders (id, user_id, status, total_cents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method)
-       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?)`
-    ).bind(orderId, userId, totalCents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method),
+      `INSERT INTO orders (id, user_id, status, total_cents, shipping_cents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method)
+       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(orderId, userId, totalCents, shippingCents, shipping_name, shipping_email, shipping_phone, shipping_address, payment_method),
     ...orderItems.map((item) =>
       context.env.DB.prepare(
         'INSERT INTO order_items (id, order_id, product_id, quantity, price_cents) VALUES (?, ?, ?, ?, ?)'
@@ -131,25 +136,27 @@ ordersRoutes.post('/', async (context) => {
   }
 
   // Confirmación por email (no bloquea ni tumba la orden si falla)
-  sendOrderConfirmation(context.env, orderId, orderItems, totalCents, shipping_name, shipping_email);
+  sendOrderConfirmation(context.env, orderId, orderItems, subtotalCents, shippingCents, totalCents, shipping_name, shipping_email);
 
   return context.json({
     data: {
       id: orderId,
       status: 'pending',
+      subtotal_cents: subtotalCents,
+      shipping_cents: shippingCents,
       total_cents: totalCents,
       items: orderItems,
     },
   }, 201);
 });
 
-function sendOrderConfirmation(env: Bindings, orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, totalCents: number, shippingName: string, shippingEmail: string): void {
+function sendOrderConfirmation(env: Bindings, orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, subtotalCents: number, shippingCents: number, totalCents: number, shippingName: string, shippingEmail: string): void {
   // Fire-and-forget: el email nunca debe tumbar la orden (sendEmail no lanza)
   void sendEmail(
     env,
     shippingEmail,
     `Tu pedido SUPRIME ${orderId.slice(0, 8)}`,
-    orderEmailHtml(orderId, items, totalCents, shippingName)
+    orderEmailHtml(orderId, items, subtotalCents, shippingCents, totalCents, shippingName)
   ).then((sent) => {
     if (!sent) console.warn(`Order confirmation email for order ${orderId} could not be sent`);
   });
@@ -198,7 +205,7 @@ ordersRoutes.get('/:id', async (context) => {
   }
 
   const order = await context.env.DB.prepare(
-    `SELECT o.id, o.status, o.total_cents, o.shipping_name, o.shipping_email,
+    `SELECT o.id, o.status, o.total_cents, o.shipping_cents, o.shipping_name, o.shipping_email,
             o.shipping_phone, o.shipping_address, o.payment_method, o.created_at, o.user_id,
             oi.product_id, oi.quantity, oi.price_cents, p.name as product_name
      FROM orders o
@@ -231,6 +238,8 @@ ordersRoutes.get('/:id', async (context) => {
     data: {
       id: first.id,
       status: first.status,
+      subtotal_cents: (first.total_cents as number) - ((first.shipping_cents as number) || 0),
+      shipping_cents: (first.shipping_cents as number) || 0,
       total_cents: first.total_cents,
       shipping_name: first.shipping_name,
       shipping_email: first.shipping_email,

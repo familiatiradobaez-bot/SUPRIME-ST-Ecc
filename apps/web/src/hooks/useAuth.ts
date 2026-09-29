@@ -102,13 +102,13 @@ export function useAuth() {
       .catch(() => {});
   }, [apiUrl, clearPersistedSession]);
 
-  const handleLogin = useCallback(async (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean }) => {
+  const handleLogin = useCallback(async (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean; terms?: boolean }) => {
     setActionLoading(true);
     setActionError('');
     try {
       const url = loginMode === 'register' ? `${apiUrl}/auth/register` : `${apiUrl}/auth/login`;
       const body = loginMode === 'register'
-        ? { email, password, username: extra?.username, display_name: extra?.display_name }
+        ? { email, password, username: extra?.username, display_name: extra?.display_name, terms: extra?.terms === true }
         : { email, password, rememberMe: extra?.rememberMe };
 
       const response = await fetch(url, {

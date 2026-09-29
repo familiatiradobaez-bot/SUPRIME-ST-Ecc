@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 type LoginFormProps = {
-  onSubmit: (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean }) => void;
+  onSubmit: (email: string, password: string, extra?: { username?: string; display_name?: string; rememberMe?: boolean; terms?: boolean }) => void;
   onCancel: () => void;
   mode: 'login' | 'register';
   onToggleMode: () => void;
@@ -17,6 +17,7 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +31,11 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
         setError('El username debe tener al menos 3 caracteres');
         return;
       }
-      onSubmit(email, password, { username, display_name: displayName || username });
+      if (!termsAccepted) {
+        setError('Debes aceptar los Términos y la Privacidad');
+        return;
+      }
+      onSubmit(email, password, { username, display_name: displayName || username, terms: true });
     } else {
       onSubmit(email, password, rememberMe ? { rememberMe } : undefined);
     }
@@ -100,6 +105,19 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
           <span>Permanecer conectado</span>
         </label>
       </div>
+      )}
+      {mode === 'register' && (
+        <div className="form-group remember-me">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              required
+            />
+            <span>Acepto los <a href="/terminos" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: 'var(--accent)' }}>Términos</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: 'var(--accent)' }}>Privacidad</a></span>
+          </label>
+        </div>
       )}
 
       <div className="form-actions">

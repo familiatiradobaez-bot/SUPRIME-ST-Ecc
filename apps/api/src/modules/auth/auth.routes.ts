@@ -19,6 +19,8 @@ const registerSchema = z.object({
   }),
   username: z.string().min(3).max(50),
   display_name: z.string().min(1).max(100),
+  // Aceptación explícita de Términos y Privacidad (RGPD). Sin esto no hay registro.
+  terms: z.literal(true, { message: 'Terms must be accepted' }),
 });
 
 // Rate limiting storage (in-memory - use KV in production).
@@ -310,9 +312,9 @@ authRoutes.post('/register', async (context) => {
   const userId = generateId();
 
   await context.env.DB.prepare(
-    `INSERT INTO users (id, role_id, username, email, password_hash, display_name, email_verified)
-     VALUES (?, 'role-customer', ?, ?, ?, ?, 0)`
-  ).bind(userId, username, email, passwordHash, display_name).run();
+    `INSERT INTO users (id, role_id, username, email, password_hash, display_name, email_verified, terms_accepted_at)
+     VALUES (?, 'role-customer', ?, ?, ?, ?, 0, ?)`
+  ).bind(userId, username, email, passwordHash, display_name, Math.floor(Date.now() / 1000)).run();
 
   // Generar y enviar código OTP de 15 minutos (sin esto no hay acceso)
   const { sent } = await issueOtp(context.env, email);

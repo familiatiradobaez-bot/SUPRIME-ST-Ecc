@@ -68,7 +68,7 @@ export function orderStatusEmailHtml(orderId: string, status: string, totalCents
   `;
 }
 
-export function orderEmailHtml(orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, totalCents: number, shippingName: string): string {
+export function orderEmailHtml(orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, subtotalCents: number, shippingCents: number, totalCents: number, shippingName: string): string {
   const rows = items.map((i) => `
     <tr>
       <td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(i.name)} × ${i.quantity}</td>
@@ -80,7 +80,15 @@ export function orderEmailHtml(orderId: string, items: Array<{ name: string; qua
       <p>Tu pedido <strong>${escapeHtml(orderId)}</strong> está en preparación.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">${rows}
         <tr>
-          <td style="padding: 8px; font-weight: bold;">Total</td>
+          <td style="padding: 8px;">Subtotal</td>
+          <td style="padding: 8px; text-align: right;">${(subtotalCents / 100).toFixed(2)}€</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">Envío (24-48h)</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${shippingCents === 0 ? 'Gratis' : `${(shippingCents / 100).toFixed(2)}€`}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px; font-weight: bold;">Total (IVA incl.)</td>
           <td style="padding: 8px; text-align: right; font-weight: bold;">${(totalCents / 100).toFixed(2)}€</td>
         </tr>
       </table>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatPrice } from '../lib/api';
+import { formatPrice, calcShipping } from '../lib/api';
 
 type CheckoutFormProps = {
   total: number;
@@ -32,12 +32,15 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name, shipping_email: email, shipping_phone: phone, shipping_address: address, payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
       <div className="checkout-summary">
         <p><strong>Artículos:</strong> {itemCount}</p>
-        <p><strong>Total:</strong> {formatPrice(total, currency)}</p>
+        <p><strong>Subtotal:</strong> {formatPrice(total, currency)}</p>
+        <p><strong>Envío 24-48h:</strong> {calcShipping(total) === 0 ? 'Gratis' : formatPrice(calcShipping(total), currency)}</p>
+        <p><strong>Total (IVA incl.):</strong> {formatPrice(total + calcShipping(total), currency)}</p>
       </div>
 
       <h3>Información de Envío</h3>
@@ -85,6 +88,18 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
           </div>
         </>
       )}
+
+      <div className="form-group remember-me">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            required
+          />
+          <span>Acepto los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Términos</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Privacidad</a></span>
+        </label>
+      </div>
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary btn-glow" disabled={loading}>

@@ -1,5 +1,5 @@
 import type { CartItem, Product } from '../types';
-import { formatPrice } from '../lib/api';
+import { formatPrice, calcShipping, FREE_SHIPPING_THRESHOLD_CENTS } from '../lib/api';
 
 type CartSidebarProps = {
   cart: CartItem[];
@@ -56,8 +56,21 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
         {cart.length > 0 && (
           <div className="cart-footer">
             <div className="cart-total">
-              <strong>Total:</strong>
+              <strong>Subtotal:</strong>
               <strong>{formatPrice(cartTotal, currency)}</strong>
+            </div>
+            <div className="cart-total cart-shipping">
+              <span>Envío 24-48h:</span>
+              <strong>{calcShipping(cartTotal) === 0 ? 'Gratis' : formatPrice(calcShipping(cartTotal), currency)}</strong>
+            </div>
+            {calcShipping(cartTotal) > 0 && (
+              <p className="cart-free-shipping">
+                Te faltan {formatPrice(FREE_SHIPPING_THRESHOLD_CENTS - cartTotal, currency)} para el envío gratis
+              </p>
+            )}
+            <div className="cart-total cart-grand">
+              <strong>Total (IVA incl.):</strong>
+              <strong>{formatPrice(cartTotal + calcShipping(cartTotal), currency)}</strong>
             </div>
             <button className="btn btn-primary btn-glow" style={{ width: '100%', marginTop: '1rem' }} onClick={onCheckout}>
               💳 Proceder al Pago
