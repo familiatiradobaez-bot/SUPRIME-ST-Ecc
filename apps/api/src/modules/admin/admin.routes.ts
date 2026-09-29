@@ -53,10 +53,29 @@ adminRoutes.use('*', async (context, next) => {
   // Verificar que la sesión existe en DB y no expiró (el token es el id de sesión)
   const sessionToken = authHeader.slice(7);
   const sess = await context.env.DB.prepare(
-    'SELECT id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
-  ).bind(sessionToken).first();
+    `SELECT s.user_id FROM sessions s WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(sessionToken).first() as { user_id: string } | null;
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  // Step-up 2FA: entrar al admin exige verificación de ≤1h (no basta la sesión larga).
+  // Si el usuario nunca configuró 2FA, se le pide configurarlo primero.
+  const totp = await context.env.DB.prepare(
+    'SELECT enabled FROM user_totp WHERE user_id = ?'
+  ).bind(sess.user_id).first() as { enabled: number } | null;
+
+  if (!totp?.enabled) {
+    return context.json({ error: 'ADMIN_2FA_SETUP_REQUIRED', message: 'Configura la verificación en dos pasos para entrar al panel' }, 403);
+  }
+
+  const grant = await context.env.DB.prepare(
+    'SELECT expires_at FROM admin_stepup WHERE user_id = ?'
+  ).bind(sess.user_id).first() as { expires_at: number } | null;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!grant || grant.expires_at <= nowSec) {
+    return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida (válida 1 hora)' }, 403);
   }
 
   await next();

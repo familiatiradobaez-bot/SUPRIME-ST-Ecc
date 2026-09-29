@@ -31,7 +31,7 @@ export function App() {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, pending2FAEmail, twofaLoading, twofaError, setPending2FAEmail, setTwofaError, handleVerify2FA, decodeTokenRole, hasAdminAccess } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
   const { currency, setCurrency } = useCurrency();
@@ -289,24 +289,15 @@ export function App() {
         <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
           <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pending2FAEmail ? 'Verificación en dos pasos' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
-              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); setPending2FAEmail(null); }}>✕</button>
+              <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
+              <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }}>✕</button>
             </div>
-            {actionError && !pendingOtpEmail && !showPasswordReset && !pending2FAEmail && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
+            {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ color: '#a3422b', padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
             {showPasswordReset ? (
               <PasswordResetForm
                 apiUrl={apiUrl}
                 onDone={() => { setShowPasswordReset(false); setLoginMode('login'); }}
                 onBack={() => setShowPasswordReset(false)}
-              />
-            ) : pending2FAEmail ? (
-              <OtpForm
-                email={pending2FAEmail}
-                onVerify={handleVerify2FA}
-                onBack={() => { setPending2FAEmail(null); setTwofaError(''); }}
-                loading={twofaLoading}
-                error={twofaError}
-                subtitle={<>Introduce el código de 6 dígitos de tu app de autenticación para <strong>{pending2FAEmail}</strong>.</>}
               />
             ) : pendingOtpEmail ? (
               <OtpForm

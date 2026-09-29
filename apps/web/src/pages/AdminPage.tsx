@@ -50,12 +50,78 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [productPrice, setProductPrice] = useState('');
   const [productStock, setProductStock] = useState('');
 
+  // Step-up 2FA del panel: el middleware exige concesión de ≤1h.
+  // 'checking' -> 'ok' | 'code' (pedir código) | 'setup' (configurar 2FA primero)
+  const [stepUp, setStepUp] = useState<'checking' | 'ok' | 'code' | 'setup'>('checking');
+
+  const checkStepUp = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/stats`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setStepUp('ok');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (data.error === 'ADMIN_2FA_SETUP_REQUIRED') {
+        setStepUp('setup');
+        handleSetup2FA();
+      } else {
+        setStepUp('code');
+      }
+    } catch {
+      setStepUp('code');
+    }
+  };
+
+  const handleStepUp = async () => {
+    if (!totpCode || totpCode.length !== 6) {
+      setTotpError('Introduce el código de 6 dígitos de tu app');
+      return;
+    }
+    setTotpLoading(true);
+    setTotpError('');
+    try {
+      const res = await fetch(`${apiUrl}/auth/admin-stepup`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: totpCode }),
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setStepUp('ok');
+        setTotpCode('');
+      } else {
+        setTotpError(data.error === 'INVALID_TOTP_CODE'
+          ? 'Código incorrecto. Revisa la hora de tu teléfono y usa el código actual.'
+          : (data.message || 'Error de verificación'));
+      }
+    } catch {
+      setTotpError('Error de conexión');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  // Los datos solo se cargan con step-up vigente
   useEffect(() => {
+    checkStepUp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, sessionToken]);
+
+  useEffect(() => {
+    if (stepUp !== 'ok') return;
     fetchStats();
     if (activeTab === 'products') fetchProducts();
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'orders') fetchOrders(0);
-  }, [activeTab]);
+  }, [activeTab, stepUp]);
 
   // Cerrar sidebar con Escape
   useEffect(() => {
@@ -130,6 +196,8 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         setTotpCode('');
         setTotpSecret('');
         setTotpUri('');
+        // El backend concede step-up al activar: entrar directo
+        setStepUp('ok');
       } else {
         setTotpError(data.error === 'INVALID_TOTP_CODE' ? 'Código incorrecto' : 'Error de verificación');
       }
@@ -314,9 +382,57 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   // NOTA: el 2FA se verifica en el login (POST /auth/verify-2fa), no aquí.
   // Este panel asume sesión válida (el middleware admin la exige).
 
-  // Show 2FA setup modal
-  if (showTotpSetup) {
+  // Step-up 2FA al entrar al panel (concesión de 1 hora)
+  if (stepUp === 'checking') {
     return (
+      <div className="admin-page">
+        <div className="admin-main">
+          <div className="loading"><div className="spinner"></div></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stepUp === 'code') {
+    return (
+      <div className="modal-overlay">
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>Verificación de Dos Pasos</h2>
+            <button className="close-btn" onClick={onBack}>✕</button>
+          </div>
+          <div className="form">
+            <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+              Por seguridad, confirma tu identidad para entrar al panel.
+              Esta verificación vale por 1 hora.
+            </p>
+            <div className="form-group">
+              <label>Código de tu app de autenticación</label>
+              <input
+                type="text"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                maxLength={6}
+                autoFocus
+                style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+              />
+            </div>
+            {totpError && <p className="error" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{totpError}</p>}
+            <div className="form-actions">
+              <button className="btn btn-primary btn-glow" onClick={handleStepUp} disabled={totpLoading}>
+                {totpLoading ? 'Verificando...' : 'Verificar y entrar'}
+              </button>
+              <button className="btn btn-secondary" onClick={onBack}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show 2FA setup modal
+  if (showTotpSetup) {    return (
       <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">

@@ -69,11 +69,26 @@ async function requireUploadAdmin(context: any, next: () => Promise<void>) {
     return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
   }
   const sess = await context.env.DB.prepare(
-    'SELECT id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
-  ).bind(authHeader.slice(7)).first();
+    'SELECT id, user_id FROM sessions WHERE id = ? AND expires_at > strftime(\'%s\', \'now\')'
+  ).bind(authHeader.slice(7)).first() as { id: string; user_id: string } | null;
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
+
+  // Step-up 2FA también para subir/ver galería (son acciones de admin)
+  const totpRow = await context.env.DB.prepare(
+    'SELECT enabled FROM user_totp WHERE user_id = ?'
+  ).bind(sess.user_id).first() as { enabled: number } | null;
+  if (!totpRow?.enabled) {
+    return context.json({ error: 'ADMIN_2FA_SETUP_REQUIRED', message: 'Configura la verificación en dos pasos para gestionar imágenes' }, 403);
+  }
+  const grant = await context.env.DB.prepare(
+    'SELECT expires_at FROM admin_stepup WHERE user_id = ?'
+  ).bind(sess.user_id).first() as { expires_at: number } | null;
+  if (!grant || grant.expires_at <= Math.floor(Date.now() / 1000)) {
+    return context.json({ error: 'ADMIN_2FA_REQUIRED', message: 'Verificación en dos pasos requerida (válida 1 hora)' }, 403);
+  }
+
   await next();
 }
 

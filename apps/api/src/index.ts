@@ -11,6 +11,7 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
       env.DB.prepare('DELETE FROM email_otps WHERE expires_at <= ?').bind(now),
+      env.DB.prepare('DELETE FROM admin_stepup WHERE expires_at <= ?').bind(now),
     ]);
   },
 };

@@ -538,17 +538,8 @@ authRoutes.post('/login', async (context) => {
     return context.json({ error: 'EMAIL_NOT_VERIFIED', message: 'Debes verificar tu correo electrónico antes de iniciar sesión' }, 403);
   }
 
-  // 2FA: si el usuario lo tiene activado, no se crea sesión todavía.
-  // El front pide el código y llama a POST /auth/verify-2fa.
-  const totpEnabled = await context.env.DB.prepare(
-    'SELECT 1 as ok FROM user_totp WHERE user_id = ? AND enabled = 1'
-  ).bind(user.id).first();
-
-  if (totpEnabled) {
-    return context.json({
-      data: { requires2FA: true, email: user.email },
-    });
-  }
+  // NOTA: el 2FA no se pide aquí. El panel admin exige step-up propio
+  // (POST /auth/admin-stepup, válido 1 hora) en su middleware.
 
   const rememberMe = (parsedBody as Record<string, unknown> | null)?.rememberMe === true;
   // Token format: base64(userId:role:timestamp) - usado como Bearer Y como id de sesión en DB.
@@ -575,55 +566,56 @@ authRoutes.post('/login', async (context) => {
 
 });
 
-// POST /auth/verify-2fa - Segundo factor tras login con contraseña
-authRoutes.post('/verify-2fa', async (context) => {
+// POST /auth/admin-stepup - Verificar 2FA para entrar al admin (concesión de 1 hora)
+// Requiere sesión Bearer válida. El middleware admin la exige en cada request.
+authRoutes.post('/admin-stepup', async (context) => {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
   const clientIp = context.req.header('CF-Connecting-IP') || context.req.header('X-Forwarded-For') || 'unknown';
   if (!checkBucket(twofaAttempts, clientIp, 10, 15 * 60 * 1000)) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
-  const body = await context.req.json().catch(() => null);
-  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const code = typeof body?.code === 'string' ? body.code.trim() : '';
-  const rememberMe = body?.rememberMe === true;
+  const token = authHeader.slice(7);
+  const session = await context.env.DB.prepare(
+    `SELECT s.user_id, u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(token).first() as { user_id: string; role_id: string } | null;
 
-  if (!email || !/^\d{6}$/.test(code)) {
-    return context.json({ error: 'INVALID_INPUT', message: 'Email y código de 6 dígitos requeridos' }, 400);
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
 
-  const user = await context.env.DB.prepare(
-    `SELECT id, username, email, display_name, role_id FROM users
-     WHERE email = ? AND is_active = 1`
-  ).bind(email).first();
+  const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
+  if (!adminRoles.includes(session.role_id)) {
+    return context.json({ error: 'FORBIDDEN', message: 'Admin access required' }, 403);
+  }
 
-  if (!user) {
-    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+  const body = await context.req.json().catch(() => null);
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+  if (!/^\d{6}$/.test(code)) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Código de 6 dígitos requerido' }, 400);
   }
 
   const totpRecord = await context.env.DB.prepare(
     'SELECT secret FROM user_totp WHERE user_id = ? AND enabled = 1'
-  ).bind(user.id).first() as { secret: string } | null;
+  ).bind(session.user_id).first() as { secret: string } | null;
 
   if (!totpRecord || !verifyTOTP(code, totpRecord.secret as string)) {
-    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto. Revisa la hora de tu teléfono y usa el código actual.' }, 401);
   }
 
-  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
-  const sessionDurationDays = rememberMe ? 30 : 7;
-  const expiresAt = Math.floor(Date.now() / 1000) + sessionDurationDays * 24 * 60 * 60;
-
+  const now = Math.floor(Date.now() / 1000);
   await context.env.DB.prepare(
-    'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-  ).bind(token, user.id, expiresAt).run();
+    `INSERT INTO admin_stepup (user_id, verified_at, expires_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET verified_at = excluded.verified_at, expires_at = excluded.expires_at`
+  ).bind(session.user_id, now, now + 3600).run();
 
-  context.header('Set-Cookie', `session_token=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${sessionDurationDays * 24 * 60 * 60}`);
-
-  return context.json({
-    data: {
-      user,
-      session: { id: token, token, expires_at: expiresAt },
-    },
-  });
+  return context.json({ data: { granted: true, validFor: 3600 } });
 });
 
 // POST /auth/logout
@@ -778,6 +770,14 @@ authRoutes.post('/me/totp/verify', async (context) => {
   await context.env.DB.prepare(
     'UPDATE user_totp SET enabled = 1 WHERE user_id = ?'
   ).bind(session.user_id).run();
+
+  // Al activar, conceder step-up inmediato (1h) para no pedir el código dos veces
+  const nowStep = Math.floor(Date.now() / 1000);
+  await context.env.DB.prepare(
+    `INSERT INTO admin_stepup (user_id, verified_at, expires_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET verified_at = excluded.verified_at, expires_at = excluded.expires_at`
+  ).bind(session.user_id, nowStep, nowStep + 3600).run();
 
   return context.json({ data: { enabled: true } });
 });

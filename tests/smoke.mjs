@@ -11,8 +11,20 @@ function check(name, cond, detail = '') {
 const j = async (r) => { try { return await r.json(); } catch { return {}; } };
 let skipped = 0;
 function checkOrSkip(ok, name, cond, detail = '') {
-  if (!ok) { skipped++; results.push(`SKIP ${name} (requiere sesión; owner con 2FA)`); return; }
+  if (!ok) { skip(name + ' (requiere sesión; owner con 2FA)'); return; }
   check(name, cond, detail);
+}
+function skip(name) { skipped++; results.push(`SKIP ${name}`); }
+// Rutas admin: PASS si hay grant (200 válido) o si exigen step-up (403 correcto)
+async function checkAdmin(name, r, validate200) {
+  if (r.status === 200) {
+    const d = await j(r);
+    try { check(`${name} (grant vigente)`, validate200(d)); }
+    catch (e) { check(`${name} (grant vigente)`, false, String(e).slice(0, 80)); }
+    return;
+  }
+  const e = await j(r);
+  check(`${name} (exige step-up)`, r.status === 403 && (e.error === 'ADMIN_2FA_REQUIRED' || e.error === 'ADMIN_2FA_SETUP_REQUIRED'), `${r.status} ${e.error}`);
 }
 
 console.log('== Salud y catálogo ==');
@@ -38,8 +50,7 @@ r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type'
 const lj = await j(r);
 const token = lj.data?.session?.token;
 const authed = !!token;
-check('login owner 200 (token o desafío 2FA)', r.status === 200 && (!!token || lj.data?.requires2FA === true), r.status);
-if (lj.data?.requires2FA) results.push('INFO owner con 2FA activado: checks con sesión se omiten');
+check('login owner 200 + token', r.status === 200 && !!token, r.status);
 const H = token ? { 'Authorization': `Bearer ${token}` } : {};
 r = await fetch(`${API}/auth/me`, { headers: H });
 const me = await j(r);
@@ -51,15 +62,22 @@ console.log('== Admin ==');
 r = await fetch(`${API}/admin/stats`);
 check('admin stats sin auth 401', r.status === 401, r.status);
 r = await fetch(`${API}/admin/stats`, { headers: H });
-checkOrSkip(authed, 'admin stats con owner 200', r.status === 200, r.status);
+if (!authed) { skip('admin stats (requiere sesión; owner con 2FA)'); }
+else if (r.status === 200) { check('admin stats con owner 200 (grant vigente)', true); }
+else {
+  const e = await j(r);
+  check('admin stats exige step-up 403', r.status === 403 && (e.error === 'ADMIN_2FA_REQUIRED' || e.error === 'ADMIN_2FA_SETUP_REQUIRED'), `${r.status} ${e.error}`);
+}
 r = await fetch(`${API}/admin/products`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-checkOrSkip(authed, 'crear producto vacío 400', r.status === 400, r.status);
+if (r.status === 400) { check('crear producto vacío 400 (grant vigente)', true); }
+else { const e = await j(r); check('crear producto (exige step-up)', r.status === 403 && !!e.error, `${r.status} ${e.error}`); }
 r = await fetch(`${API}/admin/users`, { headers: H });
-checkOrSkip(authed, 'admin users 200', r.status === 200, r.status);
+await checkAdmin('admin users 200', r, (d) => Array.isArray(d.data));
 
 r = await fetch(`${API}/admin/users?limit=1&offset=0`, { headers: H });
 const u1 = await j(r);
-checkOrSkip(authed, 'admin users paginado (limit=1 + total)', r.status === 200 && Array.isArray(u1.data) && u1.data.length <= 1 && typeof u1.pagination?.total === 'number', r.status);
+if (r.status === 200) { check('admin users paginado (limit=1 + total)', Array.isArray(u1.data) && u1.data.length <= 1 && typeof u1.pagination?.total === 'number', r.status); }
+else { check('admin users (exige step-up)', r.status === 403, `${r.status} ${u1.error}`); }
 
 console.log('== Upload/galería ==');
 const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -67,18 +85,22 @@ const UH = { ...H, 'Content-Type': 'application/json' };
 r = await fetch(`${API}/upload/images`);
 check('galería sin auth 401', r.status === 401, r.status);
 r = await fetch(`${API}/upload/images`, { headers: H });
-const g = await j(r);
-checkOrSkip(authed, 'galería con owner 200 + array', r.status === 200 && Array.isArray(g.data), r.status);
+await checkAdmin('galería con owner 200 + array', r, (d) => Array.isArray(d.data));
 r = await fetch(`${API}/upload/images?limit=1&skip=0`, { headers: H });
-const g1 = await j(r);
-checkOrSkip(authed, 'galería paginada limit=1', r.status === 200 && Array.isArray(g1.data) && g1.data.length <= 1, r.status);
+await checkAdmin('galería paginada limit=1', r, (d) => Array.isArray(d.data) && d.data.length <= 1);
 r = await fetch(`${API}/upload/imagekit`, { method: 'POST', headers: UH, body: JSON.stringify({ nope: 1 }) });
-checkOrSkip(authed, 'upload input inválido 400', r.status === 400, r.status);
+if (r.status === 400) { check('upload input inválido 400 (grant vigente)', true); }
+else { const e = await j(r); check('upload (exige step-up)', r.status === 403, `${r.status} ${e.error}`); }
 r = await fetch(`${API}/upload/imagekit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dataUrl: tiny, filename: 'x.png' }) });
 check('upload sin auth 401 (admin requerido)', r.status === 401, r.status);
 r = await fetch(`${API}/upload/imagekit`, { method: 'POST', headers: UH, body: JSON.stringify({ dataUrl: tiny, filename: 'smoke.png' }) });
-const up = await j(r);
-checkOrSkip(authed, 'upload 1px 200 + url ik.imagekit', r.status === 200 && (up.data?.url || '').includes('ik.imagekit.io'), r.status);
+if (r.status === 200) {
+  const up = await j(r);
+  check('upload 1px 200 + url ik.imagekit (grant vigente)', (up.data?.url || '').includes('ik.imagekit.io'), r.status);
+} else {
+  const e = await j(r);
+  check('upload (exige step-up)', r.status === 403, `${r.status} ${e.error}`);
+}
 
 console.log('== Órdenes/stock (sin mutar) ==');
 const OH = { ...H, 'Content-Type': 'application/json' };
@@ -89,7 +111,7 @@ check('orders sin auth 401 (login requerido)', r.status === 401, r.status);
 if (products.length) {
   const p = products.find(x => x.stock_quantity >= 0);
   r = await fetch(`${API}/orders`, { method: 'POST', headers: OH, body: JSON.stringify({ items: [{ product_id: p.id, quantity: (p.stock_quantity || 0) + 50 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: '1', shipping_address: 'X', payment_method: 'paypal' }) });
-  checkOrSkip(authed, 'orders stock insuficiente 400 (rollback)', r.status === 400, r.status);
+  check('orders stock insuficiente 400 (rollback)', r.status === 400, r.status);
 }
 
 console.log('== PDP y secciones ==');
@@ -127,8 +149,8 @@ const errLoc = r.headers.get('location') || '';
 check('callback state inválido redirige con error', r.status === 302 && errLoc.includes('login=error'), `${r.status} ${errLoc.slice(0, 80)}`);
 
 console.log('== Password reset ==');
-r = await fetch(`${API}/auth/verify-2fa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', code: '000000' }) });
-check('verify-2fa código malo 401', r.status === 401, r.status);r = await fetch(`${API}/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'nadie-xyz-123@example.com' }) });
+r = await fetch(`${API}/auth/admin-stepup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ code: '000000' }) });
+checkOrSkip(authed, 'admin-stepup código malo 401', r.status === 401, r.status);r = await fetch(`${API}/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'nadie-xyz-123@example.com' }) });
 check('forgot genérico 200 (anti-enumeración)', r.status === 200, r.status);
 r = await fetch(`${API}/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', code: '000000', newPassword: 'Test1234!' }) });
 check('reset código malo 401/404', r.status === 401 || r.status === 404, r.status);
@@ -142,9 +164,9 @@ check('home 200 + bundle', r.status === 200 && html.includes('/assets/index-'), 
 
 console.log('== Logout ==');
 r = await fetch(`${API}/auth/logout`, { method: 'POST', headers: H });
-checkOrSkip(authed, 'logout 200', r.status === 200, r.status);
+check('logout 200', r.status === 200, r.status);
 r = await fetch(`${API}/auth/me`, { headers: H });
-checkOrSkip(authed, 'me tras logout 401', r.status === 401, r.status);
+check('me tras logout 401', r.status === 401, r.status);
 
 console.log(`\nRESULTADO: ${pass} PASS / ${fail} FAIL / ${skipped} SKIP`);
 for (const line of results) console.log(line);
