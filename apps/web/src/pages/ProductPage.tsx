@@ -9,9 +9,11 @@ type ProductPageProps = {
   addedToCartId: string | null;
   onAddToCart: (productId: string, qty?: number) => void;
   currency: string;
+  wishedIds?: string[];
+  onToggleWishlist?: (productId: string) => void;
 };
 
-export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPageProps) {
+export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, onToggleWishlist }: ProductPageProps) {
   const { slug } = useParams<{ slug: string }>();
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
@@ -150,6 +152,17 @@ export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPag
               >
                 {addedToCartId === product.id ? '✓ Agregado' : '🛒 Agregar al Carrito'}
               </button>
+              {onToggleWishlist && (
+                <button
+                  type="button"
+                  className={`btn btn-secondary wishlist-heart-btn${wishedIds?.includes(product.id) ? ' active' : ''}`}
+                  onClick={() => onToggleWishlist(product.id)}
+                  aria-label={wishedIds?.includes(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                  aria-pressed={!!wishedIds?.includes(product.id)}
+                >
+                  {wishedIds?.includes(product.id) ? '❤️' : '🤍'}
+                </button>
+              )}
             </div>
 
             {product.description && (
@@ -175,6 +188,8 @@ export function ProductPage({ addedToCartId, onAddToCart, currency }: ProductPag
                     isAdded={addedToCartId === rel.id}
                     currency={currency}
                     onOpen={(p) => p.slug && navigate(`/producto/${p.slug}`)}
+                    wished={wishedIds?.includes(rel.id)}
+                    onToggleWishlist={onToggleWishlist}
                   />
                 </div>
               ))}

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
+import { sendEmail, orderStatusEmailHtml } from '../../lib/email';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -226,6 +227,53 @@ adminRoutes.get('/orders', async (context) => {
     pagination: { limit, offset, total: totalCount },
   });
 });
+
+// PUT /admin/orders/:id/status - Cambiar estado (pending→paid→shipped→delivered, o cancelled)
+const ORDER_TRANSITIONS: Record<string, string[]> = {
+  pending: ['paid', 'cancelled'],
+  paid: ['shipped', 'cancelled'],
+  shipped: ['delivered'],
+  delivered: [],
+  cancelled: [],
+};
+
+adminRoutes.put('/orders/:id/status', async (context) => {
+  const orderId = context.req.param('id');
+  const body = await context.req.json().catch(() => null);
+  const next = typeof body?.status === 'string' ? body.status : '';
+
+  if (!ORDER_TRANSITIONS[next]) {
+    return context.json({ error: 'INVALID_STATUS', message: 'Estado no válido' }, 400);
+  }
+
+  const order = await context.env.DB.prepare(
+    'SELECT status, total_cents, shipping_email FROM orders WHERE id = ?'
+  ).bind(orderId).first() as { status: string; total_cents: number; shipping_email: string } | null;
+
+  if (!order) {
+    return context.json({ error: 'ORDER_NOT_FOUND' }, 404);
+  }
+
+  if (!ORDER_TRANSITIONS[order.status]?.includes(next)) {
+    return context.json({ error: 'INVALID_TRANSITION', message: `No se puede pasar de ${order.status} a ${next}` }, 400);
+  }
+
+  await context.env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(next, orderId).run();
+
+  // Avisar al cliente (no bloquea la respuesta si falla)
+  void sendOrderStatusEmail(context.env, orderId, next, order.total_cents, order.shipping_email);
+
+  return context.json({ data: { id: orderId, prev: order.status, status: next } });
+});
+
+async function sendOrderStatusEmail(env: Bindings, orderId: string, status: string, totalCents: number, toEmail: string): Promise<void> {
+  try {
+    const sent = await sendEmail(env, toEmail, `Tu pedido ${orderId.slice(0, 8)}: ${status}`, orderStatusEmailHtml(orderId, status, totalCents));
+    if (!sent) console.warn(`Order status email for order ${orderId} could not be sent`);
+  } catch (err) {
+    console.error('Order status email failed:', err);
+  }
+}
 
 // GET /admin/settings - Get store settings
 adminRoutes.get('/settings', async (context) => {

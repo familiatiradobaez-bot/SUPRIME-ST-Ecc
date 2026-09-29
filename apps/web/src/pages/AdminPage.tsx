@@ -124,7 +124,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   useEffect(() => {
     if (stepUp !== 'ok') return;
     fetchStats();
-    if (activeTab === 'products') fetchProducts();
+    if (activeTab === 'products' || activeTab === 'stats') fetchProducts();
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'orders') fetchOrders(0);
   }, [activeTab, stepUp]);
@@ -259,6 +259,37 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [ordersPage, setOrdersPage] = useState(0);
   const [ordersTotal, setOrdersTotal] = useState(0);
   const ORDERS_PAGE_SIZE = 20;
+
+  const ORDERS_NEXT: Record<string, string[]> = {
+    pending: ['paid', 'cancelled'],
+    paid: ['shipped', 'cancelled'],
+    shipped: ['delivered'],
+    delivered: [],
+    cancelled: [],
+  };
+
+  const changeOrderStatus = async (orderId: string, next: string) => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.message || 'No se pudo cambiar el estado');
+        return;
+      }
+      fetchOrders(ordersPage);
+      fetchStats();
+    } catch {
+      alert('Error de conexión');
+    }
+  };
 
   const fetchOrders = async (page: number) => {
     try {
@@ -598,6 +629,40 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
             </div>
           </div>
         )}
+        {activeTab === 'stats' && (() => {
+          const lowStock = products.filter(p => p.stock_quantity <= 5);
+          if (lowStock.length === 0) return null;
+          return (
+            <div className="admin-low-stock">
+              <h3>⚠️ Stock bajo ({lowStock.length})</h3>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Stock</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lowStock.slice(0, 10).map(p => (
+                    <tr key={p.id}>
+                      <td>{p.name}</td>
+                      <td>{p.stock_quantity === 0 ? '❌ Agotado' : `⚠️ ${p.stock_quantity}`}</td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => { startEditProduct(p); setActiveTab('products'); }}
+                        >
+                          Reponer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
 
         {/* PRODUCTS TAB */}
         {activeTab === 'products' && (
@@ -750,7 +815,19 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                           <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{String(o.id).slice(0, 8)}…</td>
                           <td>{o.username || o.email || '—'}</td>
                           <td>{(o.total_cents / 100).toFixed(2)}€</td>
-                          <td>{o.status}</td>
+                          <td>
+                            <select
+                              value={o.status}
+                              onChange={(e) => changeOrderStatus(o.id, e.target.value)}
+                              className="order-status-select"
+                              aria-label={`Cambiar estado de orden ${String(o.id).slice(0, 8)}`}
+                            >
+                              <option value={o.status}>{o.status}</option>
+                              {(ORDERS_NEXT[o.status] || []).map(s => (
+                                <option key={s} value={s}>→ {s}</option>
+                              ))}
+                            </select>
+                          </td>
                           <td>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-ES') : '—'}</td>
                         </tr>
                       ))}

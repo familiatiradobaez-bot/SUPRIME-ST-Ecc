@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
+import { useWishlist } from './hooks/useWishlist';
 import { useProducts } from './hooks/useProducts';
 import { useCurrency } from './hooks/useCurrency';
 import { useApiUrl } from './hooks/useApiUrl';
@@ -16,6 +17,7 @@ import { UserPanel } from './components/UserPanel';
 import { CartSidebar } from './components/CartSidebar';
 import { AdminPage } from './pages/AdminPage';
 import { HomePage } from './pages/HomePage';
+import { WishlistPage } from './pages/WishlistPage';
 import { ProductPage } from './pages/ProductPage';
 import { CatalogPage } from './pages/CatalogPage';
 
@@ -34,6 +36,7 @@ export function App() {
   const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   const { cart, addedToCartId, cartTotal, cartCount, removedNotice, clearRemovedNotice, handleAddToCart, handleRemoveFromCart, setCart } = useCart(products);
+  const { wishlist, toggleWishlist, isWished } = useWishlist();
   const { currency, setCurrency } = useCurrency();
 
   const [showCart, setShowCart] = useState(false);
@@ -43,6 +46,9 @@ export function App() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [pendingGoogle2FA, setPendingGoogle2FA] = useState<string | null>(null);
+  const [google2faLoading, setGoogle2faLoading] = useState(false);
+  const [google2faError, setGoogle2faError] = useState('');
 
   // Cerrar modal de login automáticamente cuando el usuario inicia sesión
   useEffect(() => {
@@ -50,8 +56,39 @@ export function App() {
       setShowLogin(false);
       setPendingOtpEmail(null);
       setOtpError('');
+      setPendingGoogle2FA(null);
+      setGoogle2faError('');
     }
   }, [user, showLogin]);
+
+  const handleGoogle2FA = useCallback(async (code: string) => {
+    if (!pendingGoogle2FA) return;
+    setGoogle2faLoading(true);
+    setGoogle2faError('');
+    try {
+      const response = await fetch(`${apiUrl}/auth/google-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingGoogle2FA, code }),
+        credentials: 'include',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error === 'GOOGLE_2FA_EXPIRED'
+          ? 'La sesión de Google caducó. Inicia con Google de nuevo.'
+          : payload.message || 'Error al verificar');
+      }
+      const { user: userData, session: sessionData } = payload.data;
+      setUser(userData);
+      setSession(sessionData);
+      persistSession(sessionData.token, sessionData.expires_at, true);
+      setPendingGoogle2FA(null);
+    } catch (err) {
+      setGoogle2faError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setGoogle2faLoading(false);
+    }
+  }, [apiUrl, pendingGoogle2FA, persistSession, setSession, setUser]);
 
   const closeMenu = () => setShowMenu(false);
 
@@ -141,6 +178,16 @@ export function App() {
       return;
     }
 
+    // Google con 2FA: OAuth OK pero falta el código (ventana 10 min)
+    if (loginResult === '2fa-required' && provider === 'google') {
+      const emailParam = params.get('email') || '';
+      setPendingGoogle2FA(emailParam);
+      setGoogle2faError('');
+      setShowLogin(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     const token = params.get('token');
 
     if (loginResult === 'success' && provider === 'google' && token) {
@@ -194,6 +241,8 @@ export function App() {
         onNavClick={handleNavClick}
         onCategorySelect={(slug) => { closeMenu(); navigate(`/categoria/${slug}`); }}
         onLogoClick={() => navigate('/')}
+        onWishlistClick={() => navigate('/favoritos')}
+        wishlistCount={wishlist.length}
       />
 
       {/* Admin Page - página separada para admin+ */}
@@ -224,6 +273,23 @@ export function App() {
               currency={currency}
               setCurrency={setCurrency}
               onShopNow={() => scrollToId('products')}
+              wishlist={wishlist}
+              onToggleWishlist={toggleWishlist}
+              isWished={isWished}
+            />
+          }
+        />
+        <Route
+          path="/favoritos"
+          element={
+            <WishlistPage
+              products={products}
+              status={status}
+              wishlist={wishlist}
+              onToggleWishlist={toggleWishlist}
+              addedToCartId={addedToCartId}
+              onAddToCart={handleAddToCartGated}
+              currency={currency}
             />
           }
         />
@@ -234,6 +300,8 @@ export function App() {
               addedToCartId={addedToCartId}
               onAddToCart={(id, qty) => { handleAddToCartGated(id, qty ?? 1); setShowCart(true); }}
               currency={currency}
+              wishedIds={wishlist}
+              onToggleWishlist={toggleWishlist}
             />
           }
         />
@@ -245,6 +313,8 @@ export function App() {
               addedToCartId={addedToCartId}
               onAddToCart={handleAddToCartGated}
               currency={currency}
+              wishlist={wishlist}
+              onToggleWishlist={toggleWishlist}
             />
           }
         />
@@ -256,6 +326,8 @@ export function App() {
               addedToCartId={addedToCartId}
               onAddToCart={handleAddToCartGated}
               currency={currency}
+              wishlist={wishlist}
+              onToggleWishlist={toggleWishlist}
             />
           }
         />
@@ -267,6 +339,8 @@ export function App() {
               addedToCartId={addedToCartId}
               onAddToCart={handleAddToCartGated}
               currency={currency}
+              wishlist={wishlist}
+              onToggleWishlist={toggleWishlist}
             />
           }
         />
@@ -290,7 +364,7 @@ export function App() {
         <div className="modal-overlay anim-modal-overlay" onClick={() => setShowLogin(false)}>
           <div className="modal anim-modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Acceso a cuenta">
             <div className="modal-header">
-              <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
+              <h2 className="character-bounce-in">{showPasswordReset ? 'Recuperar contraseña' : pendingGoogle2FA ? 'Verificación en dos pasos' : pendingOtpEmail ? 'Verifica tu correo' : loginMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}</h2>
               <button className="close-btn" onClick={() => { setShowLogin(false); setActionError(''); setPendingOtpEmail(null); setShowPasswordReset(false); }} aria-label="Cerrar diálogo">✕</button>
             </div>
             {actionError && !pendingOtpEmail && !showPasswordReset && <p className="error character-shake" style={{ padding: '0 1.5rem', marginBottom: 0 }}>{actionError}</p>}
@@ -299,6 +373,15 @@ export function App() {
                 apiUrl={apiUrl}
                 onDone={() => { setShowPasswordReset(false); setLoginMode('login'); }}
                 onBack={() => setShowPasswordReset(false)}
+              />
+            ) : pendingGoogle2FA ? (
+              <OtpForm
+                email={pendingGoogle2FA}
+                onVerify={handleGoogle2FA}
+                onBack={() => { setPendingGoogle2FA(null); setGoogle2faError(''); }}
+                loading={google2faLoading}
+                error={google2faError}
+                subtitle={<>Tu cuenta Google tiene 2FA activado. Introduce el código de tu app para <strong>{pendingGoogle2FA}</strong> (10 min).</>}
               />
             ) : pendingOtpEmail ? (
               <OtpForm
@@ -328,6 +411,8 @@ export function App() {
       {showUserPanel && user && (
         <UserPanel
           user={user}
+          apiUrl={apiUrl}
+          sessionToken={session?.token || ''}
           onClose={() => setShowUserPanel(false)}
           onLogout={handleLogout}
           onSaveShipping={saveShipping}

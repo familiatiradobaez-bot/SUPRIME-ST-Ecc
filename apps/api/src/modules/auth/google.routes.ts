@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+﻿import { Hono } from 'hono';
 import type { Bindings } from '../../app';
 
 // Frontend URLs for post-login redirect
@@ -160,13 +160,30 @@ googleRoutes.get('/callback', async (context) => {
     }
 
     // Create session (el token es el id de sesión, igual que en login)
-    const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
+    // Si el usuario tiene 2FA activo, NO se crea sesión: se deja pendiente
+    // (ventana 10 min) y el front pide el código vía POST /auth/google-2fa.
+    const totpRow = await context.env.DB.prepare(
+      'SELECT 1 as ok FROM user_totp WHERE user_id = ? AND enabled = 1'
+    ).bind((user as any).id).first();
+
+    const frontendUrl = getFrontendUrl(context);
+
+    if (totpRow) {
+      const nowPend = Math.floor(Date.now() / 1000);
+      await context.env.DB.prepare(
+        `INSERT INTO oauth_pending_2fa (email, created_at) VALUES (?, ?)
+         ON CONFLICT(email) DO UPDATE SET created_at = excluded.created_at`
+      ).bind(googleUser.email.toLowerCase(), nowPend).run();
+      return context.redirect(`${frontendUrl}?login=2fa-required&provider=google&email=${encodeURIComponent(googleUser.email)}`);
+    }
+
+    const tokenData = `${(user as any).id}:${(user as any).role_id}:${Date.now()}`;
     const token = btoa(tokenData);
     const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
     await context.env.DB.prepare(
       'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
-    ).bind(token, user.id, expiresAt).run();
+    ).bind(token, (user as any).id, expiresAt).run();
 
     // Limpiar cookie de state + fijar sesión (append: dos Set-Cookie)
     context.header('Set-Cookie', 'oauth_state=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax', { append: true });
@@ -174,7 +191,6 @@ googleRoutes.get('/callback', async (context) => {
 
     // Redirect al front con el token (la cookie HttpOnly no es legible cross-subdominio,
     // el front lo guarda y limpia la URL inmediatamente)
-    const frontendUrl = getFrontendUrl(context);
     return context.redirect(`${frontendUrl}?login=success&provider=google&token=${encodeURIComponent(token)}`);
   } catch (error) {
     console.error('Google OAuth error:', error);

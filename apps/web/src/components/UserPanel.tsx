@@ -1,19 +1,73 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { User } from '../types';
+import { formatPrice } from '../lib/api';
 
 type UserPanelProps = {
   user: User;
+  apiUrl: string;
+  sessionToken: string;
   onClose: () => void;
   onLogout: () => void;
   onSaveShipping: (data: { full_name: string; phone: string; address: string; city: string; postal_code: string }) => Promise<void>;
 };
 
-export function UserPanel({ user, onClose, onLogout, onSaveShipping }: UserPanelProps) {
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  paid: 'Pagado',
+  shipped: 'Enviado',
+  delivered: 'Entregado',
+  cancelled: 'Cancelado',
+};
+
+type OrderSummary = {
+  id: string;
+  status: string;
+  total_cents: number;
+  created_at: string;
+};
+
+type OrderDetail = OrderSummary & {
+  items: Array<{ product_id: string; product_name: string; quantity: number; price_cents: number }>;
+};
+
+export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSaveShipping }: UserPanelProps) {
   const [name, setName] = useState(user.shipping?.full_name || '');
   const [phone, setPhone] = useState(user.shipping?.phone || '');
   const [address, setAddress] = useState(user.shipping?.address || '');
   const [city, setCity] = useState(user.shipping?.city || '');
   const [postal, setPostal] = useState(user.shipping?.postal_code || '');
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
+
+  useEffect(() => {
+    setOrdersLoading(true);
+    fetch(`${apiUrl}/orders`, {
+      headers: { 'Authorization': `Bearer ${sessionToken}` },
+      credentials: 'include',
+    })
+      .then(r => r.json())
+      .then(payload => { if (payload.data) setOrders(payload.data); })
+      .catch(() => {})
+      .finally(() => setOrdersLoading(false));
+  }, [apiUrl, sessionToken]);
+
+  const loadOrderDetail = async (id: string) => {
+    if (openOrder?.id === id) {
+      setOpenOrder(null);
+      return;
+    }
+    try {
+      const res = await fetch(`${apiUrl}/orders/${id}`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      const payload = await res.json();
+      if (payload.data) setOpenOrder(payload.data);
+    } catch {
+      // Ignore
+    }
+  };
 
   return (
     <div className="modal-overlay anim-modal-overlay" onClick={onClose}>
@@ -87,6 +141,37 @@ export function UserPanel({ user, onClose, onLogout, onSaveShipping }: UserPanel
                 ⚠️ Ya editaste tus datos hoy. Podrás editarlos mañana.
               </p>
             )}
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Mis pedidos</h3>
+            {ordersLoading && <p>Cargando pedidos...</p>}
+            {!ordersLoading && orders.length === 0 && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Aún no tienes pedidos.</p>
+            )}
+            {orders.map(o => (
+              <div key={o.id} className="user-order">
+                <button
+                  type="button"
+                  className="user-order-header"
+                  onClick={() => loadOrderDetail(o.id)}
+                >
+                  <span style={{ fontFamily: 'monospace' }}>{o.id.slice(0, 8)}…</span>
+                  <span className={`order-status order-status-${o.status}`}>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
+                  <span>{formatPrice(o.total_cents)}</span>
+                </button>
+                {openOrder?.id === o.id && (
+                  <div className="user-order-detail">
+                    {openOrder.items.map((it, i) => (
+                      <p key={i}>{it.product_name || it.product_id} × {it.quantity} — {formatPrice(it.price_cents * it.quantity)}</p>
+                    ))}
+                    <small style={{ color: 'var(--text-secondary)' }}>
+                      {o.created_at ? new Date(o.created_at).toLocaleString('es-ES') : ''}
+                    </small>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>

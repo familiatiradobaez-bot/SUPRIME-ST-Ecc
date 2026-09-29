@@ -34,12 +34,16 @@ type HomePageProps = {
   onAddToCart: (productId: string) => void;
   currency: string;
   setCurrency: (code: string) => void;
+  wishlist: string[];
+  onToggleWishlist: (productId: string) => void;
+  isWished: (productId: string) => boolean;
   onShopNow: () => void;
 };
 
 export function HomePage({
   products, status, searchTerm, filteredProducts, paginatedProducts,
-  currentPage, totalPages, goToPage, addedToCartId, onAddToCart, currency, setCurrency, onShopNow,
+  currentPage, totalPages, goToPage, addedToCartId, onAddToCart, currency, setCurrency,
+  wishlist, onToggleWishlist, isWished, onShopNow,
 }: HomePageProps) {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
@@ -178,6 +182,8 @@ export function HomePage({
                         isAdded={addedToCartId === product.id}
                         currency={currency}
                         onOpen={openProduct}
+                        wished={isWished(product.id)}
+                        onToggleWishlist={onToggleWishlist}
                       />
                     ))}
                   </div>
@@ -237,6 +243,8 @@ export function HomePage({
                     isAdded={addedToCartId === product.id}
                     currency={currency}
                     onOpen={openProduct}
+                    wished={isWished(product.id)}
+                    onToggleWishlist={onToggleWishlist}
                   />
                 </div>
               ))}

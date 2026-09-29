@@ -4860,6 +4860,89 @@ button, .btn {
   }
 }
 
+/* Wishlist */
+.wishlist-heart {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  z-index: 5;
+}
+
+.wishlist-heart.active {
+  border-color: var(--error);
+}
+
+.wishlist-heart-btn.active {
+  border-color: var(--error);
+}
+
+/* Pedidos del usuario */
+.user-order {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+
+.user-order-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--pill-bg);
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.user-order-detail {
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.85rem;
+}
+
+.user-order-detail p {
+  margin: 0.25rem 0;
+}
+
+.order-status {
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.order-status-pending { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+.order-status-paid { background: rgba(0, 217, 166, 0.15); color: var(--success); }
+.order-status-shipped { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+.order-status-delivered { background: rgba(0, 217, 166, 0.25); color: var(--success); }
+.order-status-cancelled { background: rgba(255, 71, 87, 0.15); color: var(--error); }
+
+.order-status-select {
+  background: var(--pill-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
 /* Paginación reutilizable */
 .pagination {
   display: flex;

@@ -7,9 +7,11 @@ type ProductCardProps = {
   isAdded: boolean;
   currency?: string;
   onOpen?: (product: Product) => void;
+  wished?: boolean;
+  onToggleWishlist?: (productId: string) => void;
 };
 
-export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', onOpen }: ProductCardProps) {
+export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', onOpen, wished, onToggleWishlist }: ProductCardProps) {
   return (
     <div
       className="product-card anim-product-card"
@@ -34,6 +36,17 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
         )}
         {product.stock_quantity === 0 && (
           <span className="badge-danger">Agotado</span>
+        )}
+        {onToggleWishlist && (
+          <button
+            type="button"
+            className={`wishlist-heart${wished ? ' active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }}
+            aria-label={wished ? `Quitar ${product.name} de favoritos` : `Agregar ${product.name} a favoritos`}
+            aria-pressed={!!wished}
+          >
+            {wished ? '❤️' : '🤍'}
+          </button>
         )}
       </div>
       <div className="product-body">

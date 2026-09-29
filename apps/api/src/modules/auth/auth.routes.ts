@@ -921,3 +921,66 @@ authRoutes.put('/me/shipping', async (context) => {
 
   return context.json({ data: { saved: true } });
 });
+// POST /auth/google-2fa - Completar login Google con 2FA (ventana 10 min tras OAuth)
+authRoutes.post('/google-2fa', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const code = typeof body?.code === 'string' ? body.code.trim() : '';
+
+  if (!email || !/^\d{6}$/.test(code)) {
+    return context.json({ error: 'INVALID_INPUT', message: 'Email y código de 6 dígitos requeridos' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const pending = await context.env.DB.prepare(
+    'SELECT created_at FROM oauth_pending_2fa WHERE email = ?'
+  ).bind(email).first() as { created_at: number } | null;
+
+  // Ventana de 10 minutos desde el callback; sin pendiente no hay desafío que completar
+  if (!pending || now - pending.created_at > 10 * 60) {
+    if (pending) {
+      await context.env.DB.prepare('DELETE FROM oauth_pending_2fa WHERE email = ?').bind(email).run();
+    }
+    return context.json({ error: 'GOOGLE_2FA_EXPIRED', message: 'Sesión OAuth caducada. Inicia con Google de nuevo.' }, 410);
+  }
+
+  const user = await context.env.DB.prepare(
+    'SELECT id, username, email, display_name, role_id FROM users WHERE email = ? AND is_active = 1'
+  ).bind(email).first() as {
+    id: string; username: string; email: string; display_name: string; role_id: string;
+  } | null;
+
+  if (!user) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+  }
+
+  const totpRecord = await context.env.DB.prepare(
+    'SELECT secret, last_counter FROM user_totp WHERE user_id = ? AND enabled = 1'
+  ).bind(user.id).first() as { secret: string; last_counter: number } | null;
+
+  if (!totpRecord) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
+  }
+
+  const { secret, last_counter } = totpRecord;
+  const check = verifyTOTPWithCounter(code, secret);
+  if (!check.ok || check.counter <= (totpRecord.last_counter ?? -1)) {
+    return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto o ya usado. Usa el código actual.' }, 401);
+  }
+
+  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
+  const expiresAt = now + 7 * 24 * 60 * 60;
+
+  await context.env.DB.batch([
+    context.env.DB.prepare('UPDATE user_totp SET last_counter = ? WHERE user_id = ?').bind(check.counter, user.id),
+    context.env.DB.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(token, user.id, expiresAt),
+    context.env.DB.prepare('DELETE FROM oauth_pending_2fa WHERE email = ?').bind(email),
+  ]);
+
+  return context.json({
+    data: {
+      user,
+      session: { id: token, token, expires_at: expiresAt },
+    },
+  });
+});

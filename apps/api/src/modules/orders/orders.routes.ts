@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
-import { sendEmail, orderEmailHtml } from '../../lib/email';
+import { sendEmail, orderEmailHtml, orderStatusEmailHtml } from '../../lib/email';
 
 const checkoutSchema = z.object({
   items: z.array(z.object({

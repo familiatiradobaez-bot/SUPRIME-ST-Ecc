@@ -17,9 +17,11 @@ type HeaderProps = {
   onNavClick: (section: string) => void;
   onCategorySelect?: (categorySlug: string) => void;
   onLogoClick?: () => void;
+  onWishlistClick?: () => void;
+  wishlistCount?: number;
 };
 
-export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect, onLogoClick }: HeaderProps) {
+export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onMenuClick, onLoginClick, onUserPanelClick, onAdminClick, isAdmin, showMenu, onCloseMenu, onNavClick, onCategorySelect, onLogoClick, onWishlistClick, wishlistCount }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
@@ -44,6 +46,9 @@ export function Header({ user, cartCount, searchTerm, onSearch, onCartClick, onM
         <div className="header-right">
           <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick}>
             🛒 ({cartCount})
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={onWishlistClick} aria-label="Ver favoritos">
+            ❤️ ({wishlistCount ?? 0})
           </button>
           {user ? (
             <>

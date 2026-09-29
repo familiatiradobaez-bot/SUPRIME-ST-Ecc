@@ -51,6 +51,23 @@ export async function sendEmail(env: Bindings, toEmail: string, subject: string,
   }
 }
 
+export function orderStatusEmailHtml(orderId: string, status: string, totalCents: number): string {
+  const labels: Record<string, string> = {
+    paid: 'pago confirmado',
+    shipped: 'en camino',
+    delivered: 'entregado',
+    cancelled: 'cancelado',
+  };
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #6366f1;">Tu pedido ${escapeHtml(orderId.slice(0, 8))} está ${labels[status] || status}</h1>
+      <p>Total: <strong>${(totalCents / 100).toFixed(2)}€</strong></p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="color: #888; font-size: 12px;">SUPRIME - Tu tienda premium</p>
+    </div>
+  `;
+}
+
 export function orderEmailHtml(orderId: string, items: Array<{ name: string; quantity: number; price_cents: number }>, totalCents: number, shippingName: string): string {
   const rows = items.map((i) => `
     <tr>

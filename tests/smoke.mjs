@@ -108,6 +108,12 @@ console.log('== Órdenes/stock (sin mutar) ==');
 const OH = { ...H, 'Content-Type': 'application/json' };
 r = await F(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
 check('orders body vacío 400', r.status === 400, r.status);
+r = await F(`${API}/admin/orders/00000000-0000-0000-0000-000000000000/status`, { method: 'PUT', headers: UH, body: JSON.stringify({ status: 'paid' }) });
+if (r.status === 404) { check('order status inexistente 404 (grant vigente)', true); }
+else { const e = await j(r); check('order status (exige step-up)', r.status === 403, `${r.status} ${e.error}`); }
+r = await F(`${API}/admin/orders/00000000-0000-0000-0000-000000000000/status`, { method: 'PUT', headers: UH, body: JSON.stringify({ status: 'volar' }) });
+if (r.status === 400) { check('order status inválido 400 (grant vigente)', true); }
+else { const e = await j(r); check('order status inválido (exige step-up)', r.status === 403, `${r.status} ${e.error}`); }
 r = await F(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ product_id: products[0]?.id || 'x', quantity: 1 }], shipping_name: 'T', shipping_email: 't@t.es', shipping_phone: '1', shipping_address: 'X', payment_method: 'paypal' }) });
 check('orders sin auth 401 (login requerido)', r.status === 401, r.status);
 if (products.length) {
@@ -149,6 +155,8 @@ check('callback sin code 400', r.status === 400, r.status);
 r = await F(`${API}/auth/google/callback?code=fake&state=fake`, { redirect: 'manual' });
 const errLoc = r.headers.get('location') || '';
 check('callback state inválido redirige con error', r.status === 302 && errLoc.includes('login=error'), `${r.status} ${errLoc.slice(0, 80)}`);
+r = await F(`${API}/auth/google-2fa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', code: '000000' }) });
+check('google-2fa sin pendiente/código malo 401/410', r.status === 401 || r.status === 410, r.status);
 
 console.log('== Password reset ==');
 r = await F(`${API}/auth/admin-stepup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ code: '000000' }) });

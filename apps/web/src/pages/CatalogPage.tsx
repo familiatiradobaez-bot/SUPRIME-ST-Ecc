@@ -9,6 +9,8 @@ type CatalogPageProps = {
   addedToCartId: string | null;
   onAddToCart: (productId: string) => void;
   currency: string;
+  wishlist?: string[];
+  onToggleWishlist?: (productId: string) => void;
 };
 
 const KIND_LABEL: Record<CatalogPageProps['kind'], string> = {
@@ -17,7 +19,7 @@ const KIND_LABEL: Record<CatalogPageProps['kind'], string> = {
   subdepartamento: 'Subdepartamento',
 };
 
-export function CatalogPage({ kind, addedToCartId, onAddToCart, currency }: CatalogPageProps) {
+export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishlist, onToggleWishlist }: CatalogPageProps) {
   const { slug } = useParams<{ slug: string }>();
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
@@ -121,6 +123,8 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency }: Cata
                     isAdded={addedToCartId === product.id}
                     currency={currency}
                     onOpen={(p) => p.slug && navigate(`/producto/${p.slug}`)}
+                    wished={wishlist?.includes(product.id)}
+                    onToggleWishlist={onToggleWishlist}
                   />
                 ))}
               </div>
