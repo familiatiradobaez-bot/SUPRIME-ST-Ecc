@@ -7,6 +7,40 @@ import { formatPrice } from '../lib/api';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonPdp } from '../components/Skeletons';
 
+// Genera JSON-LD Product schema para SEO
+function generateProductJsonLd(product: Product, gallery: string[], currency: string) {
+  const base = 'https://suprime.xyz';
+  const price = (product.price_cents / 100).toFixed(2);
+  const currencyCode = currency === 'EUR' ? 'EUR' : currency;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description || '',
+    image: gallery.length > 0 ? gallery : (product.image_url ? [product.image_url] : []),
+    sku: product.slug,
+    mpn: product.id,
+    brand: { '@type': 'Brand', name: 'SUPRIME' },
+    offers: {
+      '@type': 'Offer',
+      url: `${base}/producto/${product.slug}`,
+      priceCurrency: currencyCode,
+      price: price,
+      availability: product.stock_quantity > 0
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      seller: { '@type': 'Organization', name: 'SUPRIME' },
+    },
+    aggregateRating: product.avg_rating
+      ? {
+          '@type': 'AggregateRating',
+          ratingValue: product.avg_rating.toFixed(1),
+          reviewCount: product.review_count || 0,
+        }
+      : undefined,
+  };
+}
+
 type ProductPageProps = {
   addedToCartId: string | null;
   onAddToCart: (productId: string, qty?: number) => void;
@@ -43,6 +77,17 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
         const payload = await res.json();
         setProduct(payload.data);
         setStatus('ready');
+        // Inject JSON-LD for SEO
+        if (payload.data) {
+          const jsonLd = generateProductJsonLd(payload.data, payload.data.images?.length ? payload.data.images : (payload.data.image_url ? [payload.data.image_url] : []), currency);
+          const script = document.createElement('script');
+          script.type = 'application/ld+json';
+          script.text = JSON.stringify(jsonLd);
+          script.id = 'product-json-ld';
+          const old = document.getElementById('product-json-ld');
+          if (old) old.remove();
+          document.head.appendChild(script);
+        }
         fetch(`${apiUrl}/catalog/products/${slug}/related?limit=8`)
           .then(r => r.json())
           .then(rel => { if (rel.data) setRelated(rel.data); })
@@ -52,7 +97,15 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
       }
     };
     load();
-  }, [apiUrl, slug]);
+  }, [apiUrl, slug, currency]);
+
+  // Cleanup JSON-LD on unmount
+  useEffect(() => {
+    return () => {
+      const script = document.getElementById('product-json-ld');
+      if (script) script.remove();
+    };
+  }, []);
 
   if (status === 'loading') {
     return (
@@ -82,6 +135,28 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
 
   const gallery = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
   const outOfStock = product.stock_quantity === 0;
+
+  // Update og:image and twitter:image for social sharing
+  useEffect(() => {
+    if (!product || !gallery.length) return;
+    const updateMeta = (property: string, content: string) => {
+      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('property', property);
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+    const ogImage = gallery[0];
+    updateMeta('og:image', ogImage);
+    updateMeta('og:title', product.name);
+    updateMeta('og:description', product.description?.slice(0, 150) || '');
+    updateMeta('og:url', `${window.location.origin}/producto/${product.slug}`);
+    updateMeta('twitter:image', ogImage);
+    updateMeta('twitter:title', product.name);
+    updateMeta('twitter:description', product.description?.slice(0, 150) || '');
+  }, [product, gallery]);
   const maxQty = Math.max(1, Math.min(product.stock_quantity, 99));
 
   return (

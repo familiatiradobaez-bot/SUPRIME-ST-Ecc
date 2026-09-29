@@ -10,6 +10,8 @@ export type Product = {
   subdepartment_slug?: string;
   department_slug?: string;
   department_name?: string;
+  avg_rating?: number;
+  review_count?: number;
 };
 
 export type CartItem = {

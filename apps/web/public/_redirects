@@ -1,2 +1,4 @@
 # SPA fallback para Cloudflare Pages (rutas /producto/:slug, /categoria/:slug, ...)
+# Excepción: sitemap.xml → API (evita que el SPA lo capture)
+/sitemap.xml https://api.suprime.xyz/api/v1/catalog/sitemap.xml 301
 /* /index.html 200

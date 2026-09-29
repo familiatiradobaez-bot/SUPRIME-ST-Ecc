@@ -6,6 +6,25 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { ProductCard } from '../components/ProductCard';
 import { SkeletonGrid } from '../components/Skeletons';
 
+// Genera JSON-LD ItemList para categorías/departamentos
+function generateItemListJsonLd(items: Array<{ slug?: string; name: string; image_url?: string }>, baseTitle: string) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: baseTitle,
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'Product',
+        name: item.name,
+        url: item.slug ? `https://suprime.xyz/producto/${item.slug}` : undefined,
+        image: item.image_url,
+      },
+    })),
+  };
+}
+
 type CatalogPageProps = {
   kind: 'categoria' | 'departamento' | 'subdepartamento';
   addedToCartId: string | null;
@@ -81,12 +100,62 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishli
           setItems(payload.data?.products || []);
         }
         setStatus('ready');
+        // Inject JSON-LD ItemList for SEO
+        if (items.length > 0) {
+          const jsonLd = generateItemListJsonLd(items.slice(0, 50), `${KIND_LABEL[kind]}: ${title}`);
+          const script = document.createElement('script');
+          script.type = 'application/ld+json';
+          script.text = JSON.stringify(jsonLd);
+          script.id = 'itemlist-json-ld';
+          const old = document.getElementById('itemlist-json-ld');
+          if (old) old.remove();
+          document.head.appendChild(script);
+        }
       } catch {
         setStatus('error');
       }
     };
     load();
   }, [apiUrl, kind, slug]);
+
+  // Cleanup JSON-LD on unmount
+  useEffect(() => {
+    return () => {
+      const script = document.getElementById('itemlist-json-ld');
+      if (script) script.remove();
+    };
+  }, []);
+
+  // Update og:image and twitter:image for social sharing
+  useEffect(() => {
+    if (!items.length) return;
+    const updateMeta = (property: string, content: string) => {
+      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('property', property);
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+    const updateTwitterMeta = (name: string, content: string) => {
+      let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', name);
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+    const ogImage = items[0]?.image_url || 'https://suprime.xyz/og-cover.jpg';
+    updateMeta('og:image', ogImage);
+    updateMeta('og:title', `${KIND_LABEL[kind]}: ${title}`);
+    updateMeta('og:description', subtitle || '');
+    updateMeta('og:url', `${window.location.origin}${window.location.pathname}`);
+    updateMeta('twitter:image', ogImage);
+    updateMeta('twitter:title', `${KIND_LABEL[kind]}: ${title}`);
+    updateMeta('twitter:description', subtitle || '');
+  }, [items, kind, title, subtitle]);
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
   const visible = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
