@@ -5066,6 +5066,8 @@ button, .btn {
   height: 100%;
   cursor: zoom-in;
   display: block;
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .pdp-zoom-btn img {
