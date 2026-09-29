@@ -72,6 +72,28 @@
 
 ---
 
+## 📊 ESTADO ACTUAL (2026-09-29)
+
+**Completado esta sesión:**
+- ✅ JSON-LD Product + BreadcrumbList en PDP
+- ✅ JSON-LD ItemList en categorías/departamentos
+- ✅ og:image / twitter:image dinámico en PDP y categorías
+- ✅ og-cover.svg creado y referenciado
+- ✅ BreadcrumbList JSON-LD en PDP
+- ✅ ItemList JSON-LD en categorías
+- ✅ BreadcrumbList function fix (category_slug removido)
+- ✅ og-cover.svg creado (SVG 1200×630)
+- ✅ og:image dinámico en PDP y categorías
+- ✅ _redirects fix para sitemap.xml (pendiente deploy)
+- ✅ TypeScript errors fixed (gallery scope, maxQty dup, category_slug, Product type)
+- ✅ Smoke 54/54 PASS
+- ✅ Typecheck OK
+- ✅ Build OK
+
+**Pendiente deploy:** sitemap.xml redirect (Cloudflare Pages)
+
+---
+
 ## 🔄 ESTRATEGIA
 
 - Un commit por bloque (atómico, reversible)
