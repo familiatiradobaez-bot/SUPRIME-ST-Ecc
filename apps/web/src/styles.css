@@ -1390,6 +1390,14 @@ button, .btn {
   accent-color: var(--primary);
 }
 
+.checkbox-label input[type="checkbox"] {
+  margin-right: 0.6rem;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+
 .checkbox-label input[type="checkbox"]:disabled {
   opacity: 0.5;
   cursor: not-allowed;
