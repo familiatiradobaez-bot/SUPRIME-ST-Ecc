@@ -5,28 +5,42 @@
 - **Puerto Frontend (Vite)**: `5173`
 - **Puerto Backend (Node.js + tsx)**: `8789`
 
-## URLs para Acceder desde tu Celular (Túnel Cloudflare - Recomendado)
+## URLs para Acceder desde tu Celular (Red Local)
 
 ### Frontend (Interfaz de la Tienda)
 ```
-https://phases-exceptional-wheels-sunset.trycloudflare.com
-```
-
-### Backend (API)
-```
-https://difference-january-packets-alt.trycloudflare.com/api/v1
-```
-
-## URLs para Accesar desde tu PC (Red Local)
-
-### Frontend (Interfaz de la Tienda)
-```
-http://192.168.0.105:5176
+http://192.168.0.105:5173
 ```
 
 ### Backend (API)
 ```
 http://192.168.0.105:8789/api/v1
+```
+
+También está el script, que imprime lo mismo:
+```
+npm run network-info
+```
+
+> **Nota sobre los túneles.** Este documento antes recomendaba abrir túneles de
+> Cloudflare (`cloudflared tunnel --url ...`) y traía dos URLs concretas de
+> sesiones antiguas. Se han quitado por dos motivos:
+>
+> 1. **Esos subdominios ya no existen.** Los túneles son efímeros: al cerrar la
+>    sesión mueren.
+> 2. **Dejaban un agujero en la API.** Los comodines `*.trycloudflare.com`,
+>    `*.ngrok-free.dev` y `*.pages.dev` estaban en la lista de orígenes
+>    permitidos de producción, así que **cualquier** túnel gratis de cualquiera
+>    pasaba la validación de CSRF/CORS igual que `suprime.xyz`. Se comprobó en
+>    producción antes de quitarlo.
+>
+> La red local no necesita nada de eso. Si algún día hace falta un túnel, se abre
+> y se añade **su dominio exacto** a `ORIGENES_DESARROLLO` en
+> `apps/api/src/app.ts` (y a `allowedHosts` de `vite.config.ts`), nunca un comodín.
+
+## URLs para Acceder desde tu PC (Red Local)
+```
+http://localhost:5173        (o http://127.0.0.1:5173)
 ```
 
 ## Requisitos Previos

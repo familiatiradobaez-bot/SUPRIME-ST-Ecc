@@ -40,30 +40,118 @@ export function createApp() {
     health: '/api/v1/health',
   }));
 
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://192.168.0.105:5176',
-    'http://192.168.0.105:5173',
+  // ── Orígenes permitidos ──────────────────────────────────────────────────
+  //
+  // Se separan los de producción de los de desarrollo porque hasta ahora todo
+  // estaba mezclado y en un solo array, con lo que los comodines de desarrollo
+  // seguían activos EN PRODUCCIÓN.
+  //
+  // Lo que se quita de producción, y por qué importa:
+  //   *.trycloudflare.com y *.ngrok-free.dev  -> túneles gratis, se crean en
+  //     segundos y sin cuenta. Cualquiera podía poner su origen ahí y pasar
+  //     la validación igual que suprime.xyz. COMODÍN ELIMINADO: si hace falta un
+  //     túnel se añade SU dominio exacto.
+  //   localhost / 127.0.0.1 / 192.168.*       -> una página servida desde el
+  //     propio ordenador del visitante pasaba el control. Se mantienen FUERA de
+  //     producción (que es lo que se arregla aquí) porque son el flujo de
+  //     desarrollo documentado: `npm run dev` y abrir la web desde el móvil.
+  //   *.pages.dev                             -> cualquier proyecto de Pages de
+  //     cualquier cuenta de Cloudflare. COMODÍN ELIMINADO también: el dominio de
+  //     SUPRIME sigue entrando por su nombre exacto, arriba.
+  //
+  // Severidad: BAJA, no alta, y conviene decirlo claro para no inflarlo. Esta
+  // API autentica con `Authorization: Bearer <token>` guardado en localStorage,
+  // que una página de otro origen no puede leer, y la cookie `session_token` es
+  // HttpOnly + SameSite=Strict, que el navegador ni siquiera manda cross-site
+  // (verificado: /admin/* solo con cookie responde 401). O sea que la
+  // autenticación no era vulnerable a esto. Lo que estaba anulada es la barrera
+  // de defensa en profundidad que este middleware pone, y que existe para
+  // proteger si algún día se mete un endpoint que sí use la cookie.
+  //
+  // Comprobado contra la producción ANTES de este cambio, con el smoke: un
+  // origen `*.ngrok-free.dev`, `*.pages.dev` y `http://localhost:5173` pasaban
+  // la validación (respondían 401 INVALID_CREDENTIALS, o sea que la petición
+  // llegaba al handler) y un `pages.dev` ajeno recibía Access-Control-Allow-Origin
+  // con credenciales.
+  //
+  // Nota para despliegues de vista previa: dejan de funcionar contra la API de
+  // producción, que es lo correcto. Si hacen falta, hay que añadir su dominio
+  // exacto arriba o apuntarlos a una API que no sea de producción.
+  const ORIGENES_PRODUCCION = [
     'https://suprime.xyz',
     'https://www.suprime.xyz',
     'https://suprime-st-ecc.pages.dev',
-    'https://anew-straw-goggles.ngrok-free.dev',
     'https://api.suprime.xyz',
   ];
+
+  // Solo se usan con APP_ENV distinto de "production".
+  //
+  // No se listan puertos: se acepta cualquier puerto de localhost, 127.0.0.1 y
+  // de la red local. Vite va con `strictPort: false`, o sea que si el 5173 esta
+  // ocupado se va al 5174, 5175... y una lista fija se quedaba corta sola. Y la
+  // red local es el flujo documentado en NETWORK_ACCESS.md y en el script
+  // `npm run network-info`, que es abrir http://192.168.0.105:5173 desde el
+  // movil.
+  //
+  // Lo que se ha quitado de aqui, por muerto o por innecesario:
+  //   https://anew-straw-goggles.ngrok-free.dev   -> un tunel de una sesion
+  //     antigua, ese subdominio ya no existe.
+  //   http://192.168.0.105:5176                   -> solo se documenta el 5173.
+  //   *.trycloudflare.com y *.ngrok-free.dev       -> tuneles de una vez, se
+  //     abren a mano cuando hacen falta. Estaban como comodin permanente, lo
+  //     que hacia que CUALQUIER tunel de cualquiera pasara la validacion. Si
+  //     vuelve a hacer falta uno, se abre el tunel y se anade SU dominio exacto
+  //     arriba; no un comodin.
+  const ORIGENES_DESARROLLO: string[] = [];
+
+  /**
+   * Patrones que solo valen FUERA de producción.
+   *
+   * Quedan localhost, 127.0.0.1 y la red local, que son el flujo de desarrollo
+   * documentado (NETWORK_ACCESS.md y `npm run network-info`, que es abrir la
+   * web desde el móvil). Se cubren por patrón y no por puerto porque Vite usa
+   * `strictPort: false`: si el 5173 está ocupado se va al 5174, 5175...
+   *
+   * Ya NO están aquí los comodines de túnel (`.trycloudflare.com`,
+   * `.ngrok-free.dev`) ni el de `.pages.dev`. Eran el agujero: los tres dejaban
+   * pasar a cualquier túnel gratis o a cualquier proyecto de Pages de cualquier
+   * cuenta. Si algún día hace falta un túnel, se abre y se añade SU dominio
+   * exacto a ORIGENES_DESARROLLO.
+   */
+  const comodinesDesarrollo = (u: string): boolean =>
+    u.includes('localhost:') ||
+    u.includes('127.0.0.1:') ||
+    u.includes('192.168.');
+
+  /**
+   * Origen permitido, según el entorno. Se evalúa por petición porque APP_ENV
+   * vive en context.env y no se puede resolver una sola vez al arrancar.
+   */
+  const origenPermitido = (valor: string | undefined, esProduccion: boolean): boolean => {
+    if (!valor) return false;
+    let u: string;
+    try {
+      u = valor.startsWith('http') ? new URL(valor).origin : valor;
+    } catch {
+      return false;
+    }
+    if (ORIGENES_PRODUCCION.includes(u)) return true;
+    if (esProduccion) return false;
+    return ORIGENES_DESARROLLO.includes(u) || comodinesDesarrollo(u);
+  };
 
   // Security headers + CORS middleware (manual CORS to avoid body consumption)
   api.use('*', async (context, next) => {
     const requestOrigin = context.req.header('Origin');
+    const esProduccion = context.env.APP_ENV === 'production';
 
     // CORS headers
     if (requestOrigin) {
-      if (allowedOrigins.includes(requestOrigin) ||
-          requestOrigin.endsWith('.pages.dev') ||
-          requestOrigin.endsWith('.trycloudflare.com') ||
-          requestOrigin.endsWith('.ngrok-free.dev')) {
+      // Misma lista que el CSRF y por el mismo motivo: con los comodines de
+      // túnel, cualquier origen de trycloudflare/ngrok se llevaba un
+      // "Access-Control-Allow-Origin" con credenciales. En produccion solo los
+      // orígenes exactos de SUPRIME.
+      if (origenPermitido(requestOrigin, esProduccion)) {
         context.header('Access-Control-Allow-Origin', requestOrigin);
         context.header('Access-Control-Allow-Credentials', 'true');
         context.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -73,7 +161,15 @@ export function createApp() {
     }
 
     // Security headers
-    context.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://*.trycloudflare.com https://*.ngrok-free.dev https://*.pages.dev http://localhost:* http://127.0.0.1:* http://192.168.0.105:8789 https://api.qrserver.com;");
+    // El CSP tambien llevaba los origenes de desarrollo, incluidos los
+    // comodines de tunel. Se quitan tambien en la variante de desarrollo: un
+    // un CSP no necesita abrir la conexion a un tunel cualquiera para que
+    // funcione `npm run dev`, solo a la API de destino (8789 en local, la de
+    // produccion cuando se prueba contra ella).
+    const csp = esProduccion
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://api.qrserver.com;"
+      : "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net http://localhost:* http://127.0.0.1:* http://192.168.*:8789 https://api.qrserver.com;";
+    context.header('Content-Security-Policy', csp);
     context.header('X-XSS-Protection', '1; mode=block');
     context.header('X-Frame-Options', 'DENY');
     context.header('X-Content-Type-Options', 'nosniff');
@@ -117,6 +213,7 @@ export function createApp() {
       return next();
     }
 
+    const esProduccion = context.env.APP_ENV === 'production';
     const origin = context.req.header('Origin');
     const referer = context.req.header('Referer');
 
@@ -126,23 +223,7 @@ export function createApp() {
       return next();
     }
 
-    const isAllowed = (val: string | undefined): boolean => {
-      if (!val) return false;
-      try {
-        const u = val.startsWith('http') ? new URL(val).origin : val;
-        return allowedOrigins.includes(u) ||
-          u.endsWith('.pages.dev') ||
-          u.endsWith('.trycloudflare.com') ||
-          u.endsWith('.ngrok-free.dev') ||
-          u.includes('localhost:') ||
-          u.includes('127.0.0.1:') ||
-          u.includes('192.168.');
-      } catch {
-        return false;
-      }
-    };
-
-    if (!isAllowed(origin) && !isAllowed(referer)) {
+    if (!origenPermitido(origin, esProduccion) && !origenPermitido(referer, esProduccion)) {
       return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
     }
 

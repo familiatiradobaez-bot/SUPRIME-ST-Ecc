@@ -345,6 +345,59 @@ check('CSRF: POST con el Origin del front NO se bloquea', r.status !== 403, `blo
 r = await F(`${API}/health`, { headers: { 'Origin': 'https://evil.example' } });
 check('CSRF: GET no se bloquea nunca', r.status === 200, r.status);
 
+// Orígenes de TERCEROS que no pueden pasar. Antes vivían en el mismo array que
+// los de producción, así que sus comodines seguían activos en producción: un
+// túnel trycloudflare o ngrok (gratis, sin cuenta) colocaba el origen ahí y
+// pasaba el control igual que suprime.xyz.
+//
+// Antes de quitar los comodines se comprobó contra producción que pasaban de
+// verdad: respondían 401 INVALID_CREDENTIALS (o sea que la petición llegaba al
+// handler) en vez de 403 FORBIDDEN, y un pages.dev ajeno recibía
+// Access-Control-Allow-Origin con credenciales.
+//
+// Se mantienen como guardia de regresión: si alguien vuelve a meter un comodín
+// o un origen de desarrollo en la lista de producción, estos checks lo cazan.
+// Nota de severidad: la autenticación NO era vulnerable a esto (Bearer en
+// localStorage, que otro origen no puede leer, y cookie HttpOnly+SameSite=Strict
+// que el navegador ni manda cross-site). Lo que estaba anulada es la barrera de
+// defensa en profundidad del middleware.
+for (const [nombre, origen] of [
+  ['tunel trycloudflare', 'https://tunel-aleatorio.trycloudflare.com'],
+  ['tunel ngrok', 'https://tunel-aleatorio.ngrok-free.dev'],
+  ['otro proyecto de Pages', 'https://sitio-de-terceros.pages.dev'],
+  ['localhost de la victima', 'http://localhost:5173'],
+  ['IP local de la victima', 'http://192.168.1.50:5173'],
+]) {
+  r = await F(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': origen }, body: JSON.stringify({ email: 'csrf-smoke@example.com', password: 'WrongAa1!' }) });
+  const d = await j(r);
+  check(`origen de tercero rechazado en produccion (${nombre})`, r.status === 403 && d.error === 'FORBIDDEN', `${r.status} ${d.error}`);
+}
+
+// Y el dominio de Pages de SUPRIME debe SEGUIR entrando: ahora vale por su
+// nombre exacto y no por el comodin *.pages.dev. Si este check falla, el
+// despliegue de vista previa se ha roto.
+r = await F(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': 'https://suprime-st-ecc.pages.dev' }, body: JSON.stringify({ email: 'csrf-smoke@example.com', password: 'WrongAa1!' }) });
+check('CSRF: el dominio de Pages de SUPRIME sigue permitido', r.status !== 403, `bloqueado con ${r.status}`);
+
+// CORS: un origen de tercero no debe recibir Access-Control-Allow-Origin con
+// credenciales. Antes lo recibía por los mismos comodines.
+for (const [nombre, origen] of [
+  ['tunel trycloudflare', 'https://atacante.trycloudflare.com'],
+  ['tunel ngrok', 'https://atacante.ngrok-free.dev'],
+  ['otro proyecto de Pages', 'https://sitio-de-terceros.pages.dev'],
+  ['localhost', 'http://localhost:5173'],
+]) {
+  r = await F(`${API}/health`, { headers: { 'Origin': origen } });
+  check(`CORS: sin Access-Control-Allow-Origin para origen de desarrollo (${nombre})`, !r.headers.get('access-control-allow-origin'), r.headers.get('access-control-allow-origin') || 'sin cabecera');
+}
+r = await F(`${API}/health`, { headers: { 'Origin': frontOrigin } });
+check('CORS: el Origin del front SI recibe Access-Control-Allow-Origin', r.headers.get('access-control-allow-origin') === frontOrigin, r.headers.get('access-control-allow-origin') || 'sin cabecera');
+
+// El CSP de produccion no debe incluir los origenes de desarrollo.
+r = await F(`${API}/health`);
+const csp = r.headers.get('content-security-policy') || '';
+check('CSP: sin tuneles ni localhost en produccion', !/trycloudflare|ngrok|localhost|127\.0\.0\.1|192\.168|pages\.dev/.test(csp), csp.slice(0, 120));
+
 console.log('== Password reset ==');
 r = await F(`${API}/auth/admin-stepup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ code: '000000' }) });
 checkOrSkip(authed, 'admin-stepup código malo 401', r.status === 401, r.status);
