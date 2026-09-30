@@ -5,6 +5,7 @@ import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
 import { isSafetyLockOn } from '../../lib/pricing';
 import { checkRateLimit, peekRateLimit, clearRateLimit } from '../../lib/rate-limit';
+import { cifrarSecreto, descifrarSecreto, estaCifrado } from '../../lib/secrets-box';
 
 // Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
 // Sin SMS de momento: valida formato, no titularidad (ver post-lanzamiento).
@@ -97,30 +98,94 @@ async function consumeLoginFailure(env: Bindings, ip: string, accountKey: string
   if (accountKey) await rlAllowed(env, 'loginAccount', accountKey);
 }
 
-async function hashPassword(password: string, salt?: string): Promise<string> {
-  const useSalt = salt || crypto.randomUUID().replace(/-/g, '');
+// ── Contraseñas ────────────────────────────────────────────────────────────
+//
+// PBKDF2-HMAC-SHA256 con salt por usuario. El formato del hash lleva el número
+// de iteraciones dentro, para poder subirlos sin invalidar las cuentas que ya
+// existen:
+//
+//   pbkdf2-sha256$<iteraciones>$<salt>$<hash>
+//
+// El formato ANTERIOR era solo "<salt>:<hash>" y usaba 100.000 iteraciones.
+// verifyPassword sigue aceptándolo y devuelve `necesitaRehash: true` para que
+// el login lo reescriba con el numero actual. Ese rehash al iniciar sesión es lo
+// que permite subir a 600.000 sin dejar fuera a nadie: cada usuario queda
+// migrado la primera vez que entra.
+//
+// Por que 600.000: la guia de OWASP para PBKDF2-HMAC-SHA256 pide 600.000. Con
+// 100.000 no estaba roto, pero una contraseña robada de una copia antigua se
+// craquea bastante mas rapido. Notar que PBKDF2 es intencionadamente lento: por
+// eso el numero va DENTRO del hash y no en el codigo, para que subirlo no rompa
+// cuentas.
+// Por que 100.000 y no los 600.000 que recomienda OWASP, y por que NO es
+// un capricho. Medido contra produccion: la implementacion de Web Crypto de
+// Cloudflare Workers RECHAZA mas de 100.000 iteraciones, con este error y sin
+// dejar configurarlo de otra manera:
+//
+//   NotSupportedError: Pbkdf2 failed: iteration counts above 100000
+//   are not supported (requested 600000).
+//
+// No es el limite de CPU: la peticion gastaba 14 ms de CPU y lo que falla es la
+// propia funcion. Ningun plan lo cambia. Es un tope de la plataforma.
+//
+// Que pasara si se sube por encima: el registro de usuarios responde 500
+// (ocurre justo al hashear) y NADIE PUEDE CREAR UNA CUENTA. Medido.
+//
+// Por eso el numero va DENTRO del hash y el rehash al iniciar sesion. Asi, si
+// algun dia se cambia de plataforma o se mete argon2id en WASM, se sube el
+// numero aqui y las cuentas existentes se migran solas al entrar, sin dejar
+// fuera a nadie.
+//
+// ADVERTENCIA: no subir ITERACIONES por encima de 100.000 en este Worker sin
+// verificar antes que la plataforma lo acepta. Rompe el registro.
+/** Iteraciones actuales. Tope de la plataforma: ver la nota de arriba. */
+const ITERACIONES = 100_000;
+/** Iteraciones con las que se skipearon las cuentas existentes (mismo valor). */
+const ITERACIONES_ANTES = 100_000;
+
+/** Deriva el hash en hexadecimal. Es el nucleo, sin formato alrededor. */
+async function derivar(password: string, salt: string, iterations: number): Promise<string> {
   const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  );
-  const hashBuffer = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: encoder.encode(useSalt), iterations: 100000, hash: 'SHA-256' },
+  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const buf = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: encoder.encode(salt), iterations, hash: 'SHA-256' },
     keyMaterial,
-    256
+    256,
   );
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `${useSalt}:${hashHex}`;
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  const [salt] = storedHash.split(':');
-  const newHash = await hashPassword(password, salt);
-  return newHash === storedHash;
+async function hashPassword(password: string, salt?: string, iterations: number = ITERACIONES): Promise<string> {
+  const useSalt = salt || crypto.randomUUID().replace(/-/g, '');
+  const hex = await derivar(password, useSalt, iterations);
+  return `pbkdf2-sha256$${iterations}$${useSalt}$${hex}`;
+}
+
+type Verificacion = { ok: boolean; necesitaRehash: boolean };
+
+/**
+ * Compara contra el hash guardado y dice si hay que rehashear.
+ *
+ * Se compara SIEMPRE sobre el hexadecimal derivado, nunca sobre la cadena
+ * completa: si se comparara la cadena y el formato hubiera cambiado, el
+ * resultado seria "no coincide" para todos y nadie podria entrar. Eso ya paso
+ * una vez al subir esto (login 401 en todo el smoke) y por eso derivar() esta
+ * separado de hashPassword().
+ */
+async function verifyPassword(password: string, storedHash: string): Promise<Verificacion> {
+  if (storedHash.startsWith('pbkdf2-sha256$')) {
+    const [, iterStr, salt, esperado] = storedHash.split('$');
+    const iterations = Number(iterStr) || ITERACIONES;
+    const hex = await derivar(password, salt, iterations);
+    return { ok: hex === esperado, necesitaRehash: iterations < ITERACIONES };
+  }
+  // Formato antiguo "<salt>:<hashHex>" con 100.000 iteraciones. El salt es un
+  // UUID sin guiones, asi que no contiene ':' y el corte es seguro.
+  const [salt, esperadoHex] = storedHash.split(':');
+  if (!salt || !esperadoHex) return { ok: false, necesitaRehash: false };
+  const hex = await derivar(password, salt, ITERACIONES_ANTES);
+  const ok = hex === esperadoHex;
+  return { ok, necesitaRehash: ok };
 }
 
 function generateId(): string {
@@ -357,6 +422,27 @@ function concatLegacy(a: Uint8Array, b: Uint8Array): Uint8Array {
   result.set(a);
   result.set(b, a.length);
   return result;
+}
+
+/**
+ * Si el secreto TOTP de este usuario todavia esta en claro, lo reescribe
+ * cifrado. Se llama solo DESPUES de verificar un codigo con exito, o sea que si
+ * algo falla al cifrar no se rompe el 2FA de nadie: se traga el error y sigue.
+ */
+async function migrarSecretoSiHaceFalta(
+  env: Bindings,
+  userId: string,
+  secretEnColumna: string,
+  secretoClaro: string,
+): Promise<void> {
+  if (estaCifrado(secretEnColumna)) return;
+  try {
+    const cifrado = await cifrarSecreto(secretoClaro, env.TOTP_ENCRYPTION_KEY);
+    await env.DB.prepare('UPDATE user_totp SET secret = ? WHERE user_id = ?').bind(cifrado, userId).run();
+  } catch {
+    // Sin clave, o lo que sea. No es motivo para tumbar el login: el secreto
+    // sigue funcionando en claro y se reintentara en el proximo uso.
+  }
 }
 
 export const authRoutes = new Hono<{ Bindings: Bindings }>();
@@ -624,12 +710,31 @@ authRoutes.post('/login', async (context) => {
   } | null;
 
   // Sin password (cuenta solo-Google) -> 401, nunca 500
-  if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+  if (!user || !user.password_hash) {
+    await consumeLoginFailure(context.env, clientIp, accountKey);
+    return context.json({ error: 'INVALID_CREDENTIALS' }, 401);
+  }
+
+  const verif = await verifyPassword(password, user.password_hash);
+  if (!verif.ok) {
     // Fallo: se consumen los dos contadores. Un atacante con una lista de
     // correos agota el de la cuenta objetivo; uno con una lista de claves
     // desde una IP agota el de la IP.
     await consumeLoginFailure(context.env, clientIp, accountKey);
     return context.json({ error: 'INVALID_CREDENTIALS' }, 401);
+  }
+
+  // Rehash al iniciar sesión: si la contraseña venía del formato antiguo o con
+  // menos iteraciones, se reescribe con las actuales. Es lo que permite haber
+  // subido de 100.000 a 600.000 sin dejar fuera a nadie: cada cuenta queda
+  // migrada la primera vez que su dueño entra. Si falla, no se tumba el login.
+  if (verif.necesitaRehash) {
+    try {
+      const nuevo = await hashPassword(password);
+      await context.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(nuevo, user.id).run();
+    } catch {
+      // El login sigue siendo válido; solo no se ha migrado el hash.
+    }
   }
 
   // Acierto: el cubo de la cuenta se vacía. Tres tecleos y luego entrar bien
@@ -710,6 +815,9 @@ authRoutes.post('/admin-stepup', async (context) => {
     return context.json({ error: 'INVALID_INPUT', message: 'Código de 6 dígitos requerido' }, 400);
   }
 
+  // El secreto puede venir cifrado (formato enc1:...) o en claro si la cuenta
+  // es anterior al cifrado. descifrarSecreto devuelve el texto tal cual cuando no
+  // lleva prefijo, asi que ambos casos pasan por aqui igual.
   const totpRecord = await context.env.DB.prepare(
     'SELECT secret, last_counter FROM user_totp WHERE user_id = ? AND enabled = 1'
   ).bind(session.user_id).first() as { secret: string; last_counter: number } | null;
@@ -718,11 +826,17 @@ authRoutes.post('/admin-stepup', async (context) => {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto. Revisa la hora de tu teléfono y usa el código actual.' }, 401);
   }
 
+  const totpSecret = await descifrarSecreto(totpRecord.secret, context.env.TOTP_ENCRYPTION_KEY);
+
   // Anti-replay: rechazar códigos de ventanas ya usadas
-  const check = verifyTOTPWithCounter(code, totpRecord.secret as string);
+  const check = verifyTOTPWithCounter(code, totpSecret);
   if (!check.ok || check.counter <= (totpRecord.last_counter ?? -1)) {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto o ya usado. Usa el código actual.' }, 401);
   }
+
+  // Migración perezosa a cifrado: la primera vez que este usuario usa su 2FA con
+  // éxito, su secreto deja de estar en claro. Nadie tiene que reconfigurar nada.
+  await migrarSecretoSiHaceFalta(context.env, session.user_id, totpRecord.secret, totpSecret);
 
   const now = Math.floor(Date.now() / 1000);
   await context.env.DB.batch([
@@ -868,9 +982,13 @@ authRoutes.post('/me/totp/setup', async (context) => {
     }
   }
 
-  // Generate TOTP secret (32 bytes hex = 64 chars)
   // Secreto base32 de 160 bits (estándar otpauth, compatible con Authenticator/Authy)
   const secret = generateTotpSecret();
+
+  // Se guarda CIFRADO (ver lib/secrets-box.ts). Se devuelve en claro al cliente
+  // porque lo necesita para el QR, pero en la base no puede quedar en texto
+  // plano: quien se lleve D1 se llevaría la semilla del 2FA de todo el mundo.
+  const secretGuardado = await cifrarSecreto(secret, context.env.TOTP_ENCRYPTION_KEY);
 
   // Store secret temporarily (not enabled until verified)
   await context.env.DB.prepare(
@@ -880,7 +998,7 @@ authRoutes.post('/me/totp/setup', async (context) => {
        secret = excluded.secret,
        enabled = 0,
        created_at = datetime('now')`
-  ).bind(session.user_id, secret).run();
+  ).bind(session.user_id, secretGuardado).run();
 
   // Generate otpauth URI for QR code
   const user = await context.env.DB.prepare(
@@ -920,14 +1038,14 @@ authRoutes.post('/me/totp/verify', async (context) => {
 
   const totpRecord = await context.env.DB.prepare(
     'SELECT secret FROM user_totp WHERE user_id = ? AND enabled = 0'
-  ).bind(session.user_id).first();
+  ).bind(session.user_id).first() as { secret: string } | null;
 
   if (!totpRecord) {
     return context.json({ error: 'NO_TOTP_SETUP' }, 400);
   }
 
-  // Verify TOTP code (con anti-replay)
-  const enableCheck = verifyTOTPWithCounter(body.code as string, totpRecord.secret as string);
+  // Ver TOTP code (con anti-replay). El secreto se descifra si viene cifrado.
+  const enableCheck = verifyTOTPWithCounter(body.code as string, await descifrarSecreto(totpRecord.secret, context.env.TOTP_ENCRYPTION_KEY));
   if (!enableCheck.ok) {
     return context.json({ error: 'INVALID_TOTP_CODE' }, 401);
   }
@@ -1140,11 +1258,16 @@ authRoutes.post('/google-2fa', async (context) => {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto' }, 401);
   }
 
-  const { secret, last_counter } = totpRecord;
-  const check = verifyTOTPWithCounter(code, secret);
-  if (!check.ok || check.counter <= (totpRecord.last_counter ?? -1)) {
+  // El secreto se descifra si viene cifrado; si es anterior al cifrado, se usa
+  // tal cual y de paso se migra (ver migrarSecretoSiHaceFalta).
+  const { last_counter } = totpRecord;
+  const secretClaro = await descifrarSecreto(totpRecord.secret, context.env.TOTP_ENCRYPTION_KEY);
+  const check = verifyTOTPWithCounter(code, secretClaro);
+  if (!check.ok || check.counter <= (last_counter ?? -1)) {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto o ya usado. Usa el código actual.' }, 401);
   }
+
+  await migrarSecretoSiHaceFalta(context.env, user.id, totpRecord.secret, secretClaro);
 
   const token = generateSessionToken();
   const expiresAt = now + 7 * 24 * 60 * 60;

@@ -29,6 +29,12 @@ export type Bindings = {
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
   RESEND_API_KEY?: string;
+  /**
+   * Clave de 32 bytes en base64url con la que se cifra el secreto TOTP en D1.
+   * Vive en un secreto del Worker, NUNCA en D1 ni en wrangler.toml: si estuviera
+   * junto al dato, cifrar no serviría de nada. Ver lib/secrets-box.ts.
+   */
+  TOTP_ENCRYPTION_KEY?: string;
 };
 
 export function createApp() {
