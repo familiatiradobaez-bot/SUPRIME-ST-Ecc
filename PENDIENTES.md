@@ -67,8 +67,51 @@ CSS no baja, el import dinámico **entero** falla, no solo la CSS.
 | `vite:preloadError` → recarga una vez | El archivo que faltaba ya está; si insiste, lo muestra el ErrorBoundary (sin bucle) |
 | `admin.css` vuelve al bundle inicial | El panel pasa a ser un único chunk de JS sin dependencia de CSS. Cuesta 16,7 KB crudos / 2,5 KB gzip (CSS inicial 134 → 148 KB) |
 | **Cache Rule de `/assets/*` eliminada** | Una CDN que cachea un fallback con TTL de un año bajo una URL de asset es peor que no cachear en el edge. Los assets siguen con `max-age` de un año **en el navegador** (content-hash) |
-| `tools/purge-assets.mjs` + paso en CI | Purga `/assets/*` tras el despliegue; sana lo que ya quedara envenenado |
+| `tools/purge-assets.mjs` + paso en CI | Purga `/assets/*` **y los ficheros de la raíz**, y ahora **espera al despliegue** (ver más abajo) |
 | `waitForDeploy()` en el E2E | Si un chunk se sirve como HTML, falla con un mensaje claro en vez de un error de MIME sin pistas |
+
+### 🔴 Lo que salió al cambiar el logo: la caché de la raíz tenía TTL de un año
+
+Al cambiar el icono de marca se vio que **el icono nuevo no llegaba a quien ya había visitado la
+web**. No es un error de nada: es caché, y Cloudflare no avisa.
+
+- **Pages sirve la raíz con `max-age=31536000` por defecto.** Los bundles de `/assets/*` llevan hash,
+  así que un año no importa. Pero `/favicon-32.png`, `/icon-192.png`, `/rayo-128.png`, `/config.js`
+  **no llevan hash**: cambiar o borrar uno tardaba un año en llegar.
+- **`_headers` no servía para nada en la raíz.** Dos motivos, ambos medidos con una sonda
+  (`X-H-Probe`, cabecera que Cloudflare no toca): el fichero estaba **corrupto** (los acentos
+  escritos como bytes rotos, y Pages lo parsea línea a línea), y además yo **dupliqué dos rutas**
+  (`/favicon-32.png` y `/rayo-128.png`), cosa que hace que Pages aplique un bloque y descarte el
+  otro. Aun arreglado eso, **Cloudflare sobrescribe el `Cache-Control`**: la sonda aparecía, el
+  `Cache-Control` no.
+- **Solución: `tools/cache-rule-root.mjs`** crea la Cache Rule `root-static-short-cache` en el
+  ruleset de la zona (que estaba vacío). `browser_ttl` 1 h y `edge_ttl` 1 día para los 13 ficheros de
+  la raíz. Los bundles siguen a un año, que es lo correcto.
+- **La purga de CI se ejecutaba antes de que existiera el despliegue.** Pages despliega en un
+  proceso asíncrono de ~5 min; la purga corría a los 3-4. Medido: purga a las 17:32, despliegue a
+  las 17:35, y `/icon.svg` seguía sirviendo un fichero ya borrado del repo. Ahora
+  `purge-assets.mjs --espera-deploy` espera a `deploy=success` del commit actual.
+- **Lección:** `?cb=` **no** sirve para saltarse la caché. Pages incluye el query string en la
+  búsqueda del asset, así que `config.js?cb=1` cae al fallback de la SPA y devuelve `text/html`.
+
+---
+
+## 🚧 Aparcado · CSS de admin duplicado entre `styles.css` y `styles/admin.css`
+
+Quedan **44 selectores de admin definidos en las dos hojas**, que se cargan las dos
+(`admin.css` va la última en `main.tsx`, así que sus reglas ganan). Consequences today:
+
+- **No rompe nada**: por el orden de importación, cuando ambas definen la misma propiedad gana
+  `admin.css`.
+- **Ya ha causado un bug real** (2026-09-30): `.primary-badge` tenía `top` en `styles.css` y
+  `bottom` en `admin.css`. Con los dos a la vez, un absoluto de altura automática se estira de
+  arriba abajo y ocupaba el **58% de la miniatura del producto**, con un cuadro morado encima de la
+  foto. Se quitó la copia de `styles.css` y quedó en 12%.
+- **Unificar las dos hojas sigue aparcado**, y el motivo es el mismo de siempre: es un cambio
+  visual de todo el panel y merece su propia verificación pantalla a pantalla. Se intentó
+  automáticamente y se revirtió: un borrado a ciegas de 46 selectores perdía propiedades
+  (`padding` del sidebar, fondo de los items) y terminó corrompiendo un bloque dentro de un
+  `@media`. El intento automático queda en el historial; la limpieza, a mano.
 
 ---
 
