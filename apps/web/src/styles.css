@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+/* `<picture>` es inline por defecto y rompería los contenedores que miden a su
+   `<img>` hijo (`.pdp-thumb img { height: 100% }`, wrappers con aspect-ratio).
+   Con `display: contents` el `img` participa del layout del padre, así que
+   SmartImage se puede usar sin tocar el CSS de cada componente. */
+picture {
+  display: contents;
+}
+
 :root {
   --primary: #6366f1;
   --primary-dark: #4f46e5;

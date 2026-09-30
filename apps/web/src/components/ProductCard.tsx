@@ -1,5 +1,6 @@
 import type { Product } from '../types';
-import { formatPrice, thumb } from '../lib/api';
+import { formatPrice } from '../lib/api';
+import { SmartImage } from './SmartImage';
 
 type ProductCardProps = {
   product: Product;
@@ -22,16 +23,17 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
       style={onOpen ? { cursor: 'pointer' } : undefined}
     >
       <div className="product-image-wrapper">
-        <img
-          src={thumb(product.image_url)}
-          srcSet={`${thumb(product.image_url, 400)} 400w, ${thumb(product.image_url, 800)} 800w`}
-          sizes="(max-width: 640px) 50vw, 400px"
+        {/* La rejilla es `auto-fill minmax(160px, 1fr)` sobre un contenedor de
+            1400px: en escritorio la tarjeta ronda los 160-200px, no los 400
+            que se pedían antes. Por eso el `srcset` empieza en 200. */}
+        <SmartImage
+          src={product.image_url}
           alt={product.name}
+          widths={[200, 400, 600]}
+          sizes="(max-width: 640px) 46vw, (max-width: 1024px) 24vw, 200px"
           className="product-image"
-          loading="lazy"
-          decoding="async"
-          width="400"
-          height="300"
+          width={400}
+          height={300}
           onError={(e) => {
             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="20"%3E📦%3C/text%3E%3C/svg%3E';
           }}

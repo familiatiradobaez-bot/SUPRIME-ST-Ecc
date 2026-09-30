@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { User, Product } from '../types';
-import { formatPrice, thumb } from '../lib/api';
+import { formatPrice } from '../lib/api';
+import { img } from '../lib/images';
 import { CategoryNav } from './CategoryNav';
 
 type HeaderProps = {
@@ -73,7 +74,7 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
                   className="search-suggest-item"
                   onMouseDown={(e) => { e.preventDefault(); setSuggestOpen(false); onSelectProduct(p); }}
                 >
-                  <img src={thumb(p.image_url, 100)} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src={img(p.image_url, { w: 100 })} alt="" loading="lazy" decoding="async" width="100" height="100" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   <span className="search-suggest-name">{p.name}</span>
                   <span className="search-suggest-price">{formatPrice(p.price_cents, currency)}</span>
                 </button>

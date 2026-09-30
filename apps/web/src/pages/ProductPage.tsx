@@ -4,7 +4,9 @@ import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { formatPrice } from '../lib/api';
+import { img } from '../lib/images';
 import { ProductCard } from '../components/ProductCard';
+import { SmartImage } from '../components/SmartImage';
 import { SkeletonPdp } from '../components/Skeletons';
 
 function generateProductJsonLd(product: Product, gallery: string[], currency: string) {
@@ -148,6 +150,37 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
     };
   }, []);
 
+  // Update og:image and twitter:image for social sharing
+  //
+  // Este efecto va ANTES de los `return` de carga/error a propósito. Estar
+  // debajo hacía que el primer render (skeleton) ejecutara menos hooks que el
+  // render con el producto ya cargado, y React tumbaba el árbol entero con
+  // "Rendered more hooks than during the previous render" (#310): la PDP se
+  // quedaba en blanco en producción. Ningún hook puede ir después de un
+  // `return` condicional.
+  useEffect(() => {
+    if (!product) return;
+    const galleryNow = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
+    if (!galleryNow.length) return;
+    const updateMeta = (property: string, content: string) => {
+      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('property', property);
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+    const ogImage = galleryNow[0];
+    updateMeta('og:image', ogImage);
+    updateMeta('og:title', product.name);
+    updateMeta('og:description', product.description?.slice(0, 150) || '');
+    updateMeta('og:url', `${window.location.origin}/producto/${product.slug}`);
+    updateMeta('twitter:image', ogImage);
+    updateMeta('twitter:title', product.name);
+    updateMeta('twitter:description', product.description?.slice(0, 150) || '');
+  }, [product]);
+
   if (status === 'loading') {
     return (
       <div className="layout-main">
@@ -176,28 +209,6 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
 
   const gallery = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
   const outOfStock = product.stock_quantity === 0;
-
-  // Update og:image and twitter:image for social sharing
-  useEffect(() => {
-    if (!product || !gallery.length) return;
-    const updateMeta = (property: string, content: string) => {
-      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute('property', property);
-        document.head.appendChild(meta);
-      }
-      meta.content = content;
-    };
-    const ogImage = gallery[0];
-    updateMeta('og:image', ogImage);
-    updateMeta('og:title', product.name);
-    updateMeta('og:description', product.description?.slice(0, 150) || '');
-    updateMeta('og:url', `${window.location.origin}/producto/${product.slug}`);
-    updateMeta('twitter:image', ogImage);
-    updateMeta('twitter:title', product.name);
-    updateMeta('twitter:description', product.description?.slice(0, 150) || '');
-  }, [product, gallery]);
   const maxQty = Math.max(1, Math.min(product.stock_quantity, 99));
 
   return (
@@ -225,13 +236,15 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
                   onClick={() => setLightbox(true)}
                   aria-label="Ampliar imagen del producto"
                 >
-                  <img
+                  <SmartImage
                     src={gallery[Math.min(selectedImg, gallery.length - 1)]}
                     alt={product.name}
+                    widths={[400, 800, 1200]}
+                    sizes="(max-width: 900px) 92vw, 640px"
+                    loading="eager"
                     fetchPriority="high"
-                    decoding="async"
-                    width="800"
-                    height="600"
+                    width={800}
+                    height={600}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23333" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="20"%3ESin imagen%3C/text%3E%3C/svg%3E';
                     }}
@@ -256,9 +269,10 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
                     aria-label={`Ver imagen ${i + 1}`}
                   >
                     <img
-                      src={url}
+                      src={img(url, { w: 144, f: 'webp' })}
                       alt=""
                       loading="lazy"
+                      decoding="async"
                       width="72"
                       height="72"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -354,7 +368,9 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
           <div className="lightbox-overlay" onClick={() => setLightbox(false)}>
             <div className="lightbox-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Imagen ampliada de ${product.name}`}>
               <button className="close-btn lightbox-close" onClick={() => setLightbox(false)} aria-label="Cerrar imagen ampliada">✕</button>
-              <img src={gallery[Math.min(selectedImg, gallery.length - 1)]} alt={product.name} />
+              {/* El lightbox se limita a `min(900px, 100%)` de ancho, así que
+                  1200px es de sobra y evita reescalar (upsampling) hacia arriba. */}
+              <img src={img(gallery[Math.min(selectedImg, gallery.length - 1)], { w: 1200 })} alt={product.name} decoding="async" />
               {gallery.length > 1 && (
                 <div className="lightbox-nav">
                   <button onClick={() => setSelectedImg(i => (i - 1 + gallery.length) % gallery.length)} aria-label="Imagen anterior">←</button>

@@ -16,6 +16,7 @@
     "db:seed": "npm --workspace apps/api run db:seed",
     "smoke": "node tests/smoke.mjs",
     "tokens": "node tools/token-check.mjs",
+    "img:check": "node tools/img-check.mjs",
     "backup": "wrangler d1 export DB --remote --output ./backups/d1-backup.sql",
     "backup:local": "wrangler d1 export DB --local --output ./backups/d1-backup-local.sql",
     "network-info": "echo Accede desde tu celular en: && echo http://192.168.0.105:5173"
