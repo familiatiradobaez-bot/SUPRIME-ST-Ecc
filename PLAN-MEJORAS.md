@@ -35,7 +35,7 @@
 
 | # | Issue | Fix | Estado |
 |---|-------|-----|--------|
-| 25 | **No se pueden agregar departamentos ni subdepartamentos desde el panel de admin**. Solo hay lectura (`GET /catalog/departments`); crear jerarquía exige SQL manual en D1 | CRUD admin de catálogo + tab "Catálogo" en el panel | 🔄 Pendiente |
+| 25 | **No se pueden agregar departamentos ni subdepartamentos desde el panel de admin**. Solo hay lectura (`GET /catalog/departments`); crear jerarquía exige SQL manual en D1 | CRUD admin de catálogo + tab "Catálogo" en el panel | ✅ Hecho (commit `75945fb`) |
 
 ### **Desglose tarea #25 — Crear departamentos/subdepartamentos desde admin**
 
@@ -49,15 +49,15 @@
 
 | # | Tarea | Archivos | Complejidad |
 |---|-------|---------|-------------|
-| 25.1 | `GET /admin/catalog` — listar departamentos + subdepartamentos + conteo de productos | `apps/api/src/modules/admin/admin.routes.ts` | Baja |
-| 25.2 | `POST /admin/departments` (name, slug, is_active) | idem | Baja |
-| 25.3 | `POST /admin/subdepartments` (department_id, name, slug) | idem | Baja |
-| 25.4 | `PUT`/`DELETE` de ambos (con `ON DELETE CASCADE` ya definido en `0001_initial.sql`) | idem | Media |
-| 25.5 | Quitar `'subdep-demo'` hardcodeado → `subdepartment_id` obligatorio + validado en `POST/PUT /admin/products` | idem | Baja |
-| 25.6 | Tab "Catálogo" 🗂️ en el sidebar admin (formulario + tabla) | `apps/web/src/pages/AdminPage.tsx`, `styles/admin.css` | Media |
-| 25.7 | Selector de subdepartamento (por departamento) en el formulario de producto | idem | Baja |
-| 25.8 | Slug autogenerado + normalizado, con des-dupe (patrón ya existente en `POST /products`) | idem | Baja |
-| 25.9 | Smoke checks nuevos (crear depto → crear subdepto → producto en ese subdepto) | `tests/smoke.mjs` | Media |
+| 25.1 | `GET /admin/catalog` — listar departamentos + subdepartamentos + conteo de productos | `apps/api/src/modules/admin/admin.routes.ts` | ✅ Hecho |
+| 25.2 | `POST /admin/departments` (name, slug, is_active) | idem | ✅ Hecho |
+| 25.3 | `POST /admin/subdepartments` (department_id, name, slug) | idem | ✅ Hecho |
+| 25.4 | `PUT`/`DELETE` de ambos | idem | ✅ Hecho |
+| 25.5 | Quitar `'subdep-demo'` hardcodeado → `subdepartment_id` obligatorio + validado en `POST/PUT /admin/products` | idem | ✅ Hecho |
+| 25.6 | Tab "Catálogo" 🗂️ en el sidebar admin (formulario + tabla) | `apps/web/src/pages/AdminPage.tsx`, `components/CatalogManager.tsx`, `styles/admin.css` | ✅ Hecho |
+| 25.7 | Selector de subdepartamento (por departamento) en el formulario de producto | idem | ✅ Hecho |
+| 25.8 | Slug autogenerado + normalizado, con des-dupe | idem | ✅ Hecho |
+| 25.9 | Smoke checks nuevos (crear depto → crear subdepto → producto en ese subdepto) | `tests/smoke.mjs` | ✅ Hecho (16 checks) |
 
 **Reglas**
 - Permisos: reutilizar el guard de `admin.routes` (misma jerarquía que `/products`; `settings` sigue siendo owner/admin).
@@ -68,7 +68,17 @@
 - Validar en móvil (390×844) y desktop (1440×900) con `MovilLab/panorama.mjs`.
 
 **Criterio de aceptación**
-- Desde el panel, sin SQL, se puede crear un departamento → un subdepartamento → un producto dentro de ese subdepartamento, y el producto aparece en su URL pública de catálogo.
+- ✅ Desde el panel, sin SQL, se puede crear un departamento → un subdepartamento → un producto dentro de ese subdepartamento, y el producto aparece en su URL pública de catálogo.
+  Verificado en navegador (2026-09-30): alta de depto y subdepto, producto creado en el subdepto elegido, y
+  `GET /catalog/subdepartments/sub-de-prueba/products` lo devuelve. Sin overflow horizontal.
+
+**Desviaciones respecto a lo planificado**
+- 25.4: se añadió guarda `409 DEPARTMENT_NOT_EMPTY` / `SUBDEPARTMENT_NOT_EMPTY` en los borrados. Motivo:
+  `products.subdepartment_id` es `NOT NULL` **sin** `ON DELETE CASCADE`, así que el `CASCADE` de
+  `subdepartments` habría dejado productos huérfanos o un 500 por FK. Se exige antes mover/archivar.
+- 25.4: los borrados también pasan por `isSafetyLockOn`, igual que el borrado de productos.
+- Extras: `audit_logs` en todas las mutaciones; `PUT` permite reubicar un subdepartamento de departamento;
+  toggle de `is_active` (activar/desactivar sin editar).
 
 ---
 

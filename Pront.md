@@ -1,4 +1,4 @@
-# 📋 PRONT.md — HANDOFF PARA EL SIGUIENTE AGENTE (SUPRIME E-COMMERCE)
+﻿# 📋 PRONT.md — HANDOFF PARA EL SIGUIENTE AGENTE (SUPRIME E-COMMERCE)
 
 ---
 
@@ -9,8 +9,9 @@
 - **Front**: https://suprime.xyz (Cloudflare Pages, auto-deploy push a `main`)
 - **API**: https://api.suprime.xyz (Worker `suprime-st-ecc-api`, `npx wrangler deploy`)
 - **Stack**: React+Vite · Hono+Workers+D1 · ImageKit · Email CF/Resend
-- **Smoke**: **54/54 PASS** ✅ | **Typecheck**: OK ✅ | **Build**: OK ✅ | **Deploy**: Auto ✅
-- **Commit actual**: `3f86c2a` (UX Alto completado)
+- **Smoke**: **69 PASS / 1 FAIL / 2 SKIP** ⚠️ (el FAIL es preexistente: `totp setup` vs `safety_lock`)
+- **Typecheck**: OK ✅ | **Build**: OK ✅ | **Deploy**: API desplegada ✅ · Front pendiente de push
+- **Commit actual**: `75945fb` (Catálogo admin #25 + regla de control de tokens)
 
 ---
 
@@ -20,7 +21,7 @@
 |---------|--------------|
 | `SUPRIME-Continuar.md` | **Contexto completo**: restauración, estado, reglas, historial, pendientes, instrucciones |
 | `PLAN-MEJORAS.md` | Plan detallado con tareas ordenadas y estado |
-| `tests/smoke.mjs` | 54 checks E2E contra prod (API + Front) |
+| `tests/smoke.mjs` | 71 checks E2E contra prod (API + Front) |
 | `tools/token-check.mjs` | 🔑 Tokens de la sesión (`npm run tokens`) — control previo a cada bloque |
 | `MovilLab/panorama.mjs` | Auditoría móvil + desktop (390×844 + 1440×900) |
 
@@ -31,7 +32,7 @@
 ```powershell
 cd "C:\Users\VIP\Desktop\Cerebro Obcidian\C proyectos Web"
 npm run tokens      # 🔑 tokens de la sesión (REGLA: antes de cada bloque)
-npm run smoke       # 54 checks vs prod (debe dar 54 PASS / 0 FAIL)
+npm run smoke       # 71 checks vs prod (referencia: 69 PASS / 1 FAIL preexistente / 2 SKIP)
 npm run typecheck   # api + web
 npm run build:web   # build front
 npm run backup      # export D1 remoto
@@ -85,10 +86,10 @@ npx wrangler tail --format pretty
 
 ---
 
-## 🧪 **SMOKE TEST — QUÉ HACE (54 checks)**
+## 🧪 **SMOKE TEST — QUÉ HACE (71 checks)**
 
 ```bash
-npm run smoke  # 54 checks vs https://api.suprime.xyz/api/v1 + https://suprime.xyz
+npm run smoke  # 71 checks vs https://api.suprime.xyz/api/v1 + https://suprime.xyz
 ```
 
 | Sección | Checks |
@@ -96,6 +97,7 @@ npm run smoke  # 54 checks vs https://api.suprime.xyz/api/v1 + https://suprime.x
 | Salud/Catálogo | health, products, categories, product by slug |
 | Auth | login wrong 401, OK 200, /auth/me, shipping CRUD, token falso 401 |
 | Admin | /admin/stats (401/200/403), crear producto, users paginado |
+| **Catálogo admin** | **validaciones 400/404, crear depto 201 + slug, duplicado 409, crear/editar subdepto, is_active, producto sin y con subdepto, borrados, limpieza** |
 | Upload/Galería | auth, listado, paginación, upload, ImageKit |
 | Órdenes/Stock | body vacío 400, stock rollback, tel +34, stock insuficiente |
 | PDP/Secciones | related, deptos, subdeptos, 404, store-settings |
@@ -106,27 +108,35 @@ npm run smoke  # 54 checks vs https://api.suprime.xyz/api/v1 + https://suprime.x
 
 **Config**: `AbortSignal.timeout(20000)`, owner `admin@admin.com`/`123456` (2FA TOTP), admin PASS si 200+grant **O** 403 step-up, **no destructivo** (no regenera 2FA).
 
+> La sección de catálogo crea datos de prueba con sufijo y los limpia. Con `safety_lock` activo los
+> borrados se bloquean: avisa con `WARN` y los ids exactos, y salta a SKIP los checks de borrado.
+
 ---
 
 ## 📊 **ESTADO ACTUAL (2026-09-30)**
 
 | Métrica | Valor |
 |---------|-------|
-| **Commit actual** | `3f86c2a` (UX Alto completado) |
-| **Smoke** | 54/54 PASS ✅ |
+| **Commit actual** | `75945fb` (Catálogo admin #25 + regla de tokens) |
+| **Smoke** | 69 PASS / 1 FAIL / 2 SKIP ⚠️ |
 | **Typecheck** | OK ✅ |
-| **Build** | OK ✅ (vendor 162KB + app 119KB) |
-| **Deploy** | Auto (GitHub → Cloudflare Pages) |
-| **Smoke checks** | 54 (era 53, añadido `store-settings`) |
+| **Build** | OK ✅ (vendor 162KB + app 130KB) |
+| **Deploy** | API ✅ desplegada (`f4de77aa`) · Front ⏳ pendiente de push |
+| **Smoke checks** | 71 (54 + 16 de catálogo + 1 auth) |
+
+> ⚠️ **El FAIL de `totp setup sin step-up 403` es preexistente**: espera `ADMIN_2FA_REQUIRED` pero
+> producción tiene `safety_lock` activo y responde `SAFETY_LOCKED`. Se reproduce en el baseline
+> (`3f86c2a` = 53 PASS / 1 FAIL). No lo introdujo la tarea #25.
 
 ### Commits recientes (HEAD → older)
 ```
+75945fb Catálogo admin (#25) + control de tokens: CRUD depto/subdepto, quita subdep-demo
 3f86c2a UX Alto: Web Share API, CategoryCard aspect-ratio, img CLS, tel mask, step-up silencioso
 9682c40 SEO: BreadcrumbList JSON-LD, dynamic og:image, og-cover.svg, breadcrumb fix
 12abe99 SEO: JSON-LD Product/ItemList, dynamic og:image, sitemap redirect
 9dcfecf Móvil: categorías en acordeón
 f0c91ae Cuenta: carrito/favs por usuario + última cuenta
-... (14 commits totales desde 583c87e)
+... (15 commits totales desde 583c87e)
 ```
 
 ---
@@ -136,7 +146,7 @@ f0c91ae Cuenta: carrito/favs por usuario + última cuenta
 | Prioridad | Tarea |
 |-----------|-------|
 | 🔴 **KV** | Crear namespace `RATE_LIMIT_KV` + binding en `wrangler.toml` |
-| 🟠 **Catálogo admin** | **Agregar/editar/borrar departamentos y subdepartamentos desde el panel** (tarea #25, `PLAN-MEJORAS.md` 25.1–25.9). Hoy solo lectura + `subdep-demo` hardcodeado |
+| ✅ **Catálogo admin** | **Departamentos y subdepartamentos desde el panel** — HECHO (`75945fb`). Tab 🗂️ Catálogo + `GET/POST/PUT/DELETE /admin/{catalog,departments,subdepartments}`. Smoke 69 PASS |
 | 🟡 **Admin UX** | 2FA button sticky, skeleton tables, tabla usuarios ordenación |
 | 🟢 **Perf** | `srcset`/`sizes`, `preload` fonts, CSS code-splitting, `_headers` |
 | 🟢 **Infra** | Página 404, Playwright E2E, `_headers` |
@@ -158,7 +168,7 @@ npx wrangler d1 execute DB --remote --file=MovilLab/d1-restore-20260929.sql  # s
 
 ```bash
 cd "C:\Users\VIP\Desktop\Cerebro Obcidian\C proyectos Web"
-npm run smoke       # confirma 54 PASS / 0 FAIL
+npm run smoke       # confirma 69 PASS / 1 FAIL (preexistente) / 2 SKIP
 npm run typecheck   # confirma OK
 # Empezar con: srcset/sizes en ProductCard, PDP, CategoryCard
 ```
@@ -195,7 +205,7 @@ node panorama.mjs    # móvil 390×844 + desktop 1440×900 → shots/ + panorama
 |---------|----------|
 | `SUPRIME-Continuar.md` | **Leer primero** — contexto completo, restauración, reglas, historial |
 | `PLAN-MEJORAS.md` | Plan detallado con tareas, estado, orden de ejecución |
-| `tests/smoke.mjs` | 54 checks E2E (leer para entender qué se testea) |
+| `tests/smoke.mjs` | 71 checks E2E (leer para entender qué se testea) |
 | `MovilLab/panorama.mjs` | Auditoría móvil + desktop automatizada |
 | `Sesiones/SUPRIME-2026-09-29/` | Reportes de los 4 Fantásticos |
 
@@ -205,7 +215,7 @@ node panorama.mjs    # móvil 390×844 + desktop 1440×900 → shots/ + panorama
 
 ```bash
 cd "C:\Users\VIP\Desktop\Cerebro Obcidian\C proyectos Web"
-npm run smoke       # 54 PASS confirmado
+npm run smoke       # 69 PASS confirmado
 npm run typecheck   # OK
 # Empezar con: srcset/sizes en ProductCard, PDP, CategoryCard
 ```
@@ -217,7 +227,7 @@ npm run typecheck   # OK
 ## 📋 **CHECKLIST DE INICIO RÁPIDO**
 
 - [ ] `npm run tokens` → **¿alcanza para el bloque?** si no → avisar y cambiar agente
-- [ ] `npm run smoke` → 54 PASS / 0 FAIL
+- [ ] `npm run smoke` → 69 PASS / 1 FAIL (preexistente) / 2 SKIP
 - [ ] `npm run typecheck` → OK
 - [ ] `npm run build:web` → OK
 - [ ] Leer `PLAN-MEJORAS.md` → siguiente tarea: **#25 catálogo admin** (o `srcset`/`sizes`)
