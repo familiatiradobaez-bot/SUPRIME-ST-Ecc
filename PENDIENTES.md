@@ -333,14 +333,68 @@ minifica y el HTML pesa 3,6 KB.
 
 ---
 
+## ✅ Hecho · Orígenes de desarrollo fuera de producción (30-sep)
+
+`allowedOrigins` era **un solo array con todo mezclado**, y como `admin.css` en el CSS, el orden
+decidía: los comodines de desarrollo competían también **en producción**.
+
+**Comodido antes del arreglo, comprobado contra producción:**
+
+| Origen enviado | Resultado |
+|---|---|
+| `https://tunel-aleatorio.ngrok-free.dev` | `401 INVALID_CREDENTIALS` → **pasó** |
+| `https://sitio-de-terceros.pages.dev` | `401 INVALID_CREDENTIALS` → **pasó** |
+| `http://localhost:5173` | `401 INVALID_CREDENTIALS` → **pasó** |
+| `https://sitio-de-terceros.pages.dev` (CORS) | recibió `Access-Control-Allow-Origin` **con credenciales** |
+
+Es decir: un túnel `ngrok`/`trycloudflare` (gratis, sin cuenta, se abre en segundos) o cualquier
+proyecto de `pages.dev` de cualquier cuenta de Cloudflare pasaba la validación igual que
+`suprime.xyz`. Y una página servida desde el `localhost` del propio visitante también.
+
+**Severidad: baja, no alta.** La autenticación *no* era vulnerable a esto: va por
+`Authorization: Bearer` en `localStorage`, que otra origen no puede leer, y la cookie
+`session_token` es `HttpOnly` + `SameSite=Strict`, que el navegador ni siquiera manda cross-site
+(verificado antes: `/admin/*` solo con cookie → `401`). Lo que estaba anulada es la **barrera de
+defensa en profundidad** del middleware, que existe para proteger si algún día se mete un endpoint
+que sí use la cookie.
+
+**Qué se hizo:**
+
+- `ORIGENES_PRODUCCION` (4 dominios exactos) y `ORIGENES_DESARROLLO`, decididos **por petición**
+  según `context.env.APP_ENV`.
+- En producción solo entran los 4 dominios exactos. Fuera se añade `localhost` (cualquier puerto),
+  `127.0.0.1` y la red local.
+- **Comodines eliminados en los dos lados**: `.trycloudflare.com`, `.ngrok-free.dev` y `.pages.dev`.
+  No hacen falta para `npm run dev`: el flujo documentado es abrir la web desde el móvil en la red
+  local, que ya cubren `192.168.*` y `host: 0.0.0.0` en Vite.
+- El CSP también arrastraba los comodines; quitados en ambas variantes.
+- **Sin lista de puertos en desarrollo**: Vite va con `strictPort: false`, así que si el 5173 está
+  ocupado se va al 5174 y la lista fija se quedaba corta sola.
+- Se mantiene que `https://suprime-st-ecc.pages.dev` **sigue entrando**, ahora por nombre exacto.
+
+**Limpieza del mismo grupo (todo muerto):**
+
+| Fichero | Qué sobraba |
+|---|---|
+| `apps/web/vite.config.ts` | `allowedHosts` con `phases-exceptional-wheels-sunset.trycloudflare.com`, un túnel de sesión vieja |
+| `apps/web/src/hooks/useApiUrl.ts` | Caso "si el host incluye ngrok" → `192.168.0.105:8789`. El caso siguiente ya cubría exactamente eso |
+| `NETWORK_ACCESS.md` | Recomendaba abrir túneles de `cloudflared` con dos URLs de subdominios que ya no existen |
+
+**Verificación:** 10 checks nuevos del smoke (5 de origen de tercero → `403`, 4 de CORS, 1 de CSP).
+Antes de quitar los comodines fallaron cuatro de los cinco checks de origen: así se confirmó que
+el fallo era real. Smoke **84 PASS / 0 FAIL / 1 SKIP** y E2E **20/20** contra producción, que es
+lo que demuestra que la lista de orígenes no se quedó demasiado estricta.
+
+---
+
 ## 🔴 Tareas de seguridad / mantenimiento (del usuario, no del código)
 
 | # | Tarea |
 |---|-------|
 | S1 | **Rotar secretos expuestos**: tokens `cfat_`/`cfut_` y clave R2. Pasos en `_SECRETS/cloudflare.env`. ⚠️ El `cfat_` está ahora **también** como secret `CLOUDFLARE_API_TOKEN` del repo de GitHub (lo usa la purga de CI): al rotarlo hay que actualizar las dos cosas |
-| S2 | Crear token Cloudflare nuevo con **alcance mínimo** (D1, Workers, R2, Purge), no "All permissions" |
+| S2 | Crear token Cloudflare nuevo con **alcance mínimo**, no "All permissions". ⚠️ Desde el 30-sep necesita **tres** permisos, no uno: **Pages: leer** (lo usa `--espera-deploy`), **Cache Rules: editar** (la regla `root-static-short-cache`) y **Purge cache**. Con solo D1/Workers/R2/Purge la purga de CI se rompe |
 | S3 | Namespace `RATE_LIMIT_KV` | ✅ Creado, activado en `wrangler.toml` y **conectado de verdad** a login, 2FA y subidas (ver la sección de rate-limit) |
-| S4 | Revisar `SEGURIDAD_CSRF_DESACTIVADA.md` (heredado, sin revisar) |
+| S4 | ~~Revisar `SEGURIDAD_CSRF_DESACTIVADA.md`~~ | ✅ **Cerrado** (30-sep): el middleware se reactivó con la regla correcta (solo se valida el origen si la petición trae `Origin` o `Referer`) y el documento se reescribió con las mediciones. Este artículo estaba caducado en la lista |
 
 ---
 
