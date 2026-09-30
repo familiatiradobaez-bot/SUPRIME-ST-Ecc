@@ -166,7 +166,10 @@ f0c91ae Cuenta: carrito/favs por usuario + última cuenta
 
 ---
 
-## 📋 **PENDIENTES ORDENADOS (ver PLAN-MEJORAS.md)**
+## 📋 **PENDIENTES (leer `PENDIENTES.md` primero)**
+
+> Lista consolidada y ordenada por prioridad en **`PENDIENTES.md`** (raíz del repo).
+> Este archivo tiene el detalle técnico; `PENDIENTES.md` tiene el "qué hacer ahora".
 
 | Prioridad | Tarea |
 |-----------|-------|

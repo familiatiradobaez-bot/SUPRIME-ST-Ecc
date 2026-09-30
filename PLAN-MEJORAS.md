@@ -241,6 +241,9 @@ para que la regla aplique.
 
 ## 📋 ORDEN DE EJECUCIÓN PROPUESTO
 
+> **Resumen operativo en `PENDIENTES.md`** (raíz del repo): qué hacer ahora, en orden de prioridad,
+> con el impacto medido de cada uno y los avisos de seguridad. Este bloque es el detalle técnico.
+
 Bloque P0 cerrado (banner + fuentes + `_headers`). Queda:
 
 1. **P0 · Activar en el panel Cloudflare** (gratis, 10 min, sin código): Speed Brain, Early Hints, Cloudflare Fonts, 2 Cache Rules
