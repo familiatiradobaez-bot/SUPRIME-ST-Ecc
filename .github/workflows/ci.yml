@@ -21,6 +21,42 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:web
 
-      # Smoke contra producción (solo lecturas + rechazos esperados;
-      # crea una imagen de 1px en ImageKit y sesiones efímeras de owner).
-      - run: npm run smoke
+      # Smoke contra producción.
+      #
+      # Ya no usa la cuenta del owner: entra con smoke@suprime.xyz y calcula el
+      # TOTP para pedir el step-up (spec "Smoke con TOTP"). Las credenciales
+      # vienen de secrets del repo; si no están, el smoke avisa y sale con
+      # código 2 en vez de dar un monte de FAIL sin explicación.
+      #
+      # effects: sube una imagen de 1px a ImageKit, crea/borra la sesión de
+      # smoke y abre un grant de step-up de 1 h. No toca datos de la tienda.
+      - name: Smoke (con TOTP)
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_TOTP_SECRET: ${{ secrets.SMOKE_TOTP_SECRET }}
+        run: npm run smoke
+
+  e2e:
+    # Suite E2E contra el front y la API desplegados (tarea #24).
+    # Es un smoke de navegador del camino que no cubre el smoke de API:
+    # login -> panel -> catálogo, y añadir al carrito -> checkout.
+    runs-on: ubuntu-latest
+    needs: build-and-smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_TOTP_SECRET: ${{ secrets.SMOKE_TOTP_SECRET }}
+        run: npm run e2e

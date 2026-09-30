@@ -16,14 +16,21 @@
     "db:seed": "npm --workspace apps/api run db:seed",
     "smoke": "node tests/smoke.mjs",
     "smoke:setup": "node tools/smoke-setup.mjs",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium",
+    "e2e:ui": "playwright test --ui",
     "tokens": "node tools/token-check.mjs",
     "img:check": "node tools/img-check.mjs",
     "backup": "wrangler d1 export DB --remote --output ./backups/d1-backup.sql",
     "backup:local": "wrangler d1 export DB --local --output ./backups/d1-backup-local.sql",
     "network-info": "echo Accede desde tu celular en: && echo http://192.168.0.105:5173"
   },
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.0"
   }
 }

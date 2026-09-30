@@ -138,13 +138,14 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
             checked={termsAccepted}
             onChange={(e) => setTermsAccepted(e.target.checked)}
             required
+            data-testid="accept-terms"
           />
           <span>Acepto los <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Términos</a> y la <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Privacidad</a></span>
         </label>
       </div>
 
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary btn-glow" disabled={loading}>
+        <button type="submit" className="btn btn-primary btn-glow" disabled={loading} data-testid="place-order">
           {loading ? (
             <>
               <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'white' }}></span>

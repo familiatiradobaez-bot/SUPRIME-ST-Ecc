@@ -132,7 +132,7 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
       )}
 
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary btn-glow btn-truck-drive" disabled={loading}>
+        <button type="submit" className="btn btn-primary btn-glow btn-truck-drive" disabled={loading} data-testid="login-submit">
           {loading ? (
             <>
               <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'white' }}></span>

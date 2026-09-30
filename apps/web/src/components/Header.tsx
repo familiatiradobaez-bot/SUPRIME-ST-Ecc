@@ -83,8 +83,8 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
           )}
         </div>
         <div className="header-right">
-          <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick}>
-            🛒 ({cartCount})
+          <button className="btn btn-primary btn-sm btn-glow" onClick={onCartClick} data-testid="open-cart" aria-label="Abrir carrito">
+            🛒 (<span data-testid="cart-count">{cartCount}</span>)
           </button>
           <button className="btn btn-secondary btn-sm header-wishlist-btn" onClick={onWishlistClick} aria-label="Ver favoritos">
             ❤️ ({wishlistCount ?? 0})

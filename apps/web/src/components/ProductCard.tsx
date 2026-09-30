@@ -70,6 +70,9 @@ export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', o
         className={`btn btn-primary product-card-btn ${isAdded ? 'btn-success' : ''}`}
         onClick={(e) => { e.stopPropagation(); onAddToCart(product.id); }}
         disabled={product.stock_quantity === 0}
+        data-testid="add-to-cart"
+        data-slug={product.slug}
+        aria-label={`Agregar ${product.name} al carrito`}
       >
         {isAdded ? '✓ Agregado' : product.stock_quantity > 0 ? '🛒 Agregar al Carrito' : 'Sin Stock'}
       </button>

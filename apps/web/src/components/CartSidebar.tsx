@@ -72,7 +72,7 @@ export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCh
               <strong>Total (IVA incl.):</strong>
               <strong>{formatPrice(cartTotal + calcShipping(cartTotal), currency)}</strong>
             </div>
-            <button className="btn btn-primary btn-glow" style={{ width: '100%', marginTop: '1rem' }} onClick={onCheckout}>
+            <button className="btn btn-primary btn-glow" style={{ width: '100%', marginTop: '1rem' }} onClick={onCheckout} data-testid="go-checkout">
               💳 Proceder al Pago
             </button>
             <p className="cart-shipping-note">🚚 Envío 24-48h · ↩️ Devolución 30 días</p>

@@ -549,9 +549,24 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   );
 
   // Ajustes de tienda (owner/admin)
+  // `settings` guarda EXACTAMENTE lo que devuelve la API (los portes en
+  // céntimos). Los dos campos de dinero tienen su propio borrador en euros:
+  // antes se pintaba `parseInt(valor)/100` sobre el valor ya editado, así que
+  // tras cambiar el envío a 5,50 el campo se recolocaba a 0,05 al tocar
+  // cualquier otro campo. El servidor espera euros y multiplica por 100.
   const [settings, setSettings] = useState<Record<string, string> | null>(null);
-  const [settingsMsg, setSettingsMsg] = useState('');
+  const [moneyDraft, setMoneyDraft] = useState({ shipping: '', threshold: '' });
+  const [settingsErrors, setSettingsErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  const centsToEuros = (cents: string | undefined) => ((parseInt(cents ?? '0', 10) || 0) / 100).toFixed(2);
+
+  const showToast = (kind: 'ok' | 'error', text: string) => {
+    setToast({ kind, text });
+    // El toast se va solo: un mensaje que no desaparece tapa el formulario.
+    window.setTimeout(() => setToast((t) => (t?.text === text ? null : t)), 4000);
+  };
 
   useEffect(() => {
     if (activeTab !== 'settings' || !canManageStore || settings) return;
@@ -560,25 +575,55 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       credentials: 'include',
     })
       .then((r) => r.json())
-      .then((payload) => { if (payload.data) setSettings(payload.data); })
+      .then((payload) => {
+        if (!payload.data) return;
+        setSettings(payload.data);
+        setMoneyDraft({
+          shipping: centsToEuros(payload.data.shipping_cost),
+          threshold: centsToEuros(payload.data.free_shipping_threshold),
+        });
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, apiUrl, sessionToken]);
 
+  // Validación en el cliente, con los mismos límites que el servidor
+  // (0..1000 € de portes, 0..100 % de IVA). Si el número no es válido se
+  // avisa en el campo y no se manda nada: guardar un envío de "-4,90" solo
+  // se descubriría en el checkout de un cliente.
+  const validateSettings = () => {
+    const errs: Record<string, string> = {};
+    const num = (v: string) => parseFloat(String(v).replace(',', '.'));
+    if (!String(settings?.store_name ?? '').trim()) errs.store_name = 'El nombre no puede estar vacío.';
+    if (!Number.isFinite(num(moneyDraft.shipping)) || num(moneyDraft.shipping) < 0) errs.shipping = 'Portes: 0 o más.';
+    else if (num(moneyDraft.shipping) > 1000) errs.shipping = 'Portes: máximo 1000 €.';
+    if (!Number.isFinite(num(moneyDraft.threshold)) || num(moneyDraft.threshold) < 0) errs.threshold = 'Umbral: 0 o más.';
+    else if (num(moneyDraft.threshold) > 100000) errs.threshold = 'Umbral: máximo 100.000 €.';
+    const tax = num(String(settings?.tax_rate ?? ''));
+    if (!Number.isFinite(tax)) errs.tax_rate = 'IVA: número entre 0 y 100.';
+    else if (tax < 0 || tax > 100) errs.tax_rate = 'IVA: entre 0 y 100.';
+    setSettingsErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const saveSettings = async () => {
     if (!settings) return;
+    if (!validateSettings()) {
+      showToast('error', 'Revisa los campos marcados: no se guardó nada.');
+      return;
+    }
     setSavingSettings(true);
-    setSettingsMsg('');
     try {
       const res = await fetch(`${apiUrl}/admin/settings`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
         credentials: 'include',
+        // El servidor convierte euros -> céntimos, así que aquí van euros.
         body: JSON.stringify({
           store_name: settings.store_name ?? '',
           store_description: settings.store_description ?? '',
-          shipping_cost: settings.shipping_cost ?? '',
-          free_shipping_threshold: settings.free_shipping_threshold ?? '',
+          shipping_cost: moneyDraft.shipping.replace(',', '.'),
+          free_shipping_threshold: moneyDraft.threshold.replace(',', '.'),
           tax_rate: settings.tax_rate ?? '',
           maintenance_mode: settings.maintenance_mode ?? '0',
           safety_lock: settings.safety_lock ?? '1',
@@ -586,12 +631,27 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSettingsMsg(payload.message || 'No se pudo guardar (¿permisos?)');
+        showToast('error', payload.message || 'No se pudo guardar (¿permisos?).');
         return;
       }
-      setSettingsMsg('✓ Configuración guardada. Los portes aplican al instante.');
+      // Se relee del servidor: es el único que sabe qué céntimos quedaron, y
+      // así el formulario no se queda con el redondeo del navegador.
+      const fresh = await fetch(`${apiUrl}/admin/settings`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      })
+        .then((r) => r.json())
+        .catch(() => null);
+      if (fresh?.data) {
+        setSettings(fresh.data);
+        setMoneyDraft({
+          shipping: centsToEuros(fresh.data.shipping_cost),
+          threshold: centsToEuros(fresh.data.free_shipping_threshold),
+        });
+      }
+      showToast('ok', 'Configuración guardada. Los portes aplican al instante.');
     } catch {
-      setSettingsMsg('Error de conexión.');
+      showToast('error', 'Error de conexión.');
     } finally {
       setSavingSettings(false);
     }
@@ -640,7 +700,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
             </div>
             {totpError && <p className="error" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{totpError}</p>}
             <div className="form-actions">
-              <button className="btn btn-primary btn-glow" onClick={handleStepUp} disabled={totpLoading}>
+              <button className="btn btn-primary btn-glow" onClick={handleStepUp} disabled={totpLoading} data-testid="admin-stepup-submit">
                 {totpLoading ? 'Verificando...' : 'Verificar y entrar'}
               </button>
               <button className="btn btn-secondary" onClick={onBack}>Cancelar</button>
@@ -790,6 +850,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
             className="admin-sidebar-item"
             onClick={handleLockPanel}
             disabled={lockingPanel}
+            data-testid="lock-panel"
             title="Cerrar el panel y volver a pedir el código 2FA al entrar"
           >
             <span className="admin-sidebar-icon">🔒</span>
@@ -1167,7 +1228,16 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 </p>
                 <div className="form-group">
                   <label htmlFor="set-name">Nombre de la tienda:</label>
-                  <input id="set-name" type="text" value={settings.store_name ?? ''} onChange={(e) => setSettings({ ...settings, store_name: e.target.value })} maxLength={60} />
+                  <input
+                    id="set-name"
+                    type="text"
+                    value={settings.store_name ?? ''}
+                    onChange={(e) => setSettings({ ...settings, store_name: e.target.value })}
+                    maxLength={60}
+                    aria-invalid={!!settingsErrors.store_name}
+                    aria-describedby={settingsErrors.store_name ? 'set-name-err' : undefined}
+                  />
+                  {settingsErrors.store_name && <span className="field-error" id="set-name-err">{settingsErrors.store_name}</span>}
                 </div>
                 <div className="form-group">
                   <label htmlFor="set-desc">Descripción:</label>
@@ -1176,16 +1246,50 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 <div className="form-row-2col">
                   <div className="form-group">
                     <label htmlFor="set-ship">Envío (€):</label>
-                    <input id="set-ship" type="number" inputMode="decimal" step="0.01" min="0" value={((parseInt(settings.shipping_cost ?? '490', 10) || 0) / 100).toFixed(2)} onChange={(e) => setSettings({ ...settings, shipping_cost: e.target.value })} />
+                    <input
+                      id="set-ship"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={moneyDraft.shipping}
+                      onChange={(e) => setMoneyDraft((d) => ({ ...d, shipping: e.target.value }))}
+                      aria-invalid={!!settingsErrors.shipping}
+                      aria-describedby={settingsErrors.shipping ? 'set-ship-err' : undefined}
+                    />
+                    {settingsErrors.shipping && <span className="field-error" id="set-ship-err">{settingsErrors.shipping}</span>}
                   </div>
                   <div className="form-group">
                     <label htmlFor="set-threshold">Gratis desde (€):</label>
-                    <input id="set-threshold" type="number" inputMode="decimal" step="1" min="0" value={((parseInt(settings.free_shipping_threshold ?? '6000', 10) || 0) / 100).toFixed(0)} onChange={(e) => setSettings({ ...settings, free_shipping_threshold: e.target.value })} />
+                    <input
+                      id="set-threshold"
+                      type="number"
+                      inputMode="decimal"
+                      step="1"
+                      min="0"
+                      value={moneyDraft.threshold}
+                      onChange={(e) => setMoneyDraft((d) => ({ ...d, threshold: e.target.value }))}
+                      aria-invalid={!!settingsErrors.threshold}
+                      aria-describedby={settingsErrors.threshold ? 'set-threshold-err' : undefined}
+                    />
+                    {settingsErrors.threshold && <span className="field-error" id="set-threshold-err">{settingsErrors.threshold}</span>}
                   </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="set-tax">IVA (%):</label>
-                  <input id="set-tax" type="number" inputMode="decimal" step="1" min="0" max="100" value={settings.tax_rate ?? ''} onChange={(e) => setSettings({ ...settings, tax_rate: e.target.value })} />
+                  <input
+                    id="set-tax"
+                    type="number"
+                    inputMode="decimal"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={settings.tax_rate ?? ''}
+                    onChange={(e) => setSettings({ ...settings, tax_rate: e.target.value })}
+                    aria-invalid={!!settingsErrors.tax_rate}
+                    aria-describedby={settingsErrors.tax_rate ? 'set-tax-err' : undefined}
+                  />
+                  {settingsErrors.tax_rate && <span className="field-error" id="set-tax-err">{settingsErrors.tax_rate}</span>}
                 </div>
                 <div className="form-group remember-me">
                   <label className="checkbox-label" htmlFor="set-maint" style={{ minHeight: '44px' }}>
@@ -1214,13 +1318,22 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                     {savingSettings ? 'Guardando…' : '💾 Guardar configuración'}
                   </button>
                 </div>
-                {settingsMsg && <p style={{ marginTop: '0.75rem' }}>{settingsMsg}</p>}
               </>
             )}
           </div>
         )}
         </div>
       </div>
+
+      {/* Aviso de resultado de acciones del panel. role=status para que un
+          lector de pantalla lo anuncie sin robar el foco. */}
+      {toast && (
+        <div className={`admin-toast admin-toast-${toast.kind}`} role="status" aria-live="polite">
+          <span aria-hidden="true">{toast.kind === 'ok' ? '✅' : '⚠️'}</span>
+          <span>{toast.text}</span>
+          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Cerrar aviso">×</button>
+        </div>
+      )}
     </div>
   );
 }
