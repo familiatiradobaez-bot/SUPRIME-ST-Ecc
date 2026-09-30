@@ -71,7 +71,24 @@ npx wrangler tail --format pretty
 
 ---
 
-## 🎯 **PRÓXIMO BLOQUE SUGERIDO (🟢 MEDIO — Perf/Infra)**
+## 🎯 **PRÓXIMO BLOQUE SUGERIDO (🔴 P0 — Perf, según PageSpeed 2026-09-30)**
+
+PageSpeed sobre `https://suprime.xyz` (Lighthouse 13.5.0): **móvil 81**, escritorio 97.
+Accesibilidad 96, buenas prácticas 100, SEO 100. TBT 0 ms y CLS 0 en móvil.
+
+> **Causa raíz del 81**: el LCP móvil (3,6 s) es el **banner de cookies**, con TTFB 0 ms y
+> **3330 ms de retraso de renderizado**. Monta en `useEffect`, así que aparece tarde y, al ser
+> un bloque fijo grande, se convierte en el elemento LCP. Es el P0: fix pequeño, gain grande.
+
+| Orden | Tarea | Ganancia medida | Complejidad |
+|-------|-------|-----------------|-------------|
+| **1** | **Banner de cookies: primer render, no `useEffect`** | LCP 3,6 s → ~1 s · **81 → ~95** | **Baja** |
+| 2 | Imágenes en AVIF/WebP | 839 KiB (escritorio) | Media |
+| 3 | CSS/JS code-splitting | 17 KiB CSS + 25 KiB JS | Media |
+| 4 | `preload` fuentes Inter/Playfair | FCP | Baja |
+| 5 | `public/_headers` + 404 + Playwright | Infra | Baja/Media |
+
+Detalle completo y resto de hallazgos en `PLAN-MEJORAS.md` (bloque "Auditoría PageSpeed").
 
 | Orden | Tarea | Archivos clave | Complejidad |
 |-------|-------|----------------|-------------|

@@ -101,13 +101,70 @@
 
 ---
 
+## 📊 **AUDITORÍA PAGESPEED INSIGHTS — 2026-09-30 (prod)**
+
+Ejecutado con Lighthouse 13.5.0 sobre `https://suprime.xyz`, emulación Moto G Power (móvil)
+y escritorio. API `pagespeedonline` devolvió 429 (cuota compartida agotada), datos obtenidos
+del informe web.
+
+| Métrica | Móvil | Escritorio |
+|---------|-------|------------|
+| **Rendimiento** | **81** | **97** |
+| Accesibilidad | 96 | 96 |
+| Buenas prácticas | 100 | 100 |
+| SEO | 100 | 100 |
+| FCP | 2,9 s | 0,7 s |
+| **LCP** | **3,6 s** ❌ | 0,8 s |
+| TBT | 0 ms ✅ | 0 ms ✅ |
+| CLS | 0 ✅ | 0,091 |
+| Speed Index | 5,9 s | 0,7 s |
+
+### **Hallazgo crítico: el LCP móvil es el banner de cookies**
+
+Desglose de LCP (móvil): **Time to First Byte 0 ms** · **Retraso de renderizado 3330 ms**.
+El elemento LCP es el texto del banner de cookies ("Usamos almacenamiento técnico…"),
+no una imagen ni el contenido principal.
+
+Causa: `CookieBanner.tsx` monta con `useState(false)` y lo activa en un `useEffect` posterior,
+así que aparece **después** del primer render. Al ser un bloque fijo grande y lo último en
+pintarse, se convierte en el LCP. El escritorio no lo sufre porque renderiza antes de que
+corra el efecto.
+
+**Impacto**: es la causa prácticamente única del 81 en móvil. Arreglarlo sube el LCP de 3,6 s
+a ~1 s y el rendimiento de 81 a ~95+.
+
+### **Resto de oportunidades (por ahorro)**
+
+| # | Oportunidad | Ahorro | Nota |
+|---|-------------|--------|------|
+| 26 | **Banner de cookies como LCP** (P0) | ~1200 ms + LCP | Ver arriba. Montar en el primer render, no en `useEffect` |
+| 27 | `preload` de fuentes Inter/Playfair Display | — | Tarea 17 ya prevista |
+| 28 | CSS sin usar | 17 KiB | Tarea 14 (code-splitting) |
+| 29 | JS sin usar | 25 KiB | Tarea 14 |
+| 30 | **JS antiguo** (vendor 162 KB) | 11 KiB | Considerar `modulepreload` o bundle moderno |
+| 31 | **Imágenes sin formatos modernos** (AVIF/WebP) | 20 KiB móvil / **839 KiB escritorio** | En escritorio es el mayor gap |
+| 32 | CLS 0,091 en escritorio | — | Algún elemento entra tarde; revisar tras el fix de #26 |
+| 33 | Animación no compuesta (1 elemento) | — | Usar `transform`/`opacity` |
+| 34 | Tarea larga en hilo principal (1) | — | Revisar tras code-splitting |
+| 35 | Targets táctiles pequeños (a11y) | — | `--` |
+| 36 | Roles ARIA en elementos no compatibles | — | Revisar `aria-modal="false"` en CookieBanner |
+| 37 | Enlaces idénticos con distinta finalidad | — | Footer |
+
+> Tareas 14/17 (code-splitting y preload) ya estaban en la lista; este bloque las **confirma con
+> datos reales** y añade la prioridad correcta: el P0 es el banner, no el code-splitting.
+
+---
+
 ## 📋 ORDEN DE EJECUCIÓN PROPUESTO
 
-1. **Fixes críticos SEO** (1-4) → impacto inmediato en indexación
-2. **UX conversión** (5-13) → dinero directo
-3. **Catálogo admin** (25) → bloquea la gestión real del catálogo (requiere SQL hoy)
-4. **Rendimiento/CLS** (14-17) → Core Web Vitals
-5. **Infra/DX** (18-24) → mantenibilidad
+1. **P0 · Banner de cookies = LCP** (#26) → el fix de mayor impacto medible: 81 → ~95 en móvil. Bloque pequeño y autocontenido
+2. **P1 · Imágenes modernas** (#31) → 839 KiB en escritorio, AVIF/WebP
+3. **P2 · Code-splitting CSS/JS** (#14, #28, #29) → 17 KiB CSS + 25 KiB JS sin usar
+4. **P3 · `preload` de fuentes** (#17, #27) → desbloquea FCP
+5. **P4 · Admin UX** (9, 10, 19) → 2FA sticky, skeletons, ordenación
+6. **P5 · Infra/DX** (18, 20, 21, 24) → `_headers`, validaciones, 404, Playwright
+
+Los bloques SEO (1-4) y UX conversión (5-13) ya están hechos. El catálogo admin (25) también.
 
 ---
 
