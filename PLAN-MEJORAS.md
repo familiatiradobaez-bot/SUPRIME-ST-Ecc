@@ -137,7 +137,9 @@ a ~1 s y el rendimiento de 81 a ~95+.
 
 | # | Oportunidad | Ahorro | Nota |
 |---|-------------|--------|------|
-| 26 | **Banner de cookies como LCP** (P0) | ~1200 ms + LCP | Ver arriba. Montar en el primer render, no en `useEffect` |
+| 26 | **Banner de cookies como LCP** (P0) | ~1200 ms + LCP | ✅ Hecho — el LCP pasa a coincidir con el FCP |
+| 26b | **CSS de Google Fonts render-blocking** (P0) | FCP | ✅ Hecho — `media="print" onload` + `<noscript>` de seguridad |
+| 26c | **`_headers` ausente: assets sin cachear en el edge** (P0) | `REVALIDATED` → edge | ✅ Hecho — `immutable` 1 año en `/assets/*` |
 | 27 | `preload` de fuentes Inter/Playfair Display | — | Tarea 17 ya prevista |
 | 28 | CSS sin usar | 17 KiB | Tarea 14 (code-splitting) |
 | 29 | JS sin usar | 25 KiB | Tarea 14 |
@@ -155,16 +157,68 @@ a ~1 s y el rendimiento de 81 a ~95+.
 
 ---
 
+## ☁️ **CLOUDFLARE PLAN FREE — QUÉ SE PUEDE ACTIVAR (verificado en docs, 2026-09-30)**
+
+Fuente: documentación pública de Cloudflare. **No se ha consultado la cuenta ni la tarjeta.**
+
+| Feature | Free | Notas para SUPRIME |
+|---------|------|--------------------|
+| **Speed Brain** | ✅ **Activado por defecto** | Prefetchea páginas siguientes (Chromium 121+). Solo para HTML cacheable que no pase por Worker. **Verificar que esté activo** |
+| **Cache Rules** | ✅ 10 reglas | Ver más abajo |
+| **Early Hints** | ✅ Sí | En `Speed > Content Optimization`. Solo HTML/200/301/302 |
+| **Cloudflare Fonts** | ✅ Sí | **Reescribe Google Fonts al propio dominio**, sin cambios de código. Elimina el third-party y el render-blocking |
+| **Content compression (Brotli)** | ✅ Sí | Ya activo: `content-encoding: br` confirmado en prod |
+| **HTTP/3 (QUIC)** | ✅ Sí | Ya activo: `alt-svc: h3` confirmado en prod |
+| **Tiered Cache** | ✅ Sí | Solo Tiered Cache Smart; el custom es Enterprise |
+| Auto Minify / Rocket Loader | ✅ Sí | ⚠️ **No activar Rocket Loader**: rompe la CSP y los scripts `type=module` de Vite |
+| Cloudflare Images (transformaciones) | ❌ Pro+ | Polish también es **Pro+** → el P1 de imágenes hay que hacerlo en el código, no en el panel |
+| Prefetch URLs | ❌ Solo Enterprise | Speed Brain ya cubre el caso en Free |
+| Argo Smart Routing | ❌ Pro+ | — |
+| Mirage | ⚠️ Deprecado | No |
+
+### **🔴 Hallazgo: los assets no se cachean en el edge**
+
+Medido sobre producción antes del fix:
+
+| Recurso | `cf-cache-status` | `cache-control` |
+|---------|-------------------|-----------------|
+| `/` (HTML) | `DYNAMIC` | `public, max-age=0, must-revalidate` |
+| `/assets/*.js` | `REVALIDATED` (constante) | `public, max-age=14400, must-revalidate` |
+| `/assets/*.css` | `MISS` | `public, max-age=14400, must-revalidate` |
+
+Es decir: **nada se servía desde el edge**, y los bundles se revalidaban en cada visita
+(4 horas de TTL) pese a tener hash de contenido en el nombre. Causa: no existía
+`apps/web/public/_headers` (tarea #18 del plan, marcada como pendiente desde hacía tiempo).
+
+**Corregido en el bloque P0**: `_headers` con `max-age=31536000, immutable` para
+`/assets/*`, TTL cortos para el shell y cabeceras de seguridad (nosniff, X-Frame-Options,
+Referrer-Policy, Permissions-Policy, COOP).
+
+### **Plan de acción Cloudflare (todo en el panel, sin coste)**
+
+1. **Speed Brain** → `Speed > Content Optimization`: confirmar que está *On* (ya debería estarlo por defecto).
+2. **Early Hints** → mismo panel: *On*. Complementa al `preload` de fuentes.
+3. **Cloudflare Fonts** → *On*. Sustituye el fix manual de la CSS de fuentes y quita el third-party.
+4. **Cache Rules** (10 disponibles) → 2 sugeridas:
+   - `hostname eq api.suprime.xyz` → *Bypass* (la API ya es dinámica; no cachedear respuestas con cookies).
+   - `uri.path starts_with "/assets/"` → *Eligible for cache* + *Edge TTL 1 año*.
+5. **No activar** Rocket Loader (rompe CSP y módulos ES).
+
+> Ninguna de estas necesita plan de pago ni tarjeta.
+
+---
+
 ## 📋 ORDEN DE EJECUCIÓN PROPUESTO
 
-1. **P0 · Banner de cookies = LCP** (#26) → el fix de mayor impacto medible: 81 → ~95 en móvil. Bloque pequeño y autocontenido
-2. **P1 · Imágenes modernas** (#31) → 839 KiB en escritorio, AVIF/WebP
-3. **P2 · Code-splitting CSS/JS** (#14, #28, #29) → 17 KiB CSS + 25 KiB JS sin usar
-4. **P3 · `preload` de fuentes** (#17, #27) → desbloquea FCP
-5. **P4 · Admin UX** (9, 10, 19) → 2FA sticky, skeletons, ordenación
-6. **P5 · Infra/DX** (18, 20, 21, 24) → `_headers`, validaciones, 404, Playwright
+Bloque P0 cerrado (banner + fuentes + `_headers`). Queda:
 
-Los bloques SEO (1-4) y UX conversión (5-13) ya están hechos. El catálogo admin (25) también.
+1. **P0 · Activar en el panel Cloudflare** (gratis, 10 min, sin código): Speed Brain, Early Hints, Cloudflare Fonts, 2 Cache Rules
+2. **P1 · Imágenes modernas** (#31) → 839 KiB en escritorio. **Ojo: Polish y Cloudflare Images son Pro+, hay que hacerlo en el código** (`srcset`/`sizes` + AVIF/WebP vía ImageKit, que ya usáis)
+3. **P2 · Code-splitting CSS/JS** (#14, #28, #29) → 17 KiB CSS + 25 KiB JS sin usar
+4. **P3 · Admin UX** (9, 10, 19) → 2FA sticky, skeletons, ordenación
+5. **P4 · Infra/DX** (20, 21, 24) → validaciones, 404, Playwright
+
+Los bloques SEO (1-4), UX conversión (5-13) y catálogo admin (25) están hechos.
 
 ---
 

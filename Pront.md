@@ -82,13 +82,15 @@ Accesibilidad 96, buenas prácticas 100, SEO 100. TBT 0 ms y CLS 0 en móvil.
 
 | Orden | Tarea | Ganancia medida | Complejidad |
 |-------|-------|-----------------|-------------|
-| **1** | **Banner de cookies: primer render, no `useEffect`** | LCP 3,6 s → ~1 s · **81 → ~95** | **Baja** |
-| 2 | Imágenes en AVIF/WebP | 839 KiB (escritorio) | Media |
-| 3 | CSS/JS code-splitting | 17 KiB CSS + 25 KiB JS | Media |
-| 4 | `preload` fuentes Inter/Playfair | FCP | Baja |
-| 5 | `public/_headers` + 404 + Playwright | Infra | Baja/Media |
+| **1** | **Banner de cookies: primer render, no `useEffect`** | LCP 3,6 s → ~1 s · **81 → ~95** | ✅ Hecho |
+| **2** | **`_headers`: assets inmutables en el edge** | `REVALIDATED` → HIT, TTL 4 h → 1 año | ✅ Hecho |
+| **3** | **CSS de fuentes sin render-blocking** | FCP 1476 ms → 1200 ms | ✅ Hecho |
+| 4 | Activar Speed Brain / Early Hints / Cloudflare Fonts (panel, gratis) | LCP/TTFB en navegación | Baja, sin código |
+| 5 | Imágenes AVIF/WebP + `srcset` (Polish es Pro+: hay que hacerlo en código) | 839 KiB escritorio | Media |
+| 6 | CSS/JS code-splitting | 17 KiB CSS + 25 KiB JS | Media |
+| 7 | `public/_headers` ya hecho · 404 · Playwright | Infra | Baja/Media |
 
-Detalle completo y resto de hallazgos en `PLAN-MEJORAS.md` (bloque "Auditoría PageSpeed").
+Detalle completo en `PLAN-MEJORAS.md` (bloques "Auditoría PageSpeed" y "Cloudflare plan Free").
 
 | Orden | Tarea | Archivos clave | Complejidad |
 |-------|-------|----------------|-------------|

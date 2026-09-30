@@ -29,7 +29,22 @@
   <title>SUPRIME - Tienda Premium</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+  <!--
+    La CSS de Google Fonts es render-blocking: retrasa el FCP hasta que llega.
+    con `media="print" onload` se descarga sin bloquear y se aplica al terminar,
+    con el <noscript> como red de seguridad si el JS está desactivado.
+    Alternativa mejor: activar Cloudflare Fonts (plan Free) y servir las fuentes
+    desde el propio dominio, eliminando el third-party por completo.
+  -->
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+    media="print"
+    onload="this.media='all'"
+  />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" />
+  </noscript>
 </head>
 <body>
   <div id="root"></div>
