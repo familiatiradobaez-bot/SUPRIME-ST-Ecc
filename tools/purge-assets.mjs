@@ -86,6 +86,21 @@ const RAIZ = [
   '/icon.svg', '/og-cover.svg',
 ].map((p) => ORIGEN + p);
 
+/**
+ * Lee una variable de entorno, con el fichero local de secretos como alternativa.
+ * El token ya lo hacia; la cuenta no, y sin ella no se puede preguntar a Pages
+ * por los despliegues, con lo que --espera-deploy se quedaba inactivo en local
+ * (en CI el secret si estaba puesto).
+ */
+function leerEntorno(clave) {
+  if (process.env[clave]) return process.env[clave];
+  try {
+    const s = readFileSync(join(REPO, '..', '_SECRETS', 'cloudflare.env'), 'utf8');
+    const m = s.match(new RegExp(`^${clave}=(\\S+)`, 'm'));
+    return m ? m[1] : null;
+  } catch { return null; }
+}
+
 function readToken() {
   const i = args.indexOf('--token');
   if (i !== -1 && args[i + 1]) return args[i + 1];
@@ -123,7 +138,7 @@ if (dryRun) {
  * borrado del repo.
  */
 async function esperarDeploy(token) {
-  const cuenta = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const cuenta = leerEntorno('CLOUDFLARE_ACCOUNT_ID');
   let sha = process.env.GITHUB_SHA || '';
   if (!sha) {
     try { sha = execSync('git rev-parse HEAD', { cwd: join(REPO) }).toString().trim(); } catch { sha = ''; }
