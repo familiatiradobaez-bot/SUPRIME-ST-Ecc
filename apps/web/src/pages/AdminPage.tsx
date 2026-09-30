@@ -3,6 +3,10 @@ import type { User } from '../types';
 import { ImageManager } from '../components/ImageManager';
 import { CatalogManager } from '../components/CatalogManager';
 import type { CatalogDepartment } from '../components/CatalogManager';
+// La CSS del panel se importa desde aquí (no desde main.tsx) para que Vite la
+// empaquete en el chunk de AdminPage, que se carga al abrir el panel y no en la
+// home. Único consumidor: este componente.
+import '../styles/admin.css';
 
 type AdminStats = {
   products: number;

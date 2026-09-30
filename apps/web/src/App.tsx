@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type { Product } from './types';
 import { useAuth } from './hooks/useAuth';
@@ -11,19 +11,30 @@ import { getAuthHeaders, loadStoreSettings } from './lib/api';
 import { Header } from './components/Header';
 import { CookieBanner } from './components/CookieBanner';
 import { Footer } from './components/Footer';
-import { LoginForm } from './components/LoginForm';
-import { OtpForm } from './components/OtpForm';
-import { PasswordResetForm } from './components/PasswordResetForm';
-import { CheckoutForm } from './components/CheckoutForm';
-import { UserPanel } from './components/UserPanel';
-import { CartSidebar } from './components/CartSidebar';
-import { AdminPage } from './pages/AdminPage';
 import { HomePage } from './pages/HomePage';
-import { LegalPage } from './pages/LegalPage';
-import { WishlistPage } from './pages/WishlistPage';
-import { ProductPage } from './pages/ProductPage';
-import { CatalogPage } from './pages/CatalogPage';
-import { NotFoundPage } from './pages/NotFoundPage';
+
+// Code-splitting (tarea #14/#29): la home no carga el panel de admin ni los
+// modales de cuenta y checkout. Antes todoopaedia viajaba en el bundle inicial,
+// que es lo que Lighthouse marcaba como "JS sin usar" (25 KiB) y que paga
+// cualquier visitante con su red móvil, no solo quien usa esas pantallas.
+// `Header`, `Footer` y el carrito sí van en el bundle inicial: son el primer
+// painted y separarlos solo añadiría un salto de contenido.
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const ProductPage = lazy(() => import('./pages/ProductPage').then((m) => ({ default: m.ProductPage })));
+const CatalogPage = lazy(() => import('./pages/CatalogPage').then((m) => ({ default: m.CatalogPage })));
+const WishlistPage = lazy(() => import('./pages/WishlistPage').then((m) => ({ default: m.WishlistPage })));
+const LegalPage = lazy(() => import('./pages/LegalPage').then((m) => ({ default: m.LegalPage })));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+const CartSidebar = lazy(() => import('./components/CartSidebar').then((m) => ({ default: m.CartSidebar })));
+const LoginForm = lazy(() => import('./components/LoginForm').then((m) => ({ default: m.LoginForm })));
+const OtpForm = lazy(() => import('./components/OtpForm').then((m) => ({ default: m.OtpForm })));
+const PasswordResetForm = lazy(() => import('./components/PasswordResetForm').then((m) => ({ default: m.PasswordResetForm })));
+const CheckoutForm = lazy(() => import('./components/CheckoutForm').then((m) => ({ default: m.CheckoutForm })));
+const UserPanel = lazy(() => import('./components/UserPanel').then((m) => ({ default: m.UserPanel })));
+
+function LazyFallback() {
+  return <div className="loading"><div className="spinner"></div></div>;
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -332,12 +343,14 @@ export function App() {
   // Vista admin completamente separada - oculta toda la tienda
   if (showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || ''))) {
     return (
-      <AdminPage
-        user={user}
-        sessionToken={session?.token || ''}
-        apiUrl={apiUrl}
-        onBack={() => setShowAdminPanel(false)}
-      />
+      <Suspense fallback={<div className="layout-main"><LazyFallback /></div>}>
+        <AdminPage
+          user={user}
+          sessionToken={session?.token || ''}
+          apiUrl={apiUrl}
+          onBack={() => setShowAdminPanel(false)}
+        />
+      </Suspense>
     );
   }
 
@@ -374,14 +387,17 @@ export function App() {
 
       {/* Admin Page - página separada para admin+ */}
       {showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || '')) && (
-        <AdminPage
-          user={user}
-          sessionToken={session?.token || ''}
-          apiUrl={apiUrl}
-          onBack={() => setShowAdminPanel(false)}
-        />
+        <Suspense fallback={<LazyFallback />}>
+          <AdminPage
+            user={user}
+            sessionToken={session?.token || ''}
+            apiUrl={apiUrl}
+            onBack={() => setShowAdminPanel(false)}
+          />
+        </Suspense>
       )}
 
+      <Suspense fallback={<LazyFallback />}>
       <Routes>
         <Route
           path="/"
@@ -481,7 +497,13 @@ export function App() {
             (buscar, tienda, contacto) y marcado como noindex. */}
         <Route path="*" element={<NotFoundPage onSearch={handleSearchNav} />} />
       </Routes>
+      </Suspense>
 
+      {/* Modales y panel lateral: sus formularios van en chunks aparte, así que
+          necesitan su propio límite. Con `fallback={null}` se ve el fondo del
+          modal y el contenido aparece al llegar el chunk, en vez de un spinner
+          dentro de un diálogo a medio pintar. */}
+      <Suspense fallback={null}>
       {showCart && (
         <CartSidebar
           cart={cart}
@@ -647,6 +669,7 @@ export function App() {
           </div>
         </div>
       )}
+      </Suspense>
 
       <Footer />
       <CookieBanner />
