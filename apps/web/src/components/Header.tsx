@@ -48,7 +48,8 @@ export function Header({ user, cartCount, searchTerm, suggestions, currency, onS
           tabIndex={onLogoClick ? 0 : undefined}
           aria-label="Ir a la portada de SUPRIME"
           onKeyDown={onLogoClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLogoClick(); } } : undefined}
-        >✨ SUPRIME</h1>
+        ><img className="logo-mark" src="/rayo-128.png" alt="" width={32} height={41} />
+          <span className="logo-word">SUPRIME</span></h1>
         <div className="search-bar">
           <input
             type="search"

@@ -22,8 +22,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
+  <!-- El icono es el rayo de la marca, recortado del original con alfa real.
+       Antes era un SVG con un <text>⚡</text>, que no es un icono: es un glyph
+       del sistema, asi que salia de un color distinto en cada sistema
+       operativo. Y el apple-touch-icon apuntaba a un SVG, que iOS rechaza: al
+       "anadir a pantalla de inicio" en iPhone no ponia icono. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152.png" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://*.trycloudflare.com https://*.ngrok-free.dev https://*.pages.dev http://localhost:* http://127.0.0.1:* http://192.168.0.105:8789 https://api.qrserver.com" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>SUPRIME - Tienda Premium</title>

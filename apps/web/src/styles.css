@@ -42,6 +42,10 @@ picture {
   --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
   --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  /* Dorado de la marca. Los tonos estan sacados del rayo original: el brillo
+     mas claro que da el pixel de #f8ee9e y el dorado profundo en la sombra. */
+  --oro-marca: linear-gradient(160deg, #fdf6c8 0%, #f5d97a 38%, #e0a92e 72%, #b5761a 100%);
+  --oro-marca-solido: #e8b84b;
   --gradient-secondary: linear-gradient(135deg, #e94560 0%, #f97316 100%);
   --gradient-dark: linear-gradient(180deg, #0a0a14 0%, #12121f 100%);
   --gradient-card: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
@@ -236,15 +240,37 @@ p {
   margin-top: 0.5rem;
 }
 
+/* El logo es el rayo de la marca mas la palabra. El rayo va como imagen con
+   alfa real (tools/build-logo-assets.mjs lo recorta del original) y la palabra
+   como texto, no como imagen: la imagen original de la marca decia "UPRIME",
+   sin la S, y ademas el texto recortado sale borroso a tamano de cabecera. */
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.logo-mark {
+  height: clamp(26px, 4vw, 36px);
+  width: auto;
+  display: block;
+  /* El resplandor del rayo se ve mejor reforzado sobre el fondo oscuro. */
+  filter: drop-shadow(0 0 8px rgba(232, 184, 75, 0.35));
+}
+
+.logo-word {
   font-size: clamp(1.2rem, 4vw, 1.8rem);
   font-weight: 700;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
   letter-spacing: -0.5px;
-  white-space: nowrap;
+  background: var(--oro-marca);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Fallback: si background-clip: text no esta soportado, el texto se veria
+     invisible con -webkit-text-fill-color: transparent. Con esto sale en dorado
+     plano en ese caso. */
+  color: var(--oro-marca-solido);
 }
 
 .search-bar {

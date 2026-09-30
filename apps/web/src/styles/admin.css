@@ -46,26 +46,28 @@
   margin-bottom: 1rem;
 }
 
+/* Antes era una caja con el emoji ⚡ dentro, o sea un glyph del sistema con un
+   color distinto en cada sistema operativo. Ahora es el rayo real de la marca,
+   con alfa, recortado del original. */
 .admin-sidebar-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background: var(--gradient-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
+  height: 44px;
+  width: auto;
   flex-shrink: 0;
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(232, 184, 75, 0.35));
 }
 
 .admin-sidebar-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 1.25rem;
   font-weight: 700;
-  background: var(--gradient-primary);
+  /* Dorado de la marca, como el rayo de al lado. Estaba en el violeta del
+     tema, que ya no coincide con el logo. */
+  background: var(--oro-marca);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  color: var(--oro-marca-solido);
 }
 
 .admin-sidebar-nav {

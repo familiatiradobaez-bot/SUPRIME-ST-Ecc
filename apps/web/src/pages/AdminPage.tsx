@@ -798,7 +798,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       {/* Sidebar */}
       <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="admin-sidebar-header">
-          <div className="admin-sidebar-logo">⚡</div>
+          <img className="admin-sidebar-logo" src="/rayo-128.png" alt="" width={34} height={44} />
           <span className="admin-sidebar-title">SUPRIME</span>
         </div>
 
