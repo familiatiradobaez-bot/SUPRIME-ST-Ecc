@@ -4845,17 +4845,11 @@ button, .btn {
   display: block;
 }
 
-.image-actions {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.4rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-}
+/* Los botones de la miniatura (mover/borrar) los posiciona styles/admin.css
+   arriba a la derecha. Aqui tambien habia una copia con `bottom: 0; left: 0`,
+   y al combinarse con el `top` de admin.css la barra se estiraba a todo el
+   ancho y alto de la miniatura, dejando un degradado encima de la foto. Mismo
+   problema que .primary-badge y misma causa: dos hojas con la misma clase. */
 
 .btn-icon {
   width: 28px;
@@ -4891,18 +4885,14 @@ button, .btn {
   background: rgba(255, 71, 87, 0.7);
 }
 
-.primary-badge {
-  position: absolute;
-  top: 0.4rem;
-  left: 0.4rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-full);
-  background: var(--primary);
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
+/* La insignia "Principal" vive en styles/admin.css, que es la hoja canónica
+   del panel. Estaba tambien aqui con `top: 0.4rem`, y como admin.css pone
+   `bottom: 0.25rem`, el elemento recibia top Y bottom a la vez: al estar
+   posicionado en absoluto con altura automática se estiraba de arriba abajo y
+   ocupaba el 58% de la miniatura (66x92 px sobre una imagen de 103x103), con un
+   cuadro morado encima de la foto del producto. Con las dos hojas cargadas, dos
+   reglas de la misma clase se combinan en vez de ganarse: por eso esta no
+   puede seguir aqui. El anclaje lo decide admin.css. */
 
 /* Galería de imágenes reutilizables (ImageManager) */
 .gallery-section {

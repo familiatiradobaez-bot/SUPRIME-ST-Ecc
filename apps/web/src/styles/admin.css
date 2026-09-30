@@ -1022,12 +1022,20 @@ input[aria-invalid='true'] {
   display: block;
 }
 
+/* Los botones se posicionan aqui y en un solo sitio. styles.css tenia tambien
+   una copia con bottom/left, y al combinarse con este `top` la barra se
+   estiraba a toda la miniatura con un degradado encima de la foto. */
 .image-actions {
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
   display: flex;
-  gap: 0.25rem;
+  gap: 0.15rem;
+  /* En una miniatura de ~100 px los tres botones no caben en una fila y se
+     reparten en dos. Con esto la barra no se sale nunca por la izquierda. */
+  max-width: calc(100% - 0.5rem);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .btn-icon {
@@ -1059,6 +1067,10 @@ input[aria-invalid='true'] {
   background: var(--error);
 }
 
+/* Insignia "Principal" de la miniatura. Hoja canónica: la copia que había en
+   styles.css traía `top` y esta trae `bottom`; con las dos aplicadas el badge
+   se estiraba de arriba abajo y tapaba la foto del producto. El anclaje se
+   decide aquí y en un solo sitio. */
 .primary-badge {
   position: absolute;
   bottom: 0.25rem;
@@ -1069,6 +1081,7 @@ input[aria-invalid='true'] {
   border-radius: var(--radius-sm);
   font-size: 0.65rem;
   font-weight: 600;
+  text-transform: uppercase;
 }
 
 @media (max-width: 768px) {
