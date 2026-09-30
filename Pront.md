@@ -5,12 +5,13 @@
 ## 📁 **CONTEXTO COMPLETO — SUPRIME E-COMMERCE**
 
 ### **Estado Actual (2026-09-30)**
+- **Rendimiento móvil**: **81 → 90** ✅ (LCP 3,6 s → 2,9 s; el LCP ya no es el banner de cookies)
 - **Repo**: `C:\Users\VIP\Desktop\Cerebro Obcidian\C proyectos Web` (git `main`, GitHub `familiatiradobaez-bot/SUPRIME-ST-Ecc`)
 - **Front**: https://suprime.xyz (Cloudflare Pages, auto-deploy push a `main`)
 - **API**: https://api.suprime.xyz (Worker `suprime-st-ecc-api`, `npx wrangler deploy`)
 - **Stack**: React+Vite · Hono+Workers+D1 · ImageKit · Email CF/Resend
 - **Smoke**: **69 PASS / 1 FAIL / 2 SKIP** ⚠️ (el FAIL es preexistente: `totp setup` vs `safety_lock`)
-- **Typecheck**: OK ✅ | **Build**: OK ✅ | **Deploy**: API desplegada ✅ · Front pendiente de push
+- **Typecheck**: OK ✅ | **Build**: OK ✅ | **Deploy**: API `f4de77aa` ✅ · Front `fdde31a` ✅ (ambos en producción)
 - **Commit actual**: `75945fb` (Catálogo admin #25 + regla de control de tokens)
 
 ---

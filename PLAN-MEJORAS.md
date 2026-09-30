@@ -109,15 +109,20 @@ del informe web.
 
 | Métrica | Móvil | Escritorio |
 |---------|-------|------------|
-| **Rendimiento** | **81** | **97** |
-| Accesibilidad | 96 | 96 |
+| **Rendimiento** | **81 → 90** ✅ | **97** |
+| Accesibilidad | 96 → 91 | 96 |
 | Buenas prácticas | 100 | 100 |
 | SEO | 100 | 100 |
-| FCP | 2,9 s | 0,7 s |
-| **LCP** | **3,6 s** ❌ | 0,8 s |
+| FCP | 2,9 s → 2,8 s | 0,7 s |
+| **LCP** | **3,6 s → 2,9 s** ✅ | 0,8 s |
 | TBT | 0 ms ✅ | 0 ms ✅ |
 | CLS | 0 ✅ | 0,091 |
-| Speed Index | 5,9 s | 0,7 s |
+| Speed Index | 5,9 s → 2,8 s | 0,7 s |
+
+> **Verificado en producción tras el push de `fdde31a`**: el rendimiento móvil subió de 81 a 90
+> y desaparecieron de la lista tanto "Desglose de LCP" como "Solicitudes que bloquean el
+> renderizado", que eran ambos síntomas del banner de cookies. Queda pendiente medir el
+> escritorio y el LCP de nuevo cuando Cloudflare Fonts esté activo.
 
 ### **Hallazgo crítico: el LCP móvil es el banner de cookies**
 
@@ -190,9 +195,16 @@ Es decir: **nada se servía desde el edge**, y los bundles se revalidaban en cad
 (4 horas de TTL) pese a tener hash de contenido en el nombre. Causa: no existía
 `apps/web/public/_headers` (tarea #18 del plan, marcada como pendiente desde hacía tiempo).
 
-**Corregido en el bloque P0**: `_headers` con `max-age=31536000, immutable` para
-`/assets/*`, TTL cortos para el shell y cabeceras de seguridad (nosniff, X-Frame-Options,
-Referrer-Policy, Permissions-Policy, COOP).
+**Corregido en el bloque P0**: `_headers` con `immutable` y cabeceras de seguridad
+(nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP) — todo verificado
+vivo en producción.
+
+⚠️ **Parcial**: `immutable` y las cabeceras de seguridad sí se aplican, pero `max-age` sigue
+saliendo a `14400` porque Pages fusiona su valor por defecto con el del `_headers`
+(`public, max-age=14400, immutable, must-revalidate`). La documentación confirma que `_headers`
+debe sobrescribir, así que el valor por defecto de assets de Pages está gainando. **Pendiente:
+configurar el TTL de assets en el panel** (ajustes de caché del proyecto en Pages) o usar una
+Cache Rule en el plan Free (hay 10 disponibles) para `/assets/*` con Edge TTL de 1 año.
 
 ### **Plan de acción Cloudflare (todo en el panel, sin coste)**
 
