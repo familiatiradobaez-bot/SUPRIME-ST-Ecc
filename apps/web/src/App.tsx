@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type { Product } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
@@ -23,6 +23,7 @@ import { LegalPage } from './pages/LegalPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { ProductPage } from './pages/ProductPage';
 import { CatalogPage } from './pages/CatalogPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -475,7 +476,10 @@ export function App() {
             />
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Antes redirigía a la home en silencio: una URL mala o un producto
+            borrado landingaban sin explicación. Ahora hay un 404 con salida
+            (buscar, tienda, contacto) y marcado como noindex. */}
+        <Route path="*" element={<NotFoundPage onSearch={handleSearchNav} />} />
       </Routes>
 
       {showCart && (
