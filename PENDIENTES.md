@@ -56,15 +56,24 @@ encima de los `return` condicionales y verificado en producción.
 
 ---
 
-## 🟡 P2 · Code-splitting y JS
+## ✅ Hecho · P2 Code-splitting (`cd86000`)
 
-| # | Tarea | Ahorro medido |
-|---|-------|---------------|
-| 14 | CSS code-splitting por ruta (Admin, PDP, Checkout) | 17 KiB CSS sin usar |
-| 29 | JS code-splitting / lazy | 25 KiB JS sin usar |
-| 30 | JS antiguo (vendor 162 KB) | 11 KiB — considerar `modulepreload` |
+`React.lazy` + `Suspense` para el panel de admin, las rutas (PDP, catálogo, favoritos,
+legales, 404) y los modales de cuenta/carrito/checkout. `admin.css` (16,7 KB) se importa
+desde `AdminPage.tsx` para que viaje en su chunk y no en el bundle inicial.
 
-Archivos: `vite.config.ts`, `AdminPage.tsx` (lazy). Bloque medio: ~15-20K tokens.
+| Bundle inicial (lo que descarga un visitante) | Antes | Después | |
+|---|---|---|---|
+| JS | 133 KB | 48 KB | **-85 KB** |
+| CSS | 145 KB | 134 KB | -11 KB |
+| **Total** | **440 KB / 108 KB gzip** | **343 KB / 86 KB gzip** | **-22,8 KB gzip (-21%)** |
+
+`AdminPage` queda en 40,7 KB + 12,3 KB de CSS que solo se piden al abrir el panel.
+
+> **Trampa**: un componente `lazy` necesita su límite de `Suspense`. La primera versión dejó
+> `LoginForm` y `CheckoutForm` fuera de él y el login dejó de funcionar (React se queda sin
+> fallback y el árbol no monta). Lo cazó el panorama al fallar el login; el smoke de API no
+> lo ve porque no renderiza nada.
 
 ---
 
@@ -85,6 +94,7 @@ Archivos: `vite.config.ts`, `AdminPage.tsx` (lazy). Bloque medio: ~15-20K tokens
 |---|-------|
 | 24 | Suite E2E crítica con Playwright: login → add → checkout |
 | 17/27 | `preload` de fuentes Inter/Playfair — **parcialmente resuelto** por Cloudflare Fonts; ver P5 |
+| 30 | JS antiguo (vendor 162 KB) | ⚪ Sin hacer: es React + React Router, 52,8 KB gzip. Modernizar el bundle no compensa el riesgo |
 
 ✅ **21 · Página 404** cerrada en `a51f362`: `NotFoundPage` con la ruta que falló, buscador que
 lleva a la home filtrada, salidas a tienda/contacto y `noindex,follow` mientras está montada.

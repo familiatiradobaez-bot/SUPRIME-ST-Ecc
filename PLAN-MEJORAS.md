@@ -86,7 +86,7 @@
 
 | # | Issue | Fix | Estado |
 |---|-------|-----|--------|
-| 14 | **Bundle CSS 142 KB gzip 18 KB** → crítico para móvil 3G | Code-splitting CSS por ruta (Admin, PDP, Checkout) | 🔄 |
+| 14 | **Bundle CSS 142 KB gzip 18 KB** → crítico para móvil 3G | Code-splitting CSS por ruta (Admin, PDP, Checkout) | ✅ Hecho (`cd86000`): 145 → 134 KB |
 | 15 | **Imágenes sin `srcset`/`sizes`** → descargan 900px en móvil | Añadir `srcSet` + `sizes` en ProductCard, PDP hero | ✅ Hecho (`5a878c5`) |
 | 16 | **Faltan `width`/`height` en imágenes** → CLS | Añadir `width`/`height` en `<img>` (PDP, Card, CategoryCard) | ✅ Hecho |
 | 16 | **Falta `fetchpriority="high"` en hero PDP** | Añadir en PDP hero image | ✅ Hecho |
@@ -147,7 +147,7 @@ a ~1 s y el rendimiento de 81 a ~95+.
 | 26c | **`_headers` ausente: assets sin cachear en el edge** (P0) | `REVALIDATED` → edge | ✅ Hecho — `immutable` 1 año en `/assets/*` |
 | 27 | `preload` de fuentes Inter/Playfair Display | — | Tarea 17 ya prevista |
 | 28 | CSS sin usar | 17 KiB | Tarea 14 (code-splitting) |
-| 29 | JS sin usar | 25 KiB | Tarea 14 |
+| 29 | JS sin usar | 25 KiB | ✅ Hecho (`cd86000`): 133 → 48 KB de JS en el bundle inicial |
 | 30 | **JS antiguo** (vendor 162 KB) | 11 KiB | Considerar `modulepreload` o bundle moderno |
 | 31 | **Imágenes sin formatos modernos** (AVIF/WebP) | 20 KiB móvil / **839 KiB escritorio** | ✅ Hecho (`5a878c5`), en código: Polish y Images son Pro+ |
 | 32 | CLS 0,091 en escritorio | — | Algún elemento entra tarde; revisar tras el fix de #26 |
