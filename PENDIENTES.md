@@ -387,13 +387,39 @@ lo que demuestra que la lista de orígenes no se quedó demasiado estricta.
 
 ---
 
-## 🔴 Tareas de seguridad / mantenimiento (del usuario, no del código)
+## 🟡 No es un bug · No corras smoke y E2E seguidos desde el mismo equipo
+
+Comprobado el 30-sep. Al lanzar `npm run e2e` justo después de `npm run smoke`
+fallearon 3 tests de admin en móvil. **No es una regresión**: los mismos tests
+en aislamiento pasaron 5/5, y la suite completa pasó 20/20 al repetirla con los
+contadores ya reseteados.
+
+**Por qué pasa:** los dos suites usan la cuenta de smoke y salen desde la misma
+IP, y el rate-limit es por IP además de por cuenta:
+
+- `rl:loginIp` — 30 intentos / 15 min
+- `rl:twofa` — 30 step-ups / 15 min
+
+El smoke hace login + TOTP step-up muchas veces (los checks de CSRF, el grant, el
+bloqueo), y el E2E repite login y TOTP en casi cada test. Juntos, desde el mismo
+`45.153.165.7`, se pasan los dos límites.
+
+**En CI no ocurre:** `build-and-smoke` y `e2e` corren en runners distintos, con
+IPs distintas, y sus cubos son independientes.
+
+**Si pasa en local:** esperar 15 minutos, o borrar el cubo a mano:
+```
+npx wrangler kv key delete --namespace-id c695ababca41469a97d90502eebf1620 --remote "rl:twofa:<TU_IP>"
+npx wrangler kv key delete --namespace-id c695ababca41469a97d90502eebf1620 --remote "rl:loginIp:<TU_IP>"
+```
+
+---
 
 | # | Tarea |
 |---|-------|
 | S1 | **Rotar secretos expuestos**: tokens `cfat_`/`cfut_` y clave R2. Pasos en `_SECRETS/cloudflare.env`. ⚠️ El `cfat_` está ahora **también** como secret `CLOUDFLARE_API_TOKEN` del repo de GitHub (lo usa la purga de CI): al rotarlo hay que actualizar las dos cosas |
 | S2 | Crear token Cloudflare nuevo con **alcance mínimo**, no "All permissions". ⚠️ Desde el 30-sep necesita **tres** permisos, no uno: **Pages: leer** (lo usa `--espera-deploy`), **Cache Rules: editar** (la regla `root-static-short-cache`) y **Purge cache**. Con solo D1/Workers/R2/Purge la purga de CI se rompe |
-| S3 | Namespace `RATE_LIMIT_KV` | ✅ Creado, activado en `wrangler.toml` y **conectado de verdad** a login, 2FA y subidas (ver la sección de rate-limit) |
+| **S3** | Namespace `RATE_LIMIT_KV` | ✅ Creado, activado en `wrangler.toml` y **conectado de verdad** a login, 2FA y subidas (ver la sección de rate-limit) |
 | S4 | ~~Revisar `SEGURIDAD_CSRF_DESACTIVADA.md`~~ | ✅ **Cerrado** (30-sep): el middleware se reactivó con la regla correcta (solo se valida el origen si la petición trae `Origin` o `Referer`) y el documento se reescribió con las mediciones. Este artículo estaba caducado en la lista |
 
 ---
