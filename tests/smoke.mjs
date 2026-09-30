@@ -586,6 +586,14 @@ if (!rt) { skip('logout revoca el grant de admin (sin sesión para repetir)'); }
 else {
   const RH = { 'Authorization': `Bearer ${rt}` };
   r = await F(`${API}/admin/stats`, { headers: RH });
+  if (r.status === 200) {
+    // El grant es POR USUARIO, no por sesión: si el CI (o el E2E) corre a la vez
+    // con la misma cuenta de smoke, su step-up deja el panel abierto y este check
+    // no puede distinguirlo del suyo. Se revoca y se reintenta una vez.
+    results.push('WARN admin/stats dio 200 tras el logout: otra corrida con la misma cuenta tenía un grant vivo');
+    await F(`${API}/auth/admin-stepup/revoke`, { method: 'POST', headers: RH });
+    r = await F(`${API}/admin/stats`, { headers: RH });
+  }
   const e = await j(r);
   check('logout revoca el grant de admin (403 de nuevo)', r.status === 403 && (e.error === 'ADMIN_2FA_REQUIRED' || e.error === 'ADMIN_2FA_SETUP_REQUIRED'), `${r.status} ${e.error}`);
   await F(`${API}/auth/logout`, { method: 'POST', headers: RH });
