@@ -23,7 +23,8 @@ catalogRoutes.get('/store-settings', async (context) => {
 });
 
 const PRODUCT_SELECT = `p.id, p.name, p.slug, p.description, p.image_url, p.price_cents,
-  p.stock_quantity, sd.slug as subdepartment_slug, d.slug as department_slug, d.name as department_name`;
+  p.stock_quantity, p.subdepartment_id, sd.name as subdepartment_name, sd.slug as subdepartment_slug,
+  d.slug as department_slug, d.name as department_name`;
 const PRODUCT_JOINS = `FROM products p
   JOIN subdepartments sd ON sd.id = p.subdepartment_id
   JOIN departments d ON d.id = sd.department_id`;

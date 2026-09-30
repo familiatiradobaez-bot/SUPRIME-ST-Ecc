@@ -31,6 +31,47 @@
 
 ---
 
+## 🟠 CATÁLOGO / ADMIN — NUEVO (pedido 2026-09-30)
+
+| # | Issue | Fix | Estado |
+|---|-------|-----|--------|
+| 25 | **No se pueden agregar departamentos ni subdepartamentos desde el panel de admin**. Solo hay lectura (`GET /catalog/departments`); crear jerarquía exige SQL manual en D1 | CRUD admin de catálogo + tab "Catálogo" en el panel | 🔄 Pendiente |
+
+### **Desglose tarea #25 — Crear departamentos/subdepartamentos desde admin**
+
+**Problema actual**
+- `departments` / `subdepartments` solo se leen (público): `catalog.routes.ts` → `GET /catalog/departments`, `GET /catalog/departments/:slug/products`, `GET /catalog/subdepartments/:slug/products`.
+- `admin.routes.ts` **no tiene** ninguna ruta de departamentos/subdepartamentos (solo `/stats`, `/users`, `/orders`, `/settings`, `/audit`, `/products`).
+- **Acoplamiento hardcodeado**: `admin.routes.ts` línea ~392 → `VALUES (?, 'subdep-demo', ...)` en `POST /admin/products`. Todo producto nuevo cae en el subdemo, aunque el catálogo tenga otra jerarquía.
+- `AdminPage.tsx` no tiene selector de subdepartamento en el formulario de producto.
+
+**Trabajo**
+
+| # | Tarea | Archivos | Complejidad |
+|---|-------|---------|-------------|
+| 25.1 | `GET /admin/catalog` — listar departamentos + subdepartamentos + conteo de productos | `apps/api/src/modules/admin/admin.routes.ts` | Baja |
+| 25.2 | `POST /admin/departments` (name, slug, is_active) | idem | Baja |
+| 25.3 | `POST /admin/subdepartments` (department_id, name, slug) | idem | Baja |
+| 25.4 | `PUT`/`DELETE` de ambos (con `ON DELETE CASCADE` ya definido en `0001_initial.sql`) | idem | Media |
+| 25.5 | Quitar `'subdep-demo'` hardcodeado → `subdepartment_id` obligatorio + validado en `POST/PUT /admin/products` | idem | Baja |
+| 25.6 | Tab "Catálogo" 🗂️ en el sidebar admin (formulario + tabla) | `apps/web/src/pages/AdminPage.tsx`, `styles/admin.css` | Media |
+| 25.7 | Selector de subdepartamento (por departamento) en el formulario de producto | idem | Baja |
+| 25.8 | Slug autogenerado + normalizado, con des-dupe (patrón ya existente en `POST /products`) | idem | Baja |
+| 25.9 | Smoke checks nuevos (crear depto → crear subdepto → producto en ese subdepto) | `tests/smoke.mjs` | Media |
+
+**Reglas**
+- Permisos: reutilizar el guard de `admin.routes` (misma jerarquía que `/products`; `settings` sigue siendo owner/admin).
+- Slug único: `departments.slug` es `UNIQUE`; `subdepartments` tiene `UNIQUE (department_id, slug)`.
+- `departments.name` es `UNIQUE` global (ojo al crear homónimos).
+- El catálogo público lee `WHERE is_active = 1` en `departments` → un depto inactivo desaparece de la nav.
+- Sin migración D1 nueva: las tablas ya existen (`db/migrations/0001_initial.sql`).
+- Validar en móvil (390×844) y desktop (1440×900) con `MovilLab/panorama.mjs`.
+
+**Criterio de aceptación**
+- Desde el panel, sin SQL, se puede crear un departamento → un subdepartamento → un producto dentro de ese subdepartamento, y el producto aparece en su URL pública de catálogo.
+
+---
+
 ## 🟢 MEDIO (Pulido / Rendimiento / DX)
 
 | # | Issue | Fix | Estado |
@@ -54,8 +95,9 @@
 
 1. **Fixes críticos SEO** (1-4) → impacto inmediato en indexación
 2. **UX conversión** (5-13) → dinero directo
-3. **Rendimiento/CLS** (14-17) → Core Web Vitals
-4. **Infra/DX** (18-24) → mantenibilidad
+3. **Catálogo admin** (25) → bloquea la gestión real del catálogo (requiere SQL hoy)
+4. **Rendimiento/CLS** (14-17) → Core Web Vitals
+5. **Infra/DX** (18-24) → mantenibilidad
 
 ---
 
@@ -65,6 +107,7 @@
 - Carrito/Favs por cuenta con merge invitado→cuenta
 - Checkout con validación completa + sticky footer
 - Admin: usuarios, productos, órdenes, settings, 2FA con safety lock
+- ⚠️ NO tocar aún: `POST /admin/products` fija `subdepartment_id = 'subdep-demo'` (hardcode). Ver tarea #25 antes de crear productos reales.
 - Modo mantenimiento, safety lock, jerarquía roles
 - PWA básica (manifest, icon, theme-color)
 - CSP, security headers, rate-limit con KV fallback
@@ -96,6 +139,9 @@
 
 ## 🔄 ESTRATEGIA
 
+- **Control de tokens antes de cada bloque**: `npm run tokens`. Si no alcanza → avisar
+  y cambiar de agente. La cuota/reset del plan gratuito solo se ve en el panel de
+  OpenCode Zen (no accesible desde local).
 - Un commit por bloque (atómico, reversible)
 - Smoke + typecheck + build tras cada bloque
 - Deploy a staging (branch) → validar en móvil real → merge a main

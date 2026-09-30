@@ -377,6 +377,19 @@ adminRoutes.post('/products', async (context) => {
     return context.json({ error: 'INVALID_STOCK', message: 'stock_quantity debe ser entero >= 0' }, 400);
   }
 
+  // El subdepartamento es obligatorio: antes caía siempre en 'subdep-demo',
+  // lo que metía todo el catálogo nuevo en el mismo subdepartamento demo.
+  const subdepartmentId = typeof body.subdepartment_id === 'string' ? body.subdepartment_id : '';
+  if (!subdepartmentId) {
+    return context.json({ error: 'MISSING_FIELDS', message: 'subdepartment_id requerido' }, 400);
+  }
+  const sub = await context.env.DB.prepare(
+    'SELECT id FROM subdepartments WHERE id = ?'
+  ).bind(subdepartmentId).first() as { id: string } | null;
+  if (!sub) {
+    return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND', message: 'El subdepartamento no existe' }, 404);
+  }
+
   const productId = generateId();
   const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'producto';
   // Slug único (evita 500 por UNIQUE en renombres/duplicados)
@@ -389,8 +402,8 @@ adminRoutes.post('/products', async (context) => {
 
   await context.env.DB.prepare(
     `INSERT INTO products (id, subdepartment_id, name, slug, description, image_url, price_cents, stock_quantity, status)
-     VALUES (?, 'subdep-demo', ?, ?, ?, ?, ?, ?, 'active')`
-  ).bind(productId, name, slug, description, image_url, price_cents, stock_quantity).run();
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`
+  ).bind(productId, subdepartmentId, name, slug, description, image_url, price_cents, stock_quantity).run();
 
   // Persistir galería en product_images (primera = principal)
   const galleryUrls = Array.isArray(body.images) && body.images.length > 0 ? body.images : [image_url];
@@ -423,10 +436,30 @@ adminRoutes.put('/products/:id', async (context) => {
     return context.json({ error: 'INVALID_STOCK', message: 'stock_quantity debe ser entero >= 0' }, 400);
   }
 
-  const updated = await context.env.DB.prepare(
-    `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
-     WHERE id = ?`
-  ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
+  // Reubicar el producto: solo si viene informado, y validando que existe.
+  let subdepartmentId: string | null = null;
+  if (body.subdepartment_id !== undefined && body.subdepartment_id !== null && body.subdepartment_id !== '') {
+    if (typeof body.subdepartment_id !== 'string') {
+      return context.json({ error: 'INVALID_INPUT', message: 'subdepartment_id inválido' }, 400);
+    }
+    const sub = await context.env.DB.prepare(
+      'SELECT id FROM subdepartments WHERE id = ?'
+    ).bind(body.subdepartment_id).first() as { id: string } | null;
+    if (!sub) {
+      return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND', message: 'El subdepartamento no existe' }, 404);
+    }
+    subdepartmentId = sub.id;
+  }
+
+  const updated = subdepartmentId
+    ? await context.env.DB.prepare(
+        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?, subdepartment_id = ?
+         WHERE id = ?`
+      ).bind(name, description, image_url, price_cents, stock_quantity, subdepartmentId, productId).run()
+    : await context.env.DB.prepare(
+        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
+         WHERE id = ?`
+      ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
 
   if ((updated.meta as { changes?: number } | undefined)?.changes === 0) {
     return context.json({ error: 'PRODUCT_NOT_FOUND' }, 404);
@@ -458,6 +491,345 @@ adminRoutes.delete('/products/:id', async (context) => {
   await context.env.DB.prepare(
     `UPDATE products SET status = 'archived' WHERE id = ?`
   ).bind(productId).run();
+
+  return context.json({ data: { deleted: true } });
+});
+
+// ─────────────────────────────────────────────────────────────
+// CATÁLOGO: departamentos y subdepartamentos (tarea #25)
+//
+// Jerarquía: departments 1─* subdepartments 1─* products.
+// Solo lectura en el catálogo público; aquí se gestiona (crear/editar/borrar).
+// Mismo guard que el resto del admin (stock_manager+), con step-up 2FA.
+// ─────────────────────────────────────────────────────────────
+
+// Normaliza a slug: minúsculas, sin tildes, guiones. Patrón equivalente al
+// que ya usa POST /products para no tener dos implementaciones distintas.
+function slugify(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+// Nombre legible para el error cuando choca un UNIQUE.
+function isUniqueViolation(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message || '');
+  return /UNIQUE constraint failed/i.test(msg);
+}
+
+// Busca un slug libre entre name, name-2, name-3... (mismo patrón que productos).
+// `extraWhere`/`extraParams` acotan la búsqueda (p.ej. excluding the row itself).
+async function uniqueSlug(
+  env: Bindings,
+  table: 'departments' | 'subdepartments',
+  base: string,
+  extraWhere?: string,
+  extraParams: unknown[] = []
+): Promise<string> {
+  const root = base || 'item';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = attempt === 0 ? root : `${root}-${Math.random().toString(36).slice(2, 6)}`;
+    const sql = extraWhere
+      ? `SELECT 1 as ok FROM ${table} WHERE slug = ? AND ${extraWhere}`
+      : `SELECT 1 as ok FROM ${table} WHERE slug = ?`;
+    const stmt = env.DB.prepare(sql).bind(candidate, ...extraParams);
+    const taken = await stmt.first();
+    if (!taken) return candidate;
+  }
+  return `${root}-${Date.now().toString(36)}`;
+}
+
+function logAudit(
+  env: Bindings,
+  userId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  details: Record<string, unknown>
+) {
+  return env.DB.prepare(
+    'INSERT INTO audit_logs (id, user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(generateId(), userId || null, action, entityType, entityId, JSON.stringify(details)).run();
+}
+
+// GET /admin/catalog - Departamentos + subdepartamentos con conteo de productos
+adminRoutes.get('/catalog', async (context) => {
+  const departments = await context.env.DB.prepare(
+    `SELECT d.id, d.name, d.slug, d.is_active,
+            (SELECT COUNT(*) FROM subdepartments sd WHERE sd.department_id = d.id) AS subdepartment_count,
+            (SELECT COUNT(*) FROM products p
+               JOIN subdepartments sd2 ON sd2.id = p.subdepartment_id
+              WHERE sd2.department_id = d.id) AS product_count
+       FROM departments d
+       ORDER BY d.name COLLATE NOCASE`
+  ).all();
+
+  const subdepartments = await context.env.DB.prepare(
+    `SELECT sd.id, sd.department_id, sd.name, sd.slug,
+            (SELECT COUNT(*) FROM products p WHERE p.subdepartment_id = sd.id) AS product_count
+       FROM subdepartments sd
+       ORDER BY sd.name COLLATE NOCASE`
+  ).all();
+
+  const subs = subdepartments.results as Array<{ department_id: string }>;
+  const data = (departments.results as Array<{ id: string }>).map((dept) => ({
+    ...dept,
+    subdepartments: subs.filter((s) => s.department_id === dept.id),
+  }));
+
+  return context.json({ data });
+});
+
+// POST /admin/departments - Crear departamento
+adminRoutes.post('/departments', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  if (!body) return context.json({ error: 'INVALID_INPUT' }, 400);
+
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name || name.length > 80) {
+    return context.json({ error: 'INVALID_NAME', message: 'name requerido (1-80 chars)' }, 400);
+  }
+
+  const isActive = body.is_active === 0 || body.is_active === '0' ? 0 : 1;
+  const slug = await uniqueSlug(context.env, 'departments', slugify(body.slug || name));
+
+  const id = generateId();
+  try {
+    await context.env.DB.prepare(
+      `INSERT INTO departments (id, name, slug, is_active) VALUES (?, ?, ?, ?)`
+    ).bind(id, name, slug, isActive).run();
+  } catch (err) {
+    // departments.name es UNIQUE global: homónimos darían 500.
+    if (isUniqueViolation(err)) {
+      return context.json({ error: 'DUPLICATE_NAME', message: `Ya existe un departamento llamado "${name}"` }, 409);
+    }
+    throw err;
+  }
+
+  await logAudit(context.env, context.get('authUserId'), 'CREATE_DEPARTMENT', 'department', id, { name, slug });
+
+  return context.json({ data: { id, name, slug, is_active: isActive } }, 201);
+});
+
+// PUT /admin/departments/:id - Editar departamento
+adminRoutes.put('/departments/:id', async (context) => {
+  const id = context.req.param('id');
+  const body = await context.req.json().catch(() => null);
+  if (!body) return context.json({ error: 'INVALID_INPUT' }, 400);
+
+  const current = await context.env.DB.prepare(
+    'SELECT id, name, slug, is_active FROM departments WHERE id = ?'
+  ).bind(id).first() as { id: string; name: string; slug: string; is_active: number } | null;
+  if (!current) return context.json({ error: 'DEPARTMENT_NOT_FOUND' }, 404);
+
+  const name = body.name === undefined
+    ? current.name
+    : (typeof body.name === 'string' ? body.name.trim() : '');
+  if (!name || name.length > 80) {
+    return context.json({ error: 'INVALID_NAME', message: 'name requerido (1-80 chars)' }, 400);
+  }
+
+  const isActive = body.is_active === undefined
+    ? current.is_active
+    : (body.is_active === 0 || body.is_active === '0' ? 0 : 1);
+
+  // El slug solo se recalcula si viene explícito o si cambió el nombre.
+  let slug = current.slug;
+  if (typeof body.slug === 'string' && body.slug.trim()) {
+    slug = await uniqueSlug(context.env, 'departments', slugify(body.slug), 'id != ?', [id]);
+  } else if (name !== current.name) {
+    slug = await uniqueSlug(context.env, 'departments', slugify(name), 'id != ?', [id]);
+  }
+
+  try {
+    await context.env.DB.prepare(
+      'UPDATE departments SET name = ?, slug = ?, is_active = ? WHERE id = ?'
+    ).bind(name, slug, isActive, id).run();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return context.json({ error: 'DUPLICATE_NAME', message: `Ya existe un departamento llamado "${name}"` }, 409);
+    }
+    throw err;
+  }
+
+  await logAudit(context.env, context.get('authUserId'), 'UPDATE_DEPARTMENT', 'department', id, {
+    prev: { name: current.name, slug: current.slug, is_active: current.is_active },
+    next: { name, slug, is_active: isActive },
+  });
+
+  return context.json({ data: { id, name, slug, is_active: isActive } });
+});
+
+// DELETE /admin/departments/:id - Borrar departamento (CASCADE a subdepartamentos)
+adminRoutes.delete('/departments/:id', async (context) => {
+  if (await isSafetyLockOn(context.env)) {
+    return context.json({ error: 'SAFETY_LOCKED', message: 'Modo seguro activo: desactívalo en Configuración para borrar' }, 403);
+  }
+  const id = context.req.param('id');
+
+  const current = await context.env.DB.prepare(
+    'SELECT name FROM departments WHERE id = ?'
+  ).bind(id).first() as { name: string } | null;
+  if (!current) return context.json({ error: 'DEPARTMENT_NOT_FOUND' }, 404);
+
+  // Los productos cuelgan de subdepartments, y products.subdepartment_id no
+  // tiene ON DELETE: borrar en cascada dejaría productos huérfanos. Se bloquea
+  // si hay productos vivos en vez de destruirlos en silencio.
+  const used = await context.env.DB.prepare(
+    `SELECT COUNT(*) as count FROM products p
+       JOIN subdepartments sd ON sd.id = p.subdepartment_id
+      WHERE sd.department_id = ? AND p.status != 'archived'`
+  ).bind(id).first() as { count: number } | null;
+
+  if ((used?.count || 0) > 0) {
+    return context.json({
+      error: 'DEPARTMENT_NOT_EMPTY',
+      message: `Tiene ${used?.count} producto(s) activo(s). Muévelos o archívalos antes de borrarlo`,
+    }, 409);
+  }
+
+  await context.env.DB.prepare('DELETE FROM departments WHERE id = ?').bind(id).run();
+  await logAudit(context.env, context.get('authUserId'), 'DELETE_DEPARTMENT', 'department', id, { name: current.name });
+
+  return context.json({ data: { deleted: true } });
+});
+
+// POST /admin/subdepartments - Crear subdepartamento
+adminRoutes.post('/subdepartments', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  if (!body) return context.json({ error: 'INVALID_INPUT' }, 400);
+
+  const departmentId = typeof body.department_id === 'string' ? body.department_id : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!departmentId) return context.json({ error: 'MISSING_FIELDS', message: 'department_id requerido' }, 400);
+  if (!name || name.length > 80) {
+    return context.json({ error: 'INVALID_NAME', message: 'name requerido (1-80 chars)' }, 400);
+  }
+
+  const parent = await context.env.DB.prepare(
+    'SELECT id, name FROM departments WHERE id = ?'
+  ).bind(departmentId).first() as { id: string; name: string } | null;
+  if (!parent) {
+    return context.json({ error: 'DEPARTMENT_NOT_FOUND', message: 'El departamento no existe' }, 404);
+  }
+
+  // UNIQUE (department_id, slug): el slug solo debe ser único dentro del depto.
+  const slug = await uniqueSlug(
+    context.env, 'subdepartments', slugify(body.slug || name), 'department_id = ?', [departmentId]
+  );
+
+  const id = generateId();
+  try {
+    await context.env.DB.prepare(
+      `INSERT INTO subdepartments (id, department_id, name, slug) VALUES (?, ?, ?, ?)`
+    ).bind(id, departmentId, name, slug).run();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return context.json({ error: 'DUPLICATE_NAME', message: `"${name}" ya existe en ${parent.name}` }, 409);
+    }
+    throw err;
+  }
+
+  await logAudit(context.env, context.get('authUserId'), 'CREATE_SUBDEPARTMENT', 'subdepartment', id, {
+    name, slug, department_id: departmentId,
+  });
+
+  return context.json({ data: { id, department_id: departmentId, name, slug } }, 201);
+});
+
+// PUT /admin/subdepartments/:id - Editar subdepartamento
+adminRoutes.put('/subdepartments/:id', async (context) => {
+  const id = context.req.param('id');
+  const body = await context.req.json().catch(() => null);
+  if (!body) return context.json({ error: 'INVALID_INPUT' }, 400);
+
+  const current = await context.env.DB.prepare(
+    'SELECT id, department_id, name, slug FROM subdepartments WHERE id = ?'
+  ).bind(id).first() as { id: string; department_id: string; name: string; slug: string } | null;
+  if (!current) return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND' }, 404);
+
+  const name = body.name === undefined
+    ? current.name
+    : (typeof body.name === 'string' ? body.name.trim() : '');
+  if (!name || name.length > 80) {
+    return context.json({ error: 'INVALID_NAME', message: 'name requerido (1-80 chars)' }, 400);
+  }
+
+  // Reasignar a otro departamento: comprobar que el destino existe.
+  let departmentId = current.department_id;
+  if (body.department_id !== undefined && body.department_id !== current.department_id) {
+    if (typeof body.department_id !== 'string' || !body.department_id) {
+      return context.json({ error: 'INVALID_INPUT', message: 'department_id inválido' }, 400);
+    }
+    const target = await context.env.DB.prepare(
+      'SELECT id FROM departments WHERE id = ?'
+    ).bind(body.department_id).first();
+    if (!target) return context.json({ error: 'DEPARTMENT_NOT_FOUND' }, 404);
+    departmentId = body.department_id;
+  }
+
+  let slug = current.slug;
+  const wantSlug = typeof body.slug === 'string' && body.slug.trim() ? slugify(body.slug) : null;
+  if (wantSlug || name !== current.name || departmentId !== current.department_id) {
+    // La unicidad del slug es por (department_id, slug): hay que excluirse a
+    // uno mismo y acotar al departamento destino (puede haber cambiado).
+    slug = await uniqueSlug(
+      context.env, 'subdepartments',
+      wantSlug || slugify(name),
+      'id != ? AND department_id = ?',
+      [id, departmentId]
+    );
+  }
+
+  try {
+    await context.env.DB.prepare(
+      'UPDATE subdepartments SET department_id = ?, name = ?, slug = ? WHERE id = ?'
+    ).bind(departmentId, name, slug, id).run();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return context.json({ error: 'DUPLICATE_NAME', message: `"${name}" ya existe en ese departamento` }, 409);
+    }
+    throw err;
+  }
+
+  await logAudit(context.env, context.get('authUserId'), 'UPDATE_SUBDEPARTMENT', 'subdepartment', id, {
+    prev: current, next: { department_id: departmentId, name, slug },
+  });
+
+  return context.json({ data: { id, department_id: departmentId, name, slug } });
+});
+
+// DELETE /admin/subdepartments/:id - Borrar subdepartamento
+adminRoutes.delete('/subdepartments/:id', async (context) => {
+  if (await isSafetyLockOn(context.env)) {
+    return context.json({ error: 'SAFETY_LOCKED', message: 'Modo seguro activo: desactívalo en Configuración para borrar' }, 403);
+  }
+  const id = context.req.param('id');
+
+  const current = await context.env.DB.prepare(
+    'SELECT name FROM subdepartments WHERE id = ?'
+  ).bind(id).first() as { name: string } | null;
+  if (!current) return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND' }, 404);
+
+  // products.subdepartment_id es NOT NULL sin CASCADE: borrar con productos
+  // vivos dejaría filas huérfanas o un 500 por FK.
+  const used = await context.env.DB.prepare(
+    "SELECT COUNT(*) as count FROM products WHERE subdepartment_id = ? AND status != 'archived'"
+  ).bind(id).first() as { count: number } | null;
+
+  if ((used?.count || 0) > 0) {
+    return context.json({
+      error: 'SUBDEPARTMENT_NOT_EMPTY',
+      message: `Tiene ${used?.count} producto(s) activo(s). Muévelos o archívalos antes de borrarlo`,
+    }, 409);
+  }
+
+  await context.env.DB.prepare('DELETE FROM subdepartments WHERE id = ?').bind(id).run();
+  await logAudit(context.env, context.get('authUserId'), 'DELETE_SUBDEPARTMENT', 'subdepartment', id, { name: current.name });
 
   return context.json({ data: { deleted: true } });
 });

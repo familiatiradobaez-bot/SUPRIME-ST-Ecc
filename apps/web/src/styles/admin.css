@@ -401,6 +401,210 @@
   opacity: 0.9;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Catálogo admin: departamentos y subdepartamentos (tarea #25)
+   ───────────────────────────────────────────────────────────── */
+.admin-catalog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-catalog-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.admin-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  opacity: 0.85;
+  margin: 0;
+}
+
+.admin-catalog-msg {
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-sm, 8px);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+}
+
+.admin-catalog-msg.ok {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+}
+
+.admin-catalog-msg.err {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+}
+
+.admin-catalog-create {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-catalog-create-card {
+  background: var(--pill-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+  padding: 1rem;
+}
+
+.admin-catalog-create-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.admin-catalog-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-catalog-row input,
+.admin-catalog-row select {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.admin-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-catalog-card {
+  background: var(--pill-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+  padding: 0.9rem 1rem;
+}
+
+/* Departamento desactivado: sigue en el panel pero fuera de la tienda */
+.admin-catalog-card.inactive {
+  opacity: 0.62;
+  border-style: dashed;
+}
+
+.admin-catalog-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-catalog-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-slug {
+  font-size: 0.75rem;
+  background: var(--pill-hover-bg);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.admin-badge-off {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
+.admin-catalog-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.admin-catalog-edit {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-catalog-edit input,
+.admin-catalog-edit select {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.admin-catalog-nosubs {
+  margin-top: 0.6rem;
+  font-style: italic;
+}
+
+.admin-catalog-subs {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 2px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-catalog-subs > li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-catalog-sub-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.admin-catalog-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+}
+
+.admin-catalog-empty p {
+  margin: 0 0 0.35rem;
+}
+
+@media (max-width: 768px) {
+  .admin-catalog-edit,
+  .admin-catalog-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-catalog-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* Users Table */
 .admin-table {
   width: 100%;

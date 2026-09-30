@@ -205,6 +205,161 @@ check('reset código malo 401/404', r.status === 401 || r.status === 404, r.stat
 r = await F(`${API}/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@admin.com', code: '000000', newPassword: 'weak' }) });
 check('reset clave débil 400', r.status === 400, r.status);
 
+console.log('== Catálogo admin: departamentos/subdepartamentos (tarea #25) ==');
+// Esta sección crea datos reales: se autogenera con sufijo y se limpia al final.
+const stamp = Date.now().toString(36);
+const JH = { ...H, 'Content-Type': 'application/json' };
+let createdDeptId = null;
+let createdSubId = null;
+let createdProductId = null;
+
+// Validaciones de entrada. Se mandan CON auth: el guard de admin responde 401
+// antes de validar el body, así que sin sesión no se puede probar el 400.
+async function checkAdminExpect(name, req, expected) {
+  const res = await req();
+  if (res.status === expected) { check(name, true); return true; }
+  const e = await j(res);
+  // Sin step-up vigente el guard responde 403 antes de llegar al handler.
+  if (res.status === 403 && (e.error === 'ADMIN_2FA_REQUIRED' || e.error === 'ADMIN_2FA_SETUP_REQUIRED')) {
+    skip(`${name} (exige step-up)`);
+    return false;
+  }
+  check(name, false, `${res.status} ${e.error}`);
+  return false;
+}
+
+if (!authed) {
+  skip('validaciones catálogo admin (requiere sesión)');
+} else {
+  await checkAdminExpect('crear departamento vacío 400', () =>
+    F(`${API}/admin/departments`, { method: 'POST', headers: JH, body: JSON.stringify({}) }), 400);
+  await checkAdminExpect('departamento con name vacío 400', () =>
+    F(`${API}/admin/departments`, { method: 'POST', headers: JH, body: JSON.stringify({ name: '' }) }), 400);
+  await checkAdminExpect('subdepartamento con depto inexistente 404', () =>
+    F(`${API}/admin/subdepartments`, { method: 'POST', headers: JH, body: JSON.stringify({ department_id: 'no-existe-xyz', name: 'X' }) }), 404);
+  // Modo seguro (safety_lock) bloquea el borrado antes del 404 del recurso.
+  r = await F(`${API}/admin/departments/no-existe-xyz`, { method: 'DELETE', headers: H });
+  if (r.status === 403) {
+    const e = await j(r);
+    if (e.error === 'SAFETY_LOCKED') skip('borrar departamento inexistente 404 (modo seguro activo)');
+    else skip('borrar departamento inexistente 404 (exige step-up)');
+  } else {
+    check('borrar departamento inexistente 404', r.status === 404, r.status);
+  }
+}
+r = await F(`${API}/admin/catalog`, { headers: H });
+await checkAdmin('admin catalog 200 + estructura', r, (d) => Array.isArray(d.data) && d.data.every((x) => Array.isArray(x.subdepartments)));
+
+// Flujo real: depto → subdepto → producto dentro de él → visible en catálogo.
+r = await F(`${API}/admin/catalog`, { headers: H });
+const catOk = r.status === 200;
+if (!catOk) {
+  const e = await j(r);
+  if (r.status === 403) skip('crear depto/subdepto/producto (exige step-up 2FA)');
+  else check('admin catalog 200', false, `${r.status} ${e.error}`);
+} else {
+  r = await F(`${API}/admin/departments`, { method: 'POST', headers: JH, body: JSON.stringify({ name: `Smoke Dept ${stamp}` }) });
+  const dj = await j(r);
+  if (r.status === 201 && dj.data?.id) {
+    createdDeptId = dj.data.id;
+    check('crear departamento 201 + slug autogenerado', dj.data.slug === `smoke-dept-${stamp}`, dj.data.slug);
+  } else {
+    check('crear departamento 201', false, `${r.status} ${dj.error} ${dj.message || ''}`);
+  }
+
+  // departments.name es UNIQUE global: repetir el mismo nombre da 409, no 500.
+  r = await F(`${API}/admin/departments`, { method: 'POST', headers: JH, body: JSON.stringify({ name: `Smoke Dept ${stamp}` }) });
+  const dupe = await j(r);
+  check('departamento duplicado 409 (name UNIQUE)', r.status === 409, `${r.status} ${dupe.error}`);
+
+  if (createdDeptId) {
+    r = await F(`${API}/admin/subdepartments`, { method: 'POST', headers: JH, body: JSON.stringify({ department_id: createdDeptId, name: `Smoke Sub ${stamp}` }) });
+    const sj = await j(r);
+    if (r.status === 201 && sj.data?.id) {
+      createdSubId = sj.data.id;
+      check('crear subdepartamento 201', !!sj.data.slug, sj.data.slug);
+    } else {
+      check('crear subdepartamento 201', false, `${r.status} ${sj.error} ${sj.message || ''}`);
+    }
+
+    r = await F(`${API}/admin/departments/${createdDeptId}`, { method: 'PUT', headers: JH, body: JSON.stringify({ name: `Smoke Dept ${stamp} Renamed` }) });
+    const uj = await j(r);
+    check('editar departamento 200 + slug recalculado', r.status === 200 && uj.data?.slug === `smoke-dept-${stamp}-renamed`, `${r.status} ${uj.data?.slug}`);
+
+    r = await F(`${API}/admin/departments/${createdDeptId}`, { method: 'PUT', headers: JH, body: JSON.stringify({ is_active: 0 }) });
+    const tj = await j(r);
+    check('desactivar departamento 200', r.status === 200 && tj.data?.is_active === 0, r.status);
+
+    r = await F(`${API}/catalog/departments`);
+    const pub = await j(r);
+    const visible = Array.isArray(pub.data) && pub.data.some((d) => d.id === createdDeptId);
+    check('departamento inactivo no aparece en catálogo público', !visible, 'visible pese a is_active=0');
+
+    await F(`${API}/admin/departments/${createdDeptId}`, { method: 'PUT', headers: JH, body: JSON.stringify({ is_active: 1 }) });
+  }
+
+  // Producto: ya no debe caer en 'subdep-demo' hardcodeado.
+  r = await F(`${API}/admin/products`, { method: 'POST', headers: JH, body: JSON.stringify({ name: `Smoke Prod ${stamp}`, description: 'x', image_url: 'https://example.com/x.png', price_cents: 100, stock_quantity: 1 }) });
+  const noSub = await j(r);
+  check('crear producto sin subdepartment_id 400 (ya no hardcodea subdep-demo)', r.status === 400, `${r.status} ${noSub.error}`);
+
+  if (createdSubId) {
+    r = await F(`${API}/admin/products`, { method: 'POST', headers: JH, body: JSON.stringify({ name: `Smoke Prod ${stamp}`, description: 'x', image_url: 'https://example.com/x.png', subdepartment_id: createdSubId, price_cents: 100, stock_quantity: 1 }) });
+    const pj = await j(r);
+    if (r.status === 201 && pj.data?.id) {
+      createdProductId = pj.data.id;
+      check('crear producto en subdepartamento elegido 201', !!pj.data.slug, pj.data.slug);
+
+      r = await F(`${API}/catalog/products`);
+      const pl = await j(r);
+      const found = Array.isArray(pl.data) && pl.data.find((x) => x.id === createdProductId);
+      check('producto nuevo cuelga del subdepartamento correcto', found?.subdepartment_id === createdSubId, found?.subdepartment_slug);
+      check('producto expone nombre de depto/subdepto', !!found?.department_name && !!found?.subdepartment_name, `${found?.department_name} / ${found?.subdepartment_name}`);
+
+      // Borrar el subdepartamento con productos vivos debe rebotar 409.
+      // Con safety_lock activo el guard corta antes con 403 SAFETY_LOCKED.
+      r = await F(`${API}/admin/subdepartments/${createdSubId}`, { method: 'DELETE', headers: H });
+      const busy = await j(r);
+      if (r.status === 403 && busy.error === 'SAFETY_LOCKED') {
+        skip('borrar subdepto con productos vivos 409 (modo seguro activo)');
+      } else {
+        check('borrar subdepto con productos vivos 409', r.status === 409, `${r.status} ${busy.error}`);
+      }
+    } else {
+      check('crear producto en subdepartamento elegido 201', false, `${r.status} ${pj.error} ${pj.message || ''}`);
+    }
+  }
+
+  r = await F(`${API}/admin/departments/no-existe-xyz`, { method: 'PUT', headers: JH, body: JSON.stringify({ name: 'X' }) });
+  check('editar departamento inexistente 404', r.status === 404, r.status);
+  r = await F(`${API}/admin/catalog`);
+  check('admin catalog sin auth 401', r.status === 401, r.status);
+}
+
+// Limpieza: el smoke no debe dejar basura en el catálogo de producción.
+// DELETE /products archiva (no borra) y DELETE de catálogo exige safety_lock
+// apagado, así que con el modo seguro activo no se puede limpiar por API:
+// se avisa con los ids exactos para borrarlos por SQL si hiciera falta.
+if (createdProductId || createdSubId || createdDeptId) {
+  const del = await Promise.all([
+    createdProductId ? F(`${API}/admin/products/${createdProductId}`, { method: 'DELETE', headers: H }) : null,
+    createdSubId ? F(`${API}/admin/subdepartments/${createdSubId}`, { method: 'DELETE', headers: H }) : null,
+    createdDeptId ? F(`${API}/admin/departments/${createdDeptId}`, { method: 'DELETE', headers: H }) : null,
+  ].filter(Boolean));
+
+  const blocked = del.filter((x) => x.status !== 200);
+  if (blocked.length === 0) {
+    r = await F(`${API}/admin/catalog`, { headers: H });
+    const leftover = await j(r);
+    const gone = Array.isArray(leftover.data)
+      && !leftover.data.some((d) => d.id === createdDeptId || d.subdepartments.some((s) => s.id === createdSubId));
+    check('limpieza: depto/subdepto de prueba fuera del catálogo', gone, 'quedan restos');
+  } else {
+    // No es FAIL del código bajo prueba, pero hay que ser explícito.
+    results.push(`WARN limpieza catálogo bloqueada (safety_lock) — dept=${createdDeptId} sub=${createdSubId} prod=${createdProductId} (producto queda archivado, no se ve en el catálogo público)`);
+  }
+}
+
 console.log('== Front ==');
 r = await F(WEB);
 const html = await r.text();

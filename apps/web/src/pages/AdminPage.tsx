@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { User } from '../types';
 import { ImageManager } from '../components/ImageManager';
+import { CatalogManager } from '../components/CatalogManager';
+import type { CatalogDepartment } from '../components/CatalogManager';
 
 type AdminStats = {
   products: number;
@@ -18,6 +20,9 @@ type AdminProduct = {
   stock_quantity: number;
   status: string;
   images?: string[];
+  subdepartment_id?: string;
+  department_name?: string;
+  subdepartment_name?: string;
 };
 
 type AdminPageProps = {
@@ -28,7 +33,7 @@ type AdminPageProps = {
 };
 
 export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'orders' | 'products' | 'settings'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'orders' | 'products' | 'catalog' | 'settings'>('stats');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +54,10 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [productImages, setProductImages] = useState<string[]>([]);
   const [productPrice, setProductPrice] = useState('');
   const [productStock, setProductStock] = useState('');
+  const [productSubId, setProductSubId] = useState('');
+
+  // Jerarquía de catálogo: alimenta el selector de subdepartamento del producto.
+  const [catalog, setCatalog] = useState<CatalogDepartment[]>([]);
 
   // Step-up 2FA del panel: el middleware exige concesión de ≤1h.
   // 'checking' -> 'ok' | 'code' (pedir código) | 'setup' (configurar 2FA primero)
@@ -130,7 +139,22 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     if (activeTab === 'products' || activeTab === 'stats') fetchProducts();
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'orders') fetchOrders(0);
+    // El formulario de producto necesita la jerarquía para validar el alta.
+    if (activeTab === 'products' || activeTab === 'catalog') fetchCatalog();
   }, [activeTab, stepUp]);
+
+  const fetchCatalog = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/catalog`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.data)) setCatalog(data.data);
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
 
   // Cerrar sidebar con Escape
   useEffect(() => {
@@ -339,6 +363,10 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   };
 
   const createProduct = async () => {
+    if (!productSubId) {
+      alert('Elige el subdepartamento del producto (pestaña Catálogo para crear uno).');
+      return;
+    }
     try {
       const res = await fetch(`${apiUrl}/admin/products`, {
         method: 'POST',
@@ -352,6 +380,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           description: productDesc,
           image_url: productImages[0] || '',
           images: productImages,
+          subdepartment_id: productSubId,
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
         }),
@@ -363,7 +392,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         fetchProducts();
         fetchStats();
       } else {
-        alert('Error: ' + (data.error || 'unknown'));
+        alert('Error: ' + (data.error || 'unknown') + (data.message ? `\n\n${data.message}` : ''));
       }
     } catch (err) {
       alert('Error creating product');
@@ -385,6 +414,8 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           description: productDesc || editingProduct.description,
           image_url: productImages[0] || editingProduct.image_url,
           images: productImages.length > 0 ? productImages : editingProduct.images || [editingProduct.image_url],
+          // Solo se manda si se eligió: si no, el backend conserva el actual.
+          ...(productSubId ? { subdepartment_id: productSubId } : {}),
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
         }),
@@ -396,7 +427,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         fetchProducts();
         fetchStats();
       } else {
-        alert('Error: ' + (data.error || 'unknown'));
+        alert('Error: ' + (data.error || 'unknown') + (data.message ? `\n\n${data.message}` : ''));
       }
     } catch (err) {
       alert('Error updating product');
@@ -426,6 +457,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     setProductImages([]);
     setProductPrice('');
     setProductStock('');
+    setProductSubId('');
   };
 
   const startEditProduct = (product: AdminProduct) => {
@@ -435,12 +467,14 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     setProductImages(product.images?.length ? product.images : (product.image_url ? [product.image_url] : []));
     setProductPrice((product.price_cents / 100).toFixed(2));
     setProductStock(product.stock_quantity.toString());
+    setProductSubId(product.subdepartment_id || '');
     setShowProductForm(true);
   };
 
   const tabs = [
     { id: 'stats', label: 'Dashboard', icon: '📊' },
     { id: 'products', label: 'Productos', icon: '📦' },
+    { id: 'catalog', label: 'Catálogo', icon: '🗂️' },
     { id: 'users', label: 'Usuarios', icon: '👥' },
     { id: 'orders', label: 'Órdenes', icon: '📋' },
     { id: 'settings', label: 'Configuración', icon: '⚙️' },
@@ -780,6 +814,30 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               <div className="admin-product-form">
                 <h3>{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
                 <div className="form-group">
+                  <label>Departamento / Subdepartamento:</label>
+                  {catalog.length === 0 ? (
+                    <p className="admin-hint">
+                      No hay subdepartamentos. Créalos en la pestaña <strong>Catálogo</strong> 🗂️ antes de añadir productos.
+                    </p>
+                  ) : (
+                    <select
+                      value={productSubId}
+                      onChange={(e) => setProductSubId(e.target.value)}
+                      aria-label="Subdepartamento del producto"
+                    >
+                      <option value="">Elige subdepartamento…</option>
+                      {catalog.map((d) => (
+                        <optgroup key={d.id} label={d.name}>
+                          {d.subdepartments.length === 0 && <option disabled value={`${d.id}__empty`}>{'(sin subdepartamentos)'}</option>}
+                          {d.subdepartments.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="form-group">
                   <label>Nombre:</label>
                   <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Nombre del producto" />
                 </div>
@@ -821,6 +879,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               <thead>
                 <tr>
                   <th>Nombre</th>
+                  <th>Ubicación</th>
                   <th>Precio</th>
                   <th>Stock</th>
                   <th>Estado</th>
@@ -831,6 +890,13 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                 {products.map(p => (
                   <tr key={p.id}>
                     <td>{p.name}</td>
+                    <td>
+                      <span className="admin-hint">
+                        {p.department_name
+                          ? `${p.department_name} › ${p.subdepartment_name ?? '—'}`
+                          : (p.subdepartment_name || '—')}
+                      </span>
+                    </td>
                     <td>{(p.price_cents / 100).toFixed(2)}€</td>
                     <td>{p.stock_quantity}</td>
                     <td>{p.status === 'active' ? '✅' : '❌'}</td>
@@ -844,6 +910,15 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
             </table>
             </div>
           </div>
+        )}
+
+        {/* CATALOG TAB — departamentos y subdepartamentos (tarea #25) */}
+        {activeTab === 'catalog' && (
+          <CatalogManager
+            apiUrl={apiUrl}
+            sessionToken={sessionToken}
+            onCatalogChange={(next) => setCatalog(next)}
+          />
         )}
 
         {/* USERS TAB */}
