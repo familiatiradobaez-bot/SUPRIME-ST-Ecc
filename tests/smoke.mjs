@@ -338,8 +338,12 @@ if (!catOk) {
 
 // Limpieza: el smoke no debe dejar basura en el catálogo de producción.
 // DELETE /products archiva (no borra) y DELETE de catálogo exige safety_lock
-// apagado, así que con el modo seguro activo no se puede limpiar por API:
-// se avisa con los ids exactos para borrarlos por SQL si hiciera falta.
+// apagado, así que con el modo seguro activo no se puede limpiar por API.
+//
+// Además del borrado por id, se barre por prefijo: si una corrida anterior
+// murió a mitad (o el DELETE quedó bloqueado), sus filas no tienen id guardado
+// aquí y solo se detectan buscando por nombre.
+const SMOKE_PREFIX = 'smoke';
 if (createdProductId || createdSubId || createdDeptId) {
   const del = await Promise.all([
     createdProductId ? F(`${API}/admin/products/${createdProductId}`, { method: 'DELETE', headers: H }) : null,
@@ -357,6 +361,26 @@ if (createdProductId || createdSubId || createdDeptId) {
   } else {
     // No es FAIL del código bajo prueba, pero hay que ser explícito.
     results.push(`WARN limpieza catálogo bloqueada (safety_lock) — dept=${createdDeptId} sub=${createdSubId} prod=${createdProductId} (producto queda archivado, no se ve en el catálogo público)`);
+  }
+}
+
+// Barrido de seguridad: busca restos de cualquier corrida previa por prefijo.
+if (authed) {
+  r = await F(`${API}/admin/catalog`, { headers: H });
+  const cat = await j(r);
+  if (Array.isArray(cat.data)) {
+    const staleDepts = cat.data.filter((d) => d.name.toLowerCase().startsWith(SMOKE_PREFIX));
+    const staleSubs = cat.data.flatMap((d) => (d.subdepartments || [])
+      .filter((s) => s.name.toLowerCase().startsWith(SMOKE_PREFIX)
+        || s.slug.toLowerCase().startsWith(SMOKE_PREFIX)
+        || d.name.toLowerCase().startsWith(SMOKE_PREFIX)));
+    if (staleDepts.length || staleSubs.length) {
+      results.push('WARN quedan restos de corridas previas (borrar por SQL; safety_lock los bloquea por API):');
+      for (const d of staleDepts) results.push(`  WARN   departamento "${d.name}" (${d.id})`);
+      for (const s of staleSubs) results.push(`  WARN   subdepartamento "${s.name}" (${s.id})`);
+    } else {
+      check('sin restos de corridas de smoke anteriores', true);
+    }
   }
 }
 
