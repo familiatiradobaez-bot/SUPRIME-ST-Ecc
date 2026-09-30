@@ -9,6 +9,7 @@ import type { Bindings } from '../app';
 type KVLike = {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<unknown>;
+  delete(key: string): Promise<unknown>;
 };
 
 type RateLimitEnv = Pick<Bindings, 'RATE_LIMIT_KV'> & Record<string, unknown>;
@@ -102,5 +103,23 @@ export async function peekRateLimit(
     return { count: cur.count, remaining: Math.max(0, max - cur.count), resetIn: cur.resetAt - nowSec };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Vacía un cubo. Se usa tras un login correcto: así los 5 intentos del cubo de
+ * cuenta cuentan FALLOS, no tecleos, y una persona que se equivoca tres veces y
+ * luego entra bien no arrastra el contador. El cubo por IP no se vacía: ese sí
+ * mide el ritmo de intentos,-good o no.
+ */
+export async function clearRateLimit(env: RateLimitEnv, key: string): Promise<void> {
+  const kv = (env as { RATE_LIMIT_KV?: KVLike }).RATE_LIMIT_KV;
+  memBuckets.delete(`rl:${key}`);
+  if (!kv) return;
+  try {
+    await kv.delete(`rl:${key}`);
+  } catch {
+    // Si no se puede borrar, el cubo caduca solo por TTL. No es crítico:
+    // solo puede dejar el contador un poco alto hasta que venza.
   }
 }

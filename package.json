@@ -19,6 +19,7 @@
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
     "e2e:ui": "playwright test --ui",
+    "cf:purge-assets": "node tools/purge-assets.mjs",
     "tokens": "node tools/token-check.mjs",
     "img:check": "node tools/img-check.mjs",
     "backup": "wrangler d1 export DB --remote --output ./backups/d1-backup.sql",

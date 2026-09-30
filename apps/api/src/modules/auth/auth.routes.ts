@@ -4,7 +4,7 @@ import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
 import { isSafetyLockOn } from '../../lib/pricing';
-import { checkRateLimit } from '../../lib/rate-limit';
+import { checkRateLimit, peekRateLimit, clearRateLimit } from '../../lib/rate-limit';
 
 // Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
 // Sin SMS de momento: valida formato, no titularidad (ver post-lanzamiento).
@@ -45,9 +45,17 @@ const registerSchema = z.object({
 // Antes eran Maps en memoria por flujo, y en Workers cada isolate tiene la
 // suya: 5 intentos de login no eran 5 intentos, eran 5 por isolate, y un
 // atacante podía repartir los repartos. Ahora la cuenta es global.
-// Un Map por flujo (scope): compartir uno bloqueaba el login tras pedir OTPs.
+// Un cubo por flujo (scope): compartir uno bloqueaba el login tras pedir OTPs.
 const RL = {
-  login: { max: 5, window: 900 },
+  // Login cuenta FALLOS, y en dos cubos:
+  //  - por IP: frena el barrido automatizado (muchas cuentas desde una).
+  //  - por cuenta: frena el ataque a una cuenta concreta desde IPs distintas,
+  //    que es el caso que el cubo por IP no ve.
+  // Antes un solo cubo por IP de 5/15 min contaba también los ACIERTOS: con
+  // el smoke y la suite E2E.login saliéndose los dos, se bloqueaban entre
+  // ellos y en 15 minutos no se podía ni entrar con la clave correcta.
+  loginIp: { max: 30, window: 900 },
+  loginAccount: { max: 5, window: 900 },
   forgot: { max: 3, window: 900 },
   otpVerify: { max: 20, window: 900 },
   otpResend: { max: 10, window: 900 },
@@ -57,9 +65,30 @@ const RL = {
 
 type RLScope = keyof typeof RL;
 
-function rlAllowed(env: Bindings, scope: RLScope, ip: string): Promise<boolean> {
+function rlAllowed(env: Bindings, scope: RLScope, subject: string): Promise<boolean> {
   const { max, window } = RL[scope];
-  return checkRateLimit(env, `${scope}:${ip}`, max, window);
+  return checkRateLimit(env, `${scope}:${subject}`, max, window);
+}
+
+/**
+ * ¿Está ya agotado alguno de los dos cubos de login? Solo MIRA: el intento se
+ * consume cuando se sabe que falló (consumeLoginFailure), para que entrar con
+ * la clave correcta no gastara ninguno de los dos topes.
+ */
+async function loginBlocked(env: Bindings, ip: string, accountKey: string): Promise<boolean> {
+  const byIp = await peekRateLimit(env, `loginIp:${ip}`, RL.loginIp.max);
+  if (byIp && byIp.remaining <= 0) return true;
+  if (accountKey) {
+    const byAccount = await peekRateLimit(env, `loginAccount:${accountKey}`, RL.loginAccount.max);
+    if (byAccount && byAccount.remaining <= 0) return true;
+  }
+  return false;
+}
+
+/** Suma un intento fallido a los dos cubos. */
+async function consumeLoginFailure(env: Bindings, ip: string, accountKey: string): Promise<void> {
+  await rlAllowed(env, 'loginIp', ip);
+  if (accountKey) await rlAllowed(env, 'loginAccount', accountKey);
 }
 
 async function hashPassword(password: string, salt?: string): Promise<string> {
@@ -515,11 +544,7 @@ authRoutes.post('/reset-password', async (context) => {
 
 // POST /auth/login
 authRoutes.post('/login', async (context) => {
-  // Rate limiting check
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'login', clientIp))) {
-    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
-  }
 
   const arrayBuffer = await context.req.arrayBuffer().catch(() => null);
   const body = arrayBuffer ? new TextDecoder().decode(arrayBuffer) : null;
@@ -535,6 +560,19 @@ authRoutes.post('/login', async (context) => {
   }
 
   const { email, username, password } = parsed.data;
+  // Clave de los cubos de fallo. Se normaliza a minúsculas para que
+  // "Jose@x.com" y "jose@x.com" compartan cubo (y no eludan el tope).
+  const accountKey = (email || username || '').trim().toLowerCase();
+
+  // Dos topes, los dos con cuenta de FALLOS:
+  //  - por IP: corta el barrido con muchas cuentas desde una misma máquina.
+  //  - por cuenta: corta el ataque a una cuenta desde IPs distintas, que es
+  //    justo lo que el cubo por IP no ve.
+  // Se Mira antes de tocar la contraseña, así el 429 no filtra si la cuenta
+  // existe (mismo criterio que el resto de la ruta).
+  if (await loginBlocked(context.env, clientIp, accountKey)) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
+  }
 
   const user = await context.env.DB.prepare(
     `SELECT id, username, email, display_name, role_id, password_hash, email_verified, google_subject FROM users
@@ -546,8 +584,17 @@ authRoutes.post('/login', async (context) => {
 
   // Sin password (cuenta solo-Google) -> 401, nunca 500
   if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+    // Fallo: se consumen los dos contadores. Un atacante con una lista de
+    // correos agota el de la cuenta objetivo; uno con una lista de claves
+    // desde una IP agota el de la IP.
+    await consumeLoginFailure(context.env, clientIp, accountKey);
     return context.json({ error: 'INVALID_CREDENTIALS' }, 401);
   }
+
+  // Acierto: el cubo de la cuenta se vacía. Tres tecleos y luego entrar bien
+  // no debe dejar a la persona con 2 de 5 gastados para siempre, y el de la
+  // IP se conserva (mide el ritmo, no el acierto).
+  if (accountKey) await clearRateLimit(context.env, `loginAccount:${accountKey}`);
 
   // Check if email is verified (only for non-Google users)
   if (!user.email_verified && !user.google_subject) {

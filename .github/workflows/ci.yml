@@ -54,6 +54,17 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
+      # Pages sirve la SPA con 200 en cualquier ruta que no exista, y la Cache
+      # Rule de /assets/* guarda ese index.html con TTL de un AÑO bajo una URL
+      # .js. El navegador rechaza el módulo ES por MIME y el chunk no carga:
+      # panel, PDP, carrito y login en blanco, y no se sana solo. Se purga tras
+      # el despliegue. Ver tools/purge-assets.mjs para el incidente completo.
+      - name: Purgar /assets/* de la CDN
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node tools/purge-assets.mjs
+
       - name: E2E
         env:
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}

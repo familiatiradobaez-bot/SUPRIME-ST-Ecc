@@ -11,6 +11,7 @@ import { getAuthHeaders, loadStoreSettings } from './lib/api';
 import { Header } from './components/Header';
 import { CookieBanner } from './components/CookieBanner';
 import { Footer } from './components/Footer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomePage } from './pages/HomePage';
 
 // Code-splitting (tarea #14/#29): la home no carga el panel de admin ni los
@@ -343,14 +344,16 @@ export function App() {
   // Vista admin completamente separada - oculta toda la tienda
   if (showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || ''))) {
     return (
-      <Suspense fallback={<div className="layout-main"><LazyFallback /></div>}>
-        <AdminPage
-          user={user}
-          sessionToken={session?.token || ''}
-          apiUrl={apiUrl}
-          onBack={() => setShowAdminPanel(false)}
-        />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="layout-main"><LazyFallback /></div>}>
+          <AdminPage
+            user={user}
+            sessionToken={session?.token || ''}
+            apiUrl={apiUrl}
+            onBack={() => setShowAdminPanel(false)}
+          />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
@@ -397,6 +400,7 @@ export function App() {
         </Suspense>
       )}
 
+      <ErrorBoundary>
       <Suspense fallback={<LazyFallback />}>
       <Routes>
         <Route
@@ -498,12 +502,14 @@ export function App() {
         <Route path="*" element={<NotFoundPage onSearch={handleSearchNav} />} />
       </Routes>
       </Suspense>
+      </ErrorBoundary>
 
       {/* Modales y panel lateral: sus formularios van en chunks aparte, así que
           necesitan su propio límite. Con `fallback={null}` se ve el fondo del
           modal y el contenido aparece al llegar el chunk, en vez de un spinner
           dentro de un diálogo a medio pintar. */}
       <Suspense fallback={null}>
+      <ErrorBoundary>
       {showCart && (
         <CartSidebar
           cart={cart}
@@ -669,6 +675,7 @@ export function App() {
           </div>
         </div>
       )}
+      </ErrorBoundary>
       </Suspense>
 
       <Footer />

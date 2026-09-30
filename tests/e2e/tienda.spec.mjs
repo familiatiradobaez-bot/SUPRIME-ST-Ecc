@@ -6,10 +6,12 @@
 // deja la API perfectamente verde.
 import { test, expect } from '@playwright/test';
 import {
-  API, creds, requireCreds, uiLogin, acceptCookiesIfPresent,
+  API, creds, requireCreds, uiLogin, acceptCookiesIfPresent, waitForDeploy,
 } from './helpers.mjs';
 
 test.beforeAll(() => requireCreds());
+// Un despliegue a medias se ve como un error de MIME que no explica nada.
+test.beforeEach(async ({ request }) => { await waitForDeploy(request); });
 
 test.describe('tienda', () => {
   test('la home carga productos reales (no un esqueleto eterno)', async ({ page }) => {

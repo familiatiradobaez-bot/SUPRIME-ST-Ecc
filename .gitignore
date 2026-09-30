@@ -26,6 +26,13 @@ Thumbs.db
 # Wrangler local state
 .wrangler/
 
+# Playwright: resultados, trazas y capturas de las pruebas E2E.
+# Son binarios de depuración y ocupan bastante; el informe vive en el run de CI.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
 # Export de la D1 (npm run backup): contiene hashes y datos de usuarios.
 # El repo nunca debe llevar una copia; los restores viven en MovilLab/.
 backups/

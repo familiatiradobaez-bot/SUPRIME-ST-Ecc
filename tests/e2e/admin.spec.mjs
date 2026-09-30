@@ -5,14 +5,19 @@
 // de roles se respete en la interfaz. Con TOTP calculado en la propia prueba,
 // porque la cuenta de smoke tiene el secreto en _SECRETS/smoke.env.
 import { test, expect } from '@playwright/test';
-import { API, requireCreds, uiLogin, totpNow } from './helpers.mjs';
+import { API, requireCreds, uiLogin, totpNow, lockPanelFromApi, waitForDeploy } from './helpers.mjs';
 
 test.beforeAll(() => requireCreds());
+// Un despliegue a medias se ve como un error de MIME que no explica nada.
+test.beforeEach(async ({ request }) => { await waitForDeploy(request); });
 
 const STEPUP_DIALOG = { name: /Verificación en dos pasos/i };
 
 /** Abre el panel y mete el código hasta que el panel entre. */
 async function enterAdmin(page) {
+  // El grant vive 1 h en el servidor: sin revocarlo antes, el panel se abriría
+  // directo y el formulario del código no aparecería nunca.
+  await lockPanelFromApi();
   await page.getByRole('button', { name: /Admin/ }).first().click();
 
   const code = page.locator('#admin-stepup-code');

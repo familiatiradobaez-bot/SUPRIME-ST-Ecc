@@ -358,6 +358,58 @@ input[aria-invalid='true'] {
   }
 }
 
+/* ── Pantalla de error recuperable ─────────────────────────────────────────
+   Vive en admin.css porque es el archivo que se carga siempre (main.tsx lo
+   importa), así que el mensaje aparece aunque el fallo venga de un chunk que no
+   se pudo descargar. */
+
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--bg-dark);
+}
+
+.error-boundary-card {
+  max-width: 34rem;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--bg-card, #16161f);
+}
+
+.error-boundary-card h1 {
+  font-size: 1.35rem;
+  margin: 0 0 0.75rem;
+}
+
+.error-boundary-card p {
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+.error-boundary-detail {
+  font-size: 0.78rem;
+  word-break: break-word;
+  opacity: 0.75;
+}
+
+.error-boundary-detail code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 /* Admin Main Content */
 .admin-main {
   flex: 1;

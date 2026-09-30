@@ -107,6 +107,73 @@ export async function apiLogout(token) {
   await fetch(`${API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
 }
 
+/** Tira el grant de step-up. El grant es por usuario, no por sesión, así que
+ *  revocar con una sesión cualquiera lo cierra para todas. */
+export async function apiRevokeStepUp(token) {
+  const res = await fetch(`${API}/auth/admin-stepup/revoke`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.ok;
+}
+
+/**
+ * Deja el panel cerrado antes de probar a abrirlo.
+ *
+ * Sin esto la prueba es intermitente: el grant dura 1 h, así que si hace poco
+ * que alguien entró al panel, la pantalla se abre DIRECTO y no aparece el
+ * formulario del código — que es justo lo que la prueba quiere comprobar.
+ */
+export async function lockPanelFromApi() {
+  const token = await apiLogin();
+  const ok = await apiRevokeStepUp(token);
+  await apiLogout(token);
+  if (!ok) throw new Error('no se pudo revocar el grant de step-up');
+}
+
+/**
+ * Espera a que el despliegue esté propagado.
+ *
+ * Cloudflare Pages sirve la SPA con 200 en CUALQUIER ruta (fallback a
+ * index.html), así que un asset que aún no existe en un nodo de borde responde
+ * 200 con Content-Type text/html. El navegador lo rechaza con
+ * "Expected a JavaScript-or-Wasm module script" y la prueba falla con un error
+ * que no tiene nada que ver con el código. Esta comprobación espera a que
+ * TODOS los chunks (incluidos los lazy) se sirvan como JS/CSS de verdad.
+ */
+export async function waitForDeploy(request, { attempts = 12, delayMs = 5000 } = {}) {
+  const html = await (await request.get(WEB)).text();
+
+  const refs = new Set(
+    [...html.matchAll(/\/assets\/[A-Za-z0-9_.\-]+\.(?:js|css)/g)].map((m) => m[0])
+  );
+  // Los chunks lazy no están en el HTML: se sacan de los JS ya cargados.
+  for (const ref of [...refs]) {
+    if (!ref.endsWith('.js')) continue;
+    const body = await (await request.get(`${WEB}${ref}`)).text();
+    for (const m of body.matchAll(/["']\.\/([A-Za-z0-9_.\-]+\.(?:js|css))["']/g)) {
+      refs.add(`/assets/${m[1]}`);
+    }
+  }
+  if (refs.size === 0) throw new Error('el index.html no referencia ningún asset: ¿cambió el nombre de /assets/?');
+
+  let pending = [...refs];
+  for (let i = 0; i < attempts && pending.length; i++) {
+    const stillMissing = [];
+    for (const ref of pending) {
+      const res = await request.get(`${WEB}${ref}`, { headers: { 'Cache-Control': 'no-cache' } });
+      const type = res.headers()['content-type'] || '';
+      if (!/javascript|css/.test(type)) stillMissing.push(ref);
+    }
+    if (stillMissing.length === 0) return;
+    pending = stillMissing;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error(
+    `despliegue a medias: ${pending.length} asset(s) se sirven como HTML (fallback de la SPA):\n  ${pending.join('\n  ')}\n` +
+    'Suele ser que el push se acaba de hacer y la propagación va por detrás. Reintenta en un par de minutos.'
+  );
+}
+
 /**
  * Login por la interfaz, como lo haría una persona: abrir "Cuenta", rellenar
  * y enviar. Devuelve cuando el modal se cierra (osea, cuando hay sesión).

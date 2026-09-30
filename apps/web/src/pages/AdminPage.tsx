@@ -3,10 +3,10 @@ import type { User } from '../types';
 import { ImageManager } from '../components/ImageManager';
 import { CatalogManager } from '../components/CatalogManager';
 import type { CatalogDepartment } from '../components/CatalogManager';
-// La CSS del panel se importa desde aquí (no desde main.tsx) para que Vite la
-// empaquete en el chunk de AdminPage, que se carga al abrir el panel y no en la
-// home. Único consumidor: este componente.
-import '../styles/admin.css';
+// La CSS del panel se importa desde main.tsx, no desde aquí. Estaba en este
+// archivo para code-split, pero Vite la emitía como archivo aparte y, si ese
+// archivo no se descargaba, el import dinámico del panel entero fallaba y la
+// pantalla quedaba en blanco. Ver el comentario en main.tsx.
 
 type AdminStats = {
   products: number;
