@@ -227,6 +227,21 @@ if (r.status === 200) { check('admin users paginado (limit=1 + total)', Array.is
 else if (grantLive) { check('admin users paginado (limit=1 + total)', false, `${r.status} ${u1.error}`); }
 else { check('admin users (exige step-up)', r.status === 403, `${r.status} ${u1.error}`); }
 
+// Ordenación de la tabla de usuarios. El ORDER BY va por allowlist en el
+// servidor: un sort inventado tiene que ignorarse, no inyectarse en el SQL.
+if (u1.status === 200) {
+  r = await F(`${API}/admin/users?limit=100&sort=username&dir=asc`, { headers: H });
+  const asc = await j(r);
+  const names = Array.isArray(asc.data) ? asc.data.map((u) => String(u.username || '').toLowerCase()) : [];
+  const sorted = [...names].sort();
+  check('admin users sort=username&dir=asc ordena de verdad', r.status === 200 && names.length > 0 && names.join('|') === sorted.join('|'), names.join(','));
+  check('admin users devuelve el sort aplicado en pagination', asc.pagination?.sort === 'username' && asc.pagination?.dir === 'asc', JSON.stringify(asc.pagination));
+
+  r = await F(`${API}/admin/users?limit=100&sort=${encodeURIComponent('username; DROP TABLE users--')}&dir=asc`, { headers: H });
+  const inj = await j(r);
+  check('admin users sort desconocido cae al default (no se inyecta)', r.status === 200 && inj.pagination?.sort === 'created_at', `${r.status} ${inj.pagination?.sort}`);
+}
+
 console.log('== Upload/galería ==');
 const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const UH = { ...H, 'Content-Type': 'application/json' };
@@ -549,6 +564,15 @@ const html = await r.text();
 check('home 200 + bundle', r.status === 200 && html.includes('/assets/index-'), r.status);
 check('home viewport-fit notch', html.includes('viewport-fit=cover'), 'sin viewport-fit');
 check('home CSP permite bigdatacloud', html.includes('api.bigdatacloud.net'), 'CSP sin bigdatacloud');
+
+// El "Redirect HTTP to HTTPS" se configura a mano en el panel de Cloudflare
+// (zona suprime.xyz, Always Use HTTPS). Nada en el repo lo vuelve a poner, así
+// que si alguien lo desactiva el API vuelve a servir en claro. Se comprueba.
+for (const [name, plain] of [['api', 'http://api.suprime.xyz/api/v1/health'], ['front', 'http://suprime.xyz/']]) {
+  const res = await F(plain, { redirect: 'manual' });
+  const loc = res.headers.get('location') || '';
+  check(`${name}: http redirige a https (301)`, res.status === 301 && loc.startsWith('https://'), `${res.status} ${loc.slice(0, 60)}`);
+}
 
 console.log('== Logout ==');
 r = await F(`${API}/auth/logout`, { method: 'POST', headers: H });

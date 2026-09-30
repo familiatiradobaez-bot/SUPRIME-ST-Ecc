@@ -4,6 +4,7 @@ import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
 import { isSafetyLockOn } from '../../lib/pricing';
+import { checkRateLimit } from '../../lib/rate-limit';
 
 // Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
 // Sin SMS de momento: valida formato, no titularidad (ver post-lanzamiento).
@@ -40,41 +41,25 @@ const registerSchema = z.object({
   terms: z.literal(true, { message: 'Terms must be accepted' }),
 });
 
-// Rate limiting storage (in-memory - use KV in production).
-// Mapas separados por flujo: compartir uno solo bloqueaba login tras pedir OTPs.
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-const forgotAttempts = new Map<string, { count: number; resetAt: number }>();
+// Rate limiting: KV (RATE_LIMIT_KV) con fallback en memoria.
+// Antes eran Maps en memoria por flujo, y en Workers cada isolate tiene la
+// suya: 5 intentos de login no eran 5 intentos, eran 5 por isolate, y un
+// atacante podía repartir los repartos. Ahora la cuenta es global.
+// Un Map por flujo (scope): compartir uno bloqueaba el login tras pedir OTPs.
+const RL = {
+  login: { max: 5, window: 900 },
+  forgot: { max: 3, window: 900 },
+  otpVerify: { max: 20, window: 900 },
+  otpResend: { max: 10, window: 900 },
+  twofa: { max: 10, window: 900 },
+  register: { max: 5, window: 900 },
+} as const;
 
-function checkBucket(bucket: Map<string, { count: number; resetAt: number }>, ip: string, max: number, windowMs: number): boolean {
-  const now = Date.now();
-  const attempt = bucket.get(ip);
+type RLScope = keyof typeof RL;
 
-  if (!attempt || attempt.resetAt < now) {
-    bucket.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (attempt.count >= max) {
-    return false;
-  }
-
-  attempt.count++;
-  return true;
-}
-
-function checkRateLimit(ip: string): boolean {
-  return checkBucket(loginAttempts, ip, 5, 15 * 60 * 1000); // login: 5 / 15 min
-}
-
-function checkForgotRateLimit(ip: string): boolean {
-  return checkBucket(forgotAttempts, ip, 3, 15 * 60 * 1000); // forgot: 3 / 15 min
-}
-
-const otpVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
-const twofaAttempts = new Map<string, { count: number; resetAt: number }>();
-
-function checkOtpVerifyRateLimit(ip: string): boolean {
-  return checkBucket(otpVerifyAttempts, ip, 20, 15 * 60 * 1000); // verify/reset: 20 / 15 min por IP (además del límite por email)
+function rlAllowed(env: Bindings, scope: RLScope, ip: string): Promise<boolean> {
+  const { max, window } = RL[scope];
+  return checkRateLimit(env, `${scope}:${ip}`, max, window);
 }
 
 async function hashPassword(password: string, salt?: string): Promise<string> {
@@ -308,6 +293,12 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>();
 
 // POST /auth/register
 authRoutes.post('/register', async (context) => {
+  // El registro manda correo (verificación) y crea filas: sin tope, un
+  // Disposable-email puede usarla para spamear la bandeja de otra gente.
+  if (!(await rlAllowed(context.env, 'register', getClientIp(context.req)))) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
+  }
+
   const body = await context.req.json().catch(() => null);
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {
@@ -347,7 +338,7 @@ authRoutes.post('/register', async (context) => {
 // POST /auth/verify-otp - Validar código OTP y activar cuenta (con auto-login)
 authRoutes.post('/verify-otp', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!checkOtpVerifyRateLimit(clientIp)) {
+  if (!(await rlAllowed(context.env, 'otpVerify', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -413,11 +404,9 @@ authRoutes.post('/verify-otp', async (context) => {
 
 // POST /auth/resend-otp - Reenviar código OTP (cooldown 60s por email + bucket por IP).
 // Respuesta genérica salvo cooldown: no revela si la cuenta existe ni su estado.
-const resendAttempts = new Map<string, { count: number; resetAt: number }>();
-
 authRoutes.post('/resend-otp', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!checkBucket(resendAttempts, clientIp, 10, 15 * 60 * 1000)) {
+  if (!(await rlAllowed(context.env, 'otpResend', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -447,7 +436,7 @@ authRoutes.post('/resend-otp', async (context) => {
 // POST /auth/forgot-password - Enviar OTP para recuperar contraseña (respuesta genérica anti-enumeración)
 authRoutes.post('/forgot-password', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!checkForgotRateLimit(clientIp)) {
+  if (!(await rlAllowed(context.env, 'forgot', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -473,7 +462,7 @@ authRoutes.post('/forgot-password', async (context) => {
 // POST /auth/reset-password - Restablecer contraseña con OTP
 authRoutes.post('/reset-password', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!checkOtpVerifyRateLimit(clientIp)) {
+  if (!(await rlAllowed(context.env, 'otpVerify', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -528,7 +517,7 @@ authRoutes.post('/reset-password', async (context) => {
 authRoutes.post('/login', async (context) => {
   // Rate limiting check
   const clientIp = getClientIp(context.req);
-  if (!checkRateLimit(clientIp)) {
+  if (!(await rlAllowed(context.env, 'login', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
   }
 
@@ -608,7 +597,7 @@ authRoutes.post('/admin-stepup', async (context) => {
   }
 
   const clientIp = getClientIp(context.req);
-  if (!checkBucket(twofaAttempts, clientIp, 10, 15 * 60 * 1000)) {
+  if (!(await rlAllowed(context.env, 'twofa', clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 

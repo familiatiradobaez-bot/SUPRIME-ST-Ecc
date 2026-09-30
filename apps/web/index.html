@@ -33,9 +33,18 @@
     La CSS de Google Fonts es render-blocking: retrasa el FCP hasta que llega.
     con `media="print" onload` se descarga sin bloquear y se aplica al terminar,
     con el <noscript> como red de seguridad si el JS está desactivado.
-    Alternativa mejor: activar Cloudflare Fonts (plan Free) y servir las fuentes
-    desde el propio dominio, eliminando el third-party por completo.
+    El rel=preload de abajo sube la prioridad de esa descarga: al estar en
+    media=print el navegador la trata como recurso de baja prioridad, y cuanto
+    mas tarde llegan las fuentes mas se nota el intercambio (el CLS de 3-13 px
+    medido en MovilLab/cls.mjs sale de aqui).
+    Alternativa mejor: activar Cloudflare Fonts (plan Free) en el panel y
+    cambiar el href por /_fonts/css?family=..., que quita el third-party.
   -->
+  <link
+    rel="preload"
+    as="style"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+  />
   <link
     rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"

@@ -129,15 +129,31 @@ adminRoutes.get('/stats', async (context) => {
   });
 });
 
+// Columnas por las que se puede ordenar la tabla de usuarios. Allowlist:
+// el valor llega del query y no se puede interpolar en el ORDER BY.
+const USER_SORT_COLUMNS: Record<string, string> = {
+  created_at: 'created_at',
+  username: 'username COLLATE NOCASE',
+  email: 'email COLLATE NOCASE',
+  role: 'role_id',
+};
+
 // GET /admin/users - List users (paginado: ?limit=50 por defecto, máx 100)
+// ?sort=username|email|role|created_at & dir=asc|desc
 adminRoutes.get('/users', async (context) => {
   const limit = Math.min(Math.max(parseInt(context.req.query('limit') || '50', 10) || 50, 1), 100);
   const offset = Math.max(parseInt(context.req.query('offset') || '0', 10) || 0, 0);
+  const sortKey = context.req.query('sort') || 'created_at';
+  const sortCol = USER_SORT_COLUMNS[sortKey] || USER_SORT_COLUMNS.created_at;
+  const dir = (context.req.query('dir') || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  // Desempate por id: sin él, dos filas con el mismo valor cambian de sitio
+  // entre páginas y el paginado parece saltarse o repetir usuarios.
+  const orderBy = `${sortCol} ${dir}, id ASC`;
 
   const [result, total] = await context.env.DB.batch([
     context.env.DB.prepare(
       `SELECT id, username, email, display_name, role_id, is_active, created_at
-       FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`
+       FROM users ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     ).bind(limit, offset),
     context.env.DB.prepare('SELECT COUNT(*) as count FROM users'),
   ]);
@@ -146,7 +162,13 @@ adminRoutes.get('/users', async (context) => {
 
   return context.json({
     data: result.results,
-    pagination: { limit, offset, total: totalCount },
+    pagination: {
+      limit,
+      offset,
+      total: totalCount,
+      sort: Object.keys(USER_SORT_COLUMNS).find((k) => USER_SORT_COLUMNS[k] === sortCol) || 'created_at',
+      dir: dir.toLowerCase(),
+    },
   });
 });
 

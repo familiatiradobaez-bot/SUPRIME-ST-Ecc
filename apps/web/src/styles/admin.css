@@ -18,7 +18,9 @@
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  /* El scroll lo lleva la zona de pestañas, no el sidebar entero: así el pie
+     (usuario + botones de 2FA) queda siempre a la vista sin hacer scroll. */
+  overflow: hidden;
   z-index: 10;
   transition: transform var(--transition-normal), width var(--transition-normal);
 }
@@ -71,6 +73,11 @@
   flex-direction: column;
   gap: 0.25rem;
   flex: 1;
+  /* min-height:0 es lo que permite que esta zona encoja y scrollee en vez de
+     estirar el sidebar y empujar el pie fuera de la pantalla. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-sidebar-item {
@@ -114,6 +121,8 @@
   text-overflow: ellipsis;
 }
 
+/* Pie fijo del sidebar: los botones de 2FA no se van de la pantalla al hacer
+   scroll con muchas pestañas, que es justo cuando se buscan. */
 .admin-sidebar-footer {
   display: flex;
   flex-direction: column;
@@ -121,6 +130,10 @@
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-sidebar);
+  z-index: 1;
 }
 
 .admin-sidebar-footer .admin-sidebar-item {
@@ -188,6 +201,82 @@
 
 .admin-sidebar-toggle:hover {
   background: var(--pill-hover-bg);
+}
+
+/* ── Tablas del admin ─────────────────────────────────────────────────── */
+
+/* Cabecera ordenable: es un <button> por semántica, pero tiene que parecerse a
+   un <th> normal (misma caja, sin borde, sin fondo). */
+.th-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.th-sort:hover {
+  color: var(--text-primary);
+}
+
+.th-sort:focus-visible {
+  outline: 2px solid var(--accent-primary, #6366f1);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Filas de carga: barras grises con pulso. Sin elas la tabla aparece vacía y
+   parece que no hay usuarios cuando en realidad está cargando. */
+.skeleton-row td {
+  padding: 0.875rem 1rem;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 0.85rem;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-card, #1e1e2e) 25%,
+    var(--bg-hover, #2a2a3d) 50%,
+    var(--bg-card, #1e1e2e) 75%
+  );
+  background-size: 200% 100%;
+  animation: admin-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes admin-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+  }
+}
+
+/* Paginación compartida por usuarios y órdenes. */
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.table-pagination-info {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
 /* Admin Main Content */

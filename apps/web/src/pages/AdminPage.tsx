@@ -66,6 +66,32 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   // Step-up 2FA del panel: el middleware exige concesión de ≤1h.
   // 'checking' -> 'ok' | 'code' (pedir código) | 'setup' (configurar 2FA primero)
   const [stepUp, setStepUp] = useState<'checking' | 'ok' | 'code' | 'setup'>('checking');
+  const [lockingPanel, setLockingPanel] = useState(false);
+
+  // "Bloquear panel": tira el grant de 1 h sin cerrar la sesión de la tienda.
+  // Sin esto, dejar el panel abierto en un ordenador compartido daba acceso al
+  // admin durante una hora sin volver a pedir el código.
+  const handleLockPanel = async () => {
+    if (lockingPanel) return;
+    setLockingPanel(true);
+    try {
+      const res = await fetch(`${apiUrl}/auth/admin-stepup/revoke`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sessionToken}` },
+        credentials: 'include',
+      });
+      if (!res.ok && res.status !== 401) {
+        console.error('No se pudo bloquear el panel:', res.status);
+      }
+      // Se vuelve a comprobar el paso real: si el revoke falló, checkStepUp
+      // seguirá diciendo 'ok' y el panel se queda como estaba.
+      checkStepUp();
+    } catch {
+      checkStepUp();
+    } finally {
+      setLockingPanel(false);
+    }
+  };
 
   const checkStepUp = async () => {
     try {
@@ -298,20 +324,51 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     }
   };
 
-  const fetchUsers = async () => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersPage, setUsersPage] = useState(0);
+  const [usersSort, setUsersSort] = useState<'created_at' | 'username' | 'email' | 'role'>('created_at');
+  const [usersDir, setUsersDir] = useState<'asc' | 'desc'>('desc');
+  const [usersLoading, setUsersLoading] = useState(false);
+  const USERS_PAGE_SIZE = 20;
+
+  const fetchUsers = async (page = usersPage, sort = usersSort, dir = usersDir) => {
+    setUsersLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/admin/users`, {
-        headers: { 'Authorization': `Bearer ${sessionToken}` },
-        credentials: 'include',
-      });
+      const res = await fetch(
+        `${apiUrl}/admin/users?limit=${USERS_PAGE_SIZE}&offset=${page * USERS_PAGE_SIZE}&sort=${sort}&dir=${dir}`,
+        {
+          headers: { 'Authorization': `Bearer ${sessionToken}` },
+          credentials: 'include',
+        }
+      );
       const data = await res.json();
-      if (data.data) setUsers(data.data);
+      if (data.data) {
+        setUsers(data.data);
+        setUsersTotal(data.pagination?.total ?? data.data.length);
+        setUsersPage(page);
+      }
     } catch (err) {
       console.error('Error:', err);
+    } finally {
+      setUsersLoading(false);
     }
   };
 
-  const [users, setUsers] = useState<any[]>([]);
+  // Clic en una cabecera: misma columna alterna asc/desc, otra columna empieza
+  // en asc. Al cambiar el orden se vuelve a la página 0, que si no deja al
+  // usuario en una página que ya no existe.
+  const sortUsers = (col: typeof usersSort) => {
+    if (col === usersSort) {
+      const next = usersDir === 'asc' ? 'desc' : 'asc';
+      setUsersDir(next);
+      fetchUsers(0, col, next);
+    } else {
+      setUsersSort(col);
+      setUsersDir('asc');
+      fetchUsers(0, col, 'asc');
+    }
+  };
 
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersPage, setOrdersPage] = useState(0);
@@ -729,6 +786,15 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               <span className="admin-sidebar-label">Desactivar 2FA</span>
             </button>
           )}
+          <button
+            className="admin-sidebar-item"
+            onClick={handleLockPanel}
+            disabled={lockingPanel}
+            title="Cerrar el panel y volver a pedir el código 2FA al entrar"
+          >
+            <span className="admin-sidebar-icon">🔒</span>
+            <span className="admin-sidebar-label">{lockingPanel ? 'Bloqueando...' : 'Bloquear panel'}</span>
+          </button>
         </div>
       </aside>
 
@@ -933,20 +999,42 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Usuario</th>
-                  <th>Email</th>
-                  <th>Rol</th>
+                  <th>
+                    <button type="button" className="th-sort" onClick={() => sortUsers('username')} aria-label="Ordenar por usuario">
+                      Usuario{usersSort === 'username' ? (usersDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="th-sort" onClick={() => sortUsers('email')} aria-label="Ordenar por email">
+                      Email{usersSort === 'email' ? (usersDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="th-sort" onClick={() => sortUsers('role')} aria-label="Ordenar por rol">
+                      Rol{usersSort === 'role' ? (usersDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </th>
                   <th>Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {usersLoading && users.length === 0
+                  ? Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={`sk-${i}`} className="skeleton-row">
+                        <td><span className="skeleton-bar" style={{ width: '70%' }} /></td>
+                        <td><span className="skeleton-bar" style={{ width: '85%' }} /></td>
+                        <td><span className="skeleton-bar" style={{ width: '50%' }} /></td>
+                        <td><span className="skeleton-bar" style={{ width: '60%' }} /></td>
+                      </tr>
+                    ))
+                  : users.map(u => (
                   <tr key={u.id}>
                     <td>{u.username}</td>
                     <td>{u.email}</td>
                     <td>
                       <select
                         value={u.role_id}
+                        aria-label={`Rol de ${u.username}`}
                         onChange={async (e) => {
                           await fetch(`${apiUrl}/admin/users/${u.id}/role`, {
                             method: 'PUT',
@@ -972,6 +1060,27 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               </tbody>
             </table>
             </div>
+            {usersTotal > USERS_PAGE_SIZE && (
+              <div className="table-pagination">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => fetchUsers(usersPage - 1)}
+                  disabled={usersPage === 0 || usersLoading}
+                >
+                  ← Anterior
+                </button>
+                <span className="table-pagination-info">
+                  Página {usersPage + 1} de {Math.max(1, Math.ceil(usersTotal / USERS_PAGE_SIZE))} · {usersTotal} usuarios
+                </span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => fetchUsers(usersPage + 1)}
+                  disabled={(usersPage + 1) * USERS_PAGE_SIZE >= usersTotal || usersLoading}
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1020,7 +1129,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                   </table>
                 </div>
                 {ordersTotal > ORDERS_PAGE_SIZE && (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
+                  <div className="table-pagination">
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => fetchOrders(ordersPage - 1)}
@@ -1028,7 +1137,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                     >
                       ← Anterior
                     </button>
-                    <span style={{ color: 'var(--text-secondary)' }}>
+                    <span className="table-pagination-info">
                       Página {ordersPage + 1} de {Math.ceil(ordersTotal / ORDERS_PAGE_SIZE)}
                     </span>
                     <button

@@ -24,11 +24,11 @@ database_name = "suprime-st-ecc-db"
 database_id = "ec91ad62-2ee4-4a94-a7c8-9ec7ed9052dc"
 migrations_dir = "db/migrations"
 
-# Rate-limit distribuido (pendiente crear namespace):
-#   npx wrangler kv namespace create RATE_LIMIT_KV
-#   npx wrangler kv namespace create RATE_LIMIT_KV --preview
-# y pegar el id abajo. Sin esto el código usa fallback en memoria
-# (ver apps/api/src/lib/rate-limit.ts).
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT_KV"
-# id = "PEGAR_ID_AQUI"
+# Rate-limit distribuido. Namespace creado el 2026-09-30 (antes el código usaba
+# el fallback en memoria: en Workers cada isolate tiene la suya, así que un
+# atacante podía repartir intentos entre isolates).
+# Sin este binding el código sigue funcionando con el Map en memoria
+# (ver apps/api/src/lib/rate-limit.ts), pero el límite no es global.
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "c695ababca41469a97d90502eebf1620"

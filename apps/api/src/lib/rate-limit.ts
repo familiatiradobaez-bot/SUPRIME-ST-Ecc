@@ -75,3 +75,32 @@ export async function checkRateLimit(
 export function rateKey(req: { header: (name: string) => string | undefined }, scope: string): string {
   return `${scope}:${getClientIp(req)}`;
 }
+
+/**
+ * Lee el estado de un cubo SIN consumir intentos (para poder mostrarlo en la UI).
+ * Devuelve null si no hay cubo, si expiró o si KV falla: quien llama decide.
+ */
+export async function peekRateLimit(
+  env: RateLimitEnv,
+  key: string,
+  max: number,
+): Promise<{ count: number; remaining: number; resetIn: number } | null> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const kv = (env as { RATE_LIMIT_KV?: KVLike }).RATE_LIMIT_KV;
+
+  if (!kv) {
+    const cur = memBuckets.get(`rl:${key}`);
+    if (!cur || cur.resetAt / 1000 <= nowSec) return null;
+    return { count: cur.count, remaining: Math.max(0, max - cur.count), resetIn: Math.round(cur.resetAt / 1000 - nowSec) };
+  }
+
+  try {
+    const raw = await kv.get(`rl:${key}`);
+    if (!raw) return null;
+    const cur = JSON.parse(raw) as { count: number; resetAt: number };
+    if (cur.resetAt <= nowSec) return null;
+    return { count: cur.count, remaining: Math.max(0, max - cur.count), resetIn: cur.resetAt - nowSec };
+  } catch {
+    return null;
+  }
+}

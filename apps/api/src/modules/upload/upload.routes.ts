@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../../app';
 import { getClientIp } from '../../lib/request';
+import { checkRateLimit, peekRateLimit } from '../../lib/rate-limit';
 
 export type UploadBindings = Bindings & {
   IMAGEKIT_PRIVATE_KEY: string;
@@ -11,24 +12,14 @@ export type UploadBindings = Bindings & {
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-// Rate limiting (simple in-memory - use KV in production)
-const uploadAttempts = new Map<string, { count: number; resetAt: number }>();
+// Rate limiting de subidas: KV con fallback en memoria (lib/rate-limit.ts).
+// El in-memory servía de poco en Workers (una memoria por isolate) y esta
+// ruta consume cuota de ImageKit, que sí es dinero.
+const UPLOAD_MAX = 20;
+const UPLOAD_WINDOW = 15 * 60;
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const attempt = uploadAttempts.get(ip);
-
-  if (!attempt || attempt.resetAt < now) {
-    uploadAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
-    return true;
-  }
-
-  if (attempt.count >= 20) {
-    return false;
-  }
-
-  attempt.count++;
-  return true;
+async function uploadAllowed(env: UploadBindings, ip: string): Promise<boolean> {
+  return checkRateLimit(env, `upload:${ip}`, UPLOAD_MAX, UPLOAD_WINDOW);
 }
 
 // Validate image data URL
@@ -145,7 +136,7 @@ uploadRoutes.get('/images', async (context) => {
 uploadRoutes.post('/imagekit', async (context) => {
   const clientIp = getClientIp(context.req);
 
-  if (!checkRateLimit(clientIp)) {
+  if (!(await uploadAllowed(context.env, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many upload attempts' }, 429);
   }
 
@@ -237,19 +228,19 @@ uploadRoutes.post('/validate-url', async (context) => {
   return context.json({ data: { valid: true, url: parsed.data.url } });
 });
 
-// GET /upload/rate-limit-status - Check rate limit status
+// GET /upload/rate-limit-status - Estado del cubo de subidas, sin consumir intento.
 uploadRoutes.get('/rate-limit-status', async (context) => {
   const clientIp = getClientIp(context.req);
-  const attempt = uploadAttempts.get(clientIp);
+  const bucket = await peekRateLimit(context.env, `upload:${clientIp}`, UPLOAD_MAX);
 
-  if (!attempt || attempt.resetAt < Date.now()) {
-    return context.json({ data: { remaining: 20, resetIn: 0 } });
+  if (!bucket) {
+    return context.json({ data: { remaining: UPLOAD_MAX, resetIn: 0 } });
   }
 
   return context.json({
     data: {
-      remaining: Math.max(0, 20 - attempt.count),
-      resetIn: Math.max(0, attempt.resetAt - Date.now()),
+      remaining: bucket.remaining,
+      resetIn: Math.max(0, bucket.resetIn * 1000),
     },
   });
 });
