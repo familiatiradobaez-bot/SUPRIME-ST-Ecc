@@ -83,9 +83,14 @@ Archivos: `vite.config.ts`, `AdminPage.tsx` (lazy). Bloque medio: ~15-20K tokens
 
 | # | Tarea |
 |---|-------|
-| 21 | Página 404 personalizada (`NotFoundPage.tsx`, `App.tsx`) |
 | 24 | Suite E2E crítica con Playwright: login → add → checkout |
 | 17/27 | `preload` de fuentes Inter/Playfair — **parcialmente resuelto** por Cloudflare Fonts; ver P5 |
+
+✅ **21 · Página 404** cerrada en `a51f362`: `NotFoundPage` con la ruta que falló, buscador que
+lleva a la home filtrada, salidas a tienda/contacto y `noindex,follow` mientras está montada.
+`/producto/:slug` sigue con su propio "Producto no encontrado" (más preciso: la ruta sí existe).
+Limitación conocida: Cloudflare Pages sirve la SPA con 200 en toda ruta (`/* /index.html 200`), así
+que no hay 404 HTTP real sin una Pages Function; se controla el `noindex` en su lugar.
 
 ---
 
