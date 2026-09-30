@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Bindings } from '../../app';
+import { SITIO_CANONICO } from '../../lib/site';
 
 export const catalogRoutes = new Hono<{ Bindings: Bindings }>();
 
@@ -148,7 +149,10 @@ catalogRoutes.get('/departments/:slug/products', async (context) => {
 
 // GET /sitemap.xml - Sitemap para buscadores (home + secciones + productos)
 catalogRoutes.get('/sitemap.xml', async (context) => {
-  const base = 'https://suprime.xyz';
+  // Host canonico, desde lib/site.ts. El sitemap tiene que emitir SIEMPRE el
+  // host canonico: si mezcla los dos, Google indexa la misma pagina dos veces
+  // con dos URLs distintas.
+  const base = SITIO_CANONICO;
   const urls: string[] = [
     `${base}/`,
     `${base}/favoritos`,

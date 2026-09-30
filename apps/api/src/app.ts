@@ -4,6 +4,7 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
 import { googleRoutes } from './modules/auth/google.routes';
+import { origenPermitido, SITIO_CANONICO } from './lib/site';
 import { uploadRoutes } from './modules/upload/upload.routes';
 
 export type EmailBinding = {
@@ -42,103 +43,38 @@ export function createApp() {
 
   // ── Orígenes permitidos ──────────────────────────────────────────────────
   //
-  // Se separan los de producción de los de desarrollo porque hasta ahora todo
-  // estaba mezclado y en un solo array, con lo que los comodines de desarrollo
-  // seguían activos EN PRODUCCIÓN.
+  // Todo esto vive ahora en lib/site.ts, junto con SITIO_CANONICO. Se movió
+  // porque el dominio y la lista de orígenes estaban escritos a mano en varios
+  // ficheros (este, catalog.routes.ts, google.routes.ts) y eso hace que cambiar
+  // el dominio obligue a cazarlos todos, con lo fácil que es dejar alguno con el
+  // host viejo.
   //
-  // Lo que se quita de producción, y por qué importa:
-  //   *.trycloudflare.com y *.ngrok-free.dev  -> túneles gratis, se crean en
-  //     segundos y sin cuenta. Cualquiera podía poner su origen ahí y pasar
-  //     la validación igual que suprime.xyz. COMODÍN ELIMINADO: si hace falta un
-  //     túnel se añade SU dominio exacto.
-  //   localhost / 127.0.0.1 / 192.168.*       -> una página servida desde el
-  //     propio ordenador del visitante pasaba el control. Se mantienen FUERA de
-  //     producción (que es lo que se arregla aquí) porque son el flujo de
-  //     desarrollo documentado: `npm run dev` y abrir la web desde el móvil.
-  //   *.pages.dev                             -> cualquier proyecto de Pages de
-  //     cualquier cuenta de Cloudflare. COMODÍN ELIMINADO también: el dominio de
-  //     SUPRIME sigue entrando por su nombre exacto, arriba.
+  // El resumen de por qué la lista está partida en dos, que es lo que no hay que
+  // deshacer:
   //
-  // Severidad: BAJA, no alta, y conviene decirlo claro para no inflarlo. Esta
-  // API autentica con `Authorization: Bearer <token>` guardado en localStorage,
-  // que una página de otro origen no puede leer, y la cookie `session_token` es
-  // HttpOnly + SameSite=Strict, que el navegador ni siquiera manda cross-site
-  // (verificado: /admin/* solo con cookie responde 401). O sea que la
-  // autenticación no era vulnerable a esto. Lo que estaba anulada es la barrera
-  // de defensa en profundidad que este middleware pone, y que existe para
-  // proteger si algún día se mete un endpoint que sí use la cookie.
+  //  - En PRODUCCIÓN solo entran los dominios de SUPRIME, por nombre exacto.
+  //  - Fuera de producción se añaden localhost, 127.0.0.1 y la red local, que es
+  //    el flujo documentado (NETWORK_ACCESS.md y `npm run network-info`, que es
+  //    abrir la web desde el móvil). Se cubren por patrón y no por puerto porque
+  //    Vite va con `strictPort: false`: si el 5173 está ocupado se va al 5174 y
+  //    una lista fija de puertos se quedaba corta sola.
+  //  - NO hay comodines de túnel (`.trycloudflare.com`, `.ngrok-free.dev`) ni de
+  //    `*.pages.dev`. Estaban hasta el 30-sep y sequitaron porque dejaban pasar
+  //    a cualquier túnel gratis o a cualquier proyecto de Pages de cualquier
+  //    cuenta. Comprobado en producción antes de hacerlo: respondían 401 en vez
+  //    de 403, o sea que la petición llegaba al handler, y un pages.dev ajeno
+  //    recibía Access-Control-Allow-Origin con credenciales.
+  //    Si algún día hace falta un túnel, se añade SU dominio exacto.
   //
-  // Comprobado contra la producción ANTES de este cambio, con el smoke: un
-  // origen `*.ngrok-free.dev`, `*.pages.dev` y `http://localhost:5173` pasaban
-  // la validación (respondían 401 INVALID_CREDENTIALS, o sea que la petición
-  // llegaba al handler) y un `pages.dev` ajeno recibía Access-Control-Allow-Origin
-  // con credenciales.
+  // Severidad de aquel problema: BAJA, no alta. La autenticación no era
+  // vulnerable a esto: va por `Authorization: Bearer` en localStorage, que otra
+  // origen no puede leer, y la cookie `session_token` es HttpOnly +
+  // SameSite=Strict, que el navegador ni manda cross-site (verificado: /admin/*
+  // solo con cookie responde 401). Lo que estaba anulada era la barrera de
+  // defensa en profundidad del middleware.
   //
-  // Nota para despliegues de vista previa: dejan de funcionar contra la API de
-  // producción, que es lo correcto. Si hacen falta, hay que añadir su dominio
-  // exacto arriba o apuntarlos a una API que no sea de producción.
-  const ORIGENES_PRODUCCION = [
-    'https://suprime.xyz',
-    'https://www.suprime.xyz',
-    'https://suprime-st-ecc.pages.dev',
-    'https://api.suprime.xyz',
-  ];
-
-  // Solo se usan con APP_ENV distinto de "production".
-  //
-  // No se listan puertos: se acepta cualquier puerto de localhost, 127.0.0.1 y
-  // de la red local. Vite va con `strictPort: false`, o sea que si el 5173 esta
-  // ocupado se va al 5174, 5175... y una lista fija se quedaba corta sola. Y la
-  // red local es el flujo documentado en NETWORK_ACCESS.md y en el script
-  // `npm run network-info`, que es abrir http://192.168.0.105:5173 desde el
-  // movil.
-  //
-  // Lo que se ha quitado de aqui, por muerto o por innecesario:
-  //   https://anew-straw-goggles.ngrok-free.dev   -> un tunel de una sesion
-  //     antigua, ese subdominio ya no existe.
-  //   http://192.168.0.105:5176                   -> solo se documenta el 5173.
-  //   *.trycloudflare.com y *.ngrok-free.dev       -> tuneles de una vez, se
-  //     abren a mano cuando hacen falta. Estaban como comodin permanente, lo
-  //     que hacia que CUALQUIER tunel de cualquiera pasara la validacion. Si
-  //     vuelve a hacer falta uno, se abre el tunel y se anade SU dominio exacto
-  //     arriba; no un comodin.
-  const ORIGENES_DESARROLLO: string[] = [];
-
-  /**
-   * Patrones que solo valen FUERA de producción.
-   *
-   * Quedan localhost, 127.0.0.1 y la red local, que son el flujo de desarrollo
-   * documentado (NETWORK_ACCESS.md y `npm run network-info`, que es abrir la
-   * web desde el móvil). Se cubren por patrón y no por puerto porque Vite usa
-   * `strictPort: false`: si el 5173 está ocupado se va al 5174, 5175...
-   *
-   * Ya NO están aquí los comodines de túnel (`.trycloudflare.com`,
-   * `.ngrok-free.dev`) ni el de `.pages.dev`. Eran el agujero: los tres dejaban
-   * pasar a cualquier túnel gratis o a cualquier proyecto de Pages de cualquier
-   * cuenta. Si algún día hace falta un túnel, se abre y se añade SU dominio
-   * exacto a ORIGENES_DESARROLLO.
-   */
-  const comodinesDesarrollo = (u: string): boolean =>
-    u.includes('localhost:') ||
-    u.includes('127.0.0.1:') ||
-    u.includes('192.168.');
-
-  /**
-   * Origen permitido, según el entorno. Se evalúa por petición porque APP_ENV
-   * vive en context.env y no se puede resolver una sola vez al arrancar.
-   */
-  const origenPermitido = (valor: string | undefined, esProduccion: boolean): boolean => {
-    if (!valor) return false;
-    let u: string;
-    try {
-      u = valor.startsWith('http') ? new URL(valor).origin : valor;
-    } catch {
-      return false;
-    }
-    if (ORIGENES_PRODUCCION.includes(u)) return true;
-    if (esProduccion) return false;
-    return ORIGENES_DESARROLLO.includes(u) || comodinesDesarrollo(u);
-  };
+  // Nota: los despliegues de vista previa dejan de funcionar contra esta API de
+  // producción, que es lo correcto.
 
   // Security headers + CORS middleware (manual CORS to avoid body consumption)
   api.use('*', async (context, next) => {
@@ -165,10 +101,21 @@ export function createApp() {
     // comodines de tunel. Se quitan tambien en la variante de desarrollo: un
     // un CSP no necesita abrir la conexion a un tunel cualquiera para que
     // funcione `npm run dev`, solo a la API de destino (8789 en local, la de
-    // produccion cuando se prueba contra ella).
-    const csp = esProduccion
-      ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://api.qrserver.com;"
-      : "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.suprime.xyz https://suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net http://localhost:* http://127.0.0.1:* http://192.168.*:8789 https://api.qrserver.com;";
+    // El CSP se construye con el dominio canonico en vez de escribirlo a mano,
+    // que es como se quedaba desactualizado. connect-src es donde puedeIr el
+    // front a conectarse: el mismo origen (self), la API y los dos hosts de la
+    // tienda. Sin comodines de tunel ni IP locales: no hacen falta para que
+    // funcione `npm run dev`, que solo necesita la API de destino.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: https: blob:",
+      esProduccion
+        ? `connect-src 'self' ${SITIO_CANONICO} https://suprime.xyz https://api.suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://api.qrserver.com`
+        : `connect-src 'self' ${SITIO_CANONICO} https://suprime.xyz https://api.suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net http://localhost:* http://127.0.0.1:* http://192.168.*:8789 https://api.qrserver.com`,
+    ].join('; ');
     context.header('Content-Security-Policy', csp);
     context.header('X-XSS-Protection', '1; mode=block');
     context.header('X-Frame-Options', 'DENY');

@@ -1,9 +1,14 @@
 ﻿import { Hono } from 'hono';
 import type { Bindings } from '../../app';
 import { checkRateLimit, rateKey } from '../../lib/rate-limit';
+import { SITIO_CANONICO } from '../../lib/site';
 
 // Frontend URLs for post-login redirect
+// El host canonico es www (ver lib/site.ts). El apex sigue en la lista porque
+// alguien puede entrar por ahi y el 301 de Cloudflare no siempre se ve en la
+// peticion que hace el backend.
 const FRONTEND_URLS = [
+  'https://www.suprime.xyz',
   'https://suprime.xyz',
   'https://suprime-st-ecc.pages.dev',
 ];
@@ -20,17 +25,18 @@ function getRedirectUri(context: { req: { header: (name: string) => string | und
   return 'https://api.suprime.xyz/api/v1/auth/google/callback';
 }
 
+// A donde se manda al usuario tras el login. Siempre al host canonico (www),
+// venga el Origin que venga, para no dejar al usuario en el apex: el 301 de
+// Cloudflare lo redirigiria, pero es un salto extra y un Origin con www ya es
+// el caso normal.
 function getFrontendUrl(context: { req: { header: (name: string) => string | undefined } }): string {
   const origin = context.req.header('Origin') || context.req.header('Referer');
-  
-  if (origin && origin.includes('suprime.xyz')) {
-    return 'https://suprime.xyz';
-  }
+
   if (origin && origin.includes('pages.dev')) {
     return 'https://suprime-st-ecc.pages.dev';
   }
-  
-  return 'https://suprime.xyz';
+
+  return SITIO_CANONICO;
 }
 
 export const googleRoutes = new Hono<{ Bindings: Bindings }>();

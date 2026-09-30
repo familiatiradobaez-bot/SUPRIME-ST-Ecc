@@ -644,6 +644,49 @@ for (const [name, plain] of [['api', 'http://api.suprime.xyz/api/v1/health'], ['
   check(`${name}: http redirige a https (301)`, res.status === 301 && loc.startsWith('https://'), `${res.status} ${loc.slice(0, 60)}`);
 }
 
+console.log('== www.suprime.xyz ==');
+// El host canonico es www y el apex redirige con 301. Sin esto hay dos URLs para
+// la misma pagina, que es lo que hace que un buscador indexe las dos.
+// El 301 lo pone Cloudflare, no Pages, porque _redirects no puede mirar el Host.
+const WWW = 'https://www.suprime.xyz';
+const APEX = 'https://suprime.xyz';
+
+{
+  const res = await F(`${WWW}/`, { redirect: 'manual' });
+  check('www responde 200', res.status === 200, res.status);
+}
+for (const ruta of ['/', '/carrito?x=1', '/producto/reloj']) {
+  const res = await F(APEX + ruta, { redirect: 'manual' });
+  const loc = res.headers.get('location') || '';
+  // La ruta y la query tienen que sobrevivir al salto.
+  const rutaEsperada = ruta.split('?')[0];
+  const queryEsperada = ruta.includes('?') ? ruta.slice(ruta.indexOf('?')) : '';
+  const ok = res.status === 301 &&
+    loc.startsWith(`${WWW}${rutaEsperada}`) &&
+    loc.includes(queryEsperada);
+  check(`el apex redirige 301 a www conservando la ruta (${ruta})`, ok, `${res.status} ${loc.slice(0, 70)}`);
+}
+
+// Que no haya dos canonicos: el canonical y el og:url del HTML tienen que decir
+// www. Si uno se queda con el apex, Google ve las dos versiones.
+{
+  const res = await F(`${WWW}/`);
+  const h = await res.text();
+  check('el canonical del HTML apunta a www', h.includes(`<link rel="canonical" href="${WWW}/"`) && !h.includes(`rel="canonical" href="${APEX}/"`), 'canonical distinto');
+  check('el og:url apunta a www', h.includes(`property="og:url" content="${WWW}/"`), 'og:url distinto');
+}
+
+// El sitemap lo emite la API y tiene que llevar el host canonico en TODAS las
+// URLs. Una sola con el apex ya hace que se indexen dos.
+{
+  const res = await F(`${API}/catalog/sitemap.xml`);
+  const xml = await res.text();
+  const total = (xml.match(/<loc>/g) || []).length;
+  const conWww = (xml.match(new RegExp(`<loc>${WWW.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g')) || []).length;
+  const conApex = (xml.match(new RegExp(`<loc>${APEX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g')) || []).length;
+  check(`el sitemap usa www en todas sus URLs (${total} URLs, ${conWww} con www, ${conApex} con apex)`, total > 0 && conWww === total && conApex === 0, `${conWww}/${total} con www, ${conApex} con apex`);
+}
+
 console.log('== Logout ==');
 r = await F(`${API}/auth/logout`, { method: 'POST', headers: H });
 check('logout 200', r.status === 200, r.status);

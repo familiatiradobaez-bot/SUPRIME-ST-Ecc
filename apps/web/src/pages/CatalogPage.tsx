@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SITE_URL } from '../lib/site';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
@@ -18,7 +19,7 @@ function generateItemListJsonLd(items: Array<{ slug?: string; name: string; imag
       item: {
         '@type': 'Product',
         name: item.name,
-        url: item.slug ? `https://suprime.xyz/producto/${item.slug}` : undefined,
+        url: item.slug ? `${SITE_URL}/producto/${item.slug}` : undefined,
         image: item.image_url,
       },
     })),
@@ -147,7 +148,9 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishli
       }
       meta.content = content;
     };
-    const ogImage = items[0]?.image_url || 'https://suprime.xyz/og-cover.jpg';
+    // Sin imagen propia del producto, la de la marca. Antes ponia un .jpg que no
+  // existe en public/ (alli esta og-cover.svg), o sea que nunca se veia.
+  const ogImage = items[0]?.image_url || `${SITE_URL}/og-cover.svg`;
     updateMeta('og:image', ogImage);
     updateMeta('og:title', `${KIND_LABEL[kind]}: ${title}`);
     updateMeta('og:description', subtitle || '');

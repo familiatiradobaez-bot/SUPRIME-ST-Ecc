@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SITE_URL } from '../lib/site';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
@@ -10,7 +11,7 @@ import { SmartImage } from '../components/SmartImage';
 import { SkeletonPdp } from '../components/Skeletons';
 
 function generateProductJsonLd(product: Product, gallery: string[], currency: string) {
-  const base = 'https://suprime.xyz';
+  const base = SITE_URL;
   const price = (product.price_cents / 100).toFixed(2);
   const currencyCode = currency === 'EUR' ? 'EUR' : currency;
   return {
@@ -44,7 +45,7 @@ function generateProductJsonLd(product: Product, gallery: string[], currency: st
 
 // Genera JSON-LD BreadcrumbList para SEO
 function generateBreadcrumbJsonLd(product: Product) {
-  const base = 'https://suprime.xyz';
+  const base = SITE_URL;
   const items = [
     { '@type': 'ListItem', position: 1, item: { '@id': `${base}/`, name: 'Inicio' } },
   ];

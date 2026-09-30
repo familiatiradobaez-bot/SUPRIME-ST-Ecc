@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://suprime.xyz/sitemap.xml
+Sitemap: https://www.suprime.xyz/sitemap.xml
