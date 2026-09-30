@@ -26,6 +26,10 @@ Thumbs.db
 # Wrangler local state
 .wrangler/
 
+# Export de la D1 (npm run backup): contiene hashes y datos de usuarios.
+# El repo nunca debe llevar una copia; los restores viven en MovilLab/.
+backups/
+
 # Google credentials (secret file)
 CliGG.json
 google-credentials.json

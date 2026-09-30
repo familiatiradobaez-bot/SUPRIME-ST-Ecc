@@ -17,8 +17,14 @@ const roleRank: Record<string, number> = {
   owner: 40,
 };
 
+// OJO: el id en DB es 'role-stock-manager' (GUION), no 'stock_manager'
+// (subrayado). Normalizar solo quitando el prefijo dejaba la clave
+// 'stock-manager', que no está en roleRank → nivel 0 → TODO /admin/* devolvía
+// 403 FORBIDDEN a un stock manager que sí se autenticaba y pasaba el 2FA.
+// Aquí se unifican guion y subrayado para que las dos grafías valgan.
 function roleLevel(roleId: string): number {
-  return roleRank[roleId.replace(/^role-/, '')] || 0;
+  const key = roleId.replace(/^role-/, '').replace(/-/g, '_').toLowerCase();
+  return roleRank[key] || 0;
 }
 
 function canAccess(userRole: string, minimum: string): boolean {

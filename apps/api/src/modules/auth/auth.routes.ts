@@ -660,6 +660,31 @@ authRoutes.post('/admin-stepup', async (context) => {
   return context.json({ data: { granted: true, validFor: 3600 } });
 });
 
+// POST /auth/admin-stepup/revoke - Tirar el grant de admin sin cerrar sesión.
+// "Salir del panel" al cerrar sesión no era posible: el grant vivia 1 h en
+// admin_stepup aunque la sesión ya no existiera, así que volver a entrar con
+// la misma sesión (p. ej. otra pestaña, o un logout que no lo revocó) saltaba
+// el 2FA. Aquí se puede bloquear el panel al instante, que es lo que espera
+// quien lo deja abierto en un ordenador compartido.
+authRoutes.post('/admin-stepup/revoke', async (context) => {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return context.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const session = await context.env.DB.prepare(
+    `SELECT s.user_id FROM sessions s WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(authHeader.slice(7)).first() as { user_id: string } | null;
+
+  if (!session) {
+    return context.json({ error: 'SESSION_EXPIRED' }, 401);
+  }
+
+  await context.env.DB.prepare('DELETE FROM admin_stepup WHERE user_id = ?').bind(session.user_id).run();
+
+  return context.json({ data: { revoked: true } });
+});
+
 // POST /auth/logout
 authRoutes.post('/logout', async (context) => {
   const authHeader = context.req.header('Authorization');
@@ -669,16 +694,19 @@ authRoutes.post('/logout', async (context) => {
 
   const token = authHeader.slice(7);
   const session = await context.env.DB.prepare(
-    `SELECT id FROM sessions WHERE id = ?`
-  ).bind(token).first();
+    `SELECT s.user_id FROM sessions s WHERE s.id = ?`
+  ).bind(token).first() as { user_id: string } | null;
 
   if (!session) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
 
-  await context.env.DB.prepare(
-    'DELETE FROM sessions WHERE id = ?'
-  ).bind(token).run();
+  // Cerrar sesión también cierra el panel: sin grant, el 2FA se vuelve a pedir
+  // al entrar. Si no, "salir" dejaba el admin abierto hasta una hora.
+  await context.env.DB.batch([
+    context.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(token),
+    context.env.DB.prepare('DELETE FROM admin_stepup WHERE user_id = ?').bind(session.user_id),
+  ]);
 
   // Clear the session cookie
   context.header('Set-Cookie', 'session_token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0');

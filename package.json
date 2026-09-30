@@ -15,6 +15,7 @@
     "db:migrate": "npm --workspace apps/api run db:migrate",
     "db:seed": "npm --workspace apps/api run db:seed",
     "smoke": "node tests/smoke.mjs",
+    "smoke:setup": "node tools/smoke-setup.mjs",
     "tokens": "node tools/token-check.mjs",
     "img:check": "node tools/img-check.mjs",
     "backup": "wrangler d1 export DB --remote --output ./backups/d1-backup.sql",
