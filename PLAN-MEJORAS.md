@@ -288,18 +288,47 @@ para que la regla aplique.
 > El `PUT` al entrypoint fallaba con error 10003 porque la fase no existía: hay que
 > crearla primero con `POST /zones/:zone_id/rulesets`. Un `PUT` solo sirve para modificarla.
 
-### **Plan de acción Cloudflare (panel, sin coste) — estado**
+### **Plan de acción Cloudflare (panel, sin coste) — estado verificado 2026-09-30 (API)**
 
-1. ✅ **Cache Rule de la API** → creada por API (ver arriba). Ya no queda nada por hacer aquí.
-2. **Speed Brain** → `Speed > Content Optimization`: confirmar que está *On* (ya debería estarlo por defecto).
-2. **Early Hints** → mismo panel: *On*. Complementa al `preload` de fuentes.
-3. **Cloudflare Fonts** → *On*. Sustituye el fix manual de la CSS de fuentes y quita el third-party.
-4. **Cache Rules** (10 disponibles) → 2 sugeridas:
-   - `hostname eq api.suprime.xyz` → *Bypass* (la API ya es dinámica; no cachedear respuestas con cookies).
-   - `uri.path starts_with "/assets/"` → *Eligible for cache* + *Edge TTL 1 año*.
-5. **No activar** Rocket Loader (rompe CSP y módulos ES).
+Todo lo de abajo se comprobó contra la API de la zona (`suprime.xyz`, plan **Free Website**),
+no de memoria:
 
-> Ninguna de estas necesita plan de pago ni tarjeta.
+| Ajuste | Estado real | Nota |
+|--------|-------------|------|
+| `early_hints` | ✅ **on** | Ya estaba activo; la nota anterior decía "pendiente" |
+| `brotli` / `http3` / `ipv6` | ✅ on | Confirmado |
+| `rocket_loader` | ✅ off | Correcto: rompería la CSP y los módulos ES de Vite |
+| `polish` / `mirage` | off | Pro+ de todos modos |
+| `browser_cache_ttl` | ✅ **31536000** | **El `max-age=14400` ya no aparece.** Verificado en vivo: `/assets/*.js` → `max-age=31536000, immutable` |
+| `cache_level` | aggressive | No afecta a la API (es un Worker) |
+| `speed_brain` / `tiered_cache` | no expuestos por la API | Solo panel. Speed Brain viene activo por defecto en Free |
+| `minify` | off | Vite ya minifica; el ahorro extra es de ~1 KB. **No tocar** |
+| `always_use_https` | ⚠️ **off y no editable con el token actual** | Ver el hallazgo de abajo |
+
+**Regla de caché de assets — creada** (`suprime_assets_1y` en el ruleset `4dd3a298…`, fase
+`http_request_cache_settings`): `http.host eq "suprime.xyz" and starts_with(path, "/assets/")` →
+`cache: true`, Edge TTL y Browser TTL de 1 año. Antes de crearla, `/assets/*` salía `MISS` en cada
+visita; ahora `HIT`. Es seguro porque el nombre de los bundles lleva el hash de contenido de
+Vite: un cambio genera un nombre nuevo.
+
+> El token de `_SECRETS/cloudflare.env` **no puede editar settings** (403 `10000`) pero sí leerlos.
+> Para las reglas de caché hace falta el segundo token del archivo,
+> `CLOUDFLARE_API_TOKEN_LEGACY_RULESETS_ONLY`, que sí tiene permisos de rulesets.
+> `GET /zones/:id/rulesets` no trae el detalle de las reglas (sale `rules=0`): hay que pedir
+> `GET /zones/:id/rulesets/:ruleset_id` para verlas.
+
+#### 🔴 Hallazgo: **la API sirve tráfico en claro por http**
+
+`http://api.suprime.xyz/api/v1/health` responde **200 OK sin redirigir a https**, mientras que
+`http://suprime.xyz/` sí devuelve 301. Es decir, el subdominio del Worker acepta peticiones sin
+cifrar, incluidas las de login con credenciales. La app nunca usa http (`config.js` y el smoke
+apuntan a https), así que no hay tráfico propio afectado, pero es lo primero que arreglaría:
+
+- Opción A (30 s, panel): **Workers → Routes → `api.suprime.xyz` → Settings → "Redirect HTTP to
+  HTTPS"** en On.
+- Opción B (API): `PATCH /zones/:id/settings/always_use_https` → `{"value":"on"}`, pero requiere un
+  token con **Zone Settings: Edit**, que el actual no tiene.
+
 
 ---
 

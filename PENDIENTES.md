@@ -1,4 +1,4 @@
-﻿# SUPRIME · Pendientes consolidados (2026-09-30)
+# SUPRIME · Pendientes consolidados (2026-09-30)
 
 > Fuente: `PLAN-MEJORAS.md` (detalle por tarea) + verificación en producción.
 > Regenerar este archivo al cerrar cada bloque.
@@ -89,17 +89,29 @@ Archivos: `vite.config.ts`, `AdminPage.tsx` (lazy). Bloque medio: ~15-20K tokens
 
 ---
 
-## 🟢 P5 · Panel de Cloudflare (gratis, sin código, ~10 min)
+## 🟢 P5 · Panel de Cloudflare (gratis, sin código) — verificado por API 2026-09-30
 
 | Tarea | Estado |
 |-------|--------|
-| Cache Rule de `api.suprime.xyz` (bypass) | ✅ **Hecho por API.** Ruleset `4dd3a298…`, DNS verificado proxied |
-| TTL de assets del proyecto Pages | ⚠️ El usuario dice que está correcto, pero la cabecera sigue en `max-age=14400` + `must-revalidate`. **Pendiente de verificar** |
-| Speed Brain | ❓ No verificado (viene activo por defecto en Free) |
-| Early Hints | ❓ Pendiente de activar |
-| Cloudflare Fonts | ❓ Pendiente de activar. Requiere revisar el CSP si el HTML ya no usa `fonts.googleapis.com` |
+| Early Hints | ✅ **Ya estaba `on`** (la nota anterior decía "pendiente") |
+| Brotli / HTTP3 / IPv6 | ✅ on |
+| Rocket Loader | ✅ off (rompería la CSP y los módulos ES) |
+| TTL de assets del proyecto | ✅ **`browser_cache_ttl` = 1 año**: el `max-age=14400` ya no sale. En vivo: `max-age=31536000, immutable` |
+| Cache Rule `/assets/*` (edge) | ✅ **Creada** (`suprime_assets_1y`): los assets pasaron de `MISS` en cada visita a `HIT` |
+| Cache Rule de la API (bypass) | ⚪ **innecesaria**: la API es un Worker y no pasa por la caché de la zona (no devuelve `cf-cache-status`). Se deja la que hay, no estorba |
+| Speed Brain / Tiered Cache | ⚪ No expuestos por la API (solo panel). Speed Brain viene activo por defecto en Free |
+| Cloudflare Fonts | ❓ Sin verificar. Hay que revisar la CSP si el HTML deja de usar `fonts.googleapis.com` |
+| `always_use_https` | 🔴 **off, y la API sirve http en claro** → ver abajo |
 
-**No activar:** Rocket Loader (rompe CSP y módulos ES), Polish/Images/Argo/Prefetch (Pro+ o Enterprise).
+**🔴 Nuevo, y lo primero que arreglaría**: `http://api.suprime.xyz/api/v1/health` responde
+**200 sin redirigir**, mientras `http://suprime.xyz/` sí da 301. El subdominio del Worker acepta
+peticiones sin cifrar (login incluido). La app no usa http, pero el arreglo son 30 s:
+**Workers → Routes → `api.suprime.xyz` → Settings → "Redirect HTTP to HTTPS" → On**.
+Por API haría falta un token con *Zone Settings: Edit*; el de `_SECRETS/` no lo tiene
+(403 `10000`), y para las reglas de caché sí sirve el `..._LEGACY_RULESETS_ONLY`.
+
+**No activar:** Rocket Loader, Polish/Images/Argo/Prefetch (Pro+ o Enterprise). `minify` se deja
+apagado: Vite ya minifica y el HTML pesa 3,6 KB.
 
 > Detalle en la sección "Plan de acción Cloudflare" de `PLAN-MEJORAS.md`.
 
