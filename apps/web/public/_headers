@@ -18,9 +18,19 @@
 # config.js se reescribe en cada despliegue con la URL de la API.
 /config.js
   Cache-Control: public, max-age=300, must-revalidate
+  X-H-Probe: config
 
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
+  X-H-Probe: manifest
+
+/favicon-32.png
+  Cache-Control: public, max-age=3600
+  X-H-Probe: favicon32
+
+/rayo-128.png
+  Cache-Control: public, max-age=3600
+  X-H-Probe: rayo128
 
 # Iconos y logo de marca. NO llevan hash en el nombre, asi que no pueden
 # cachearse un ano como los bundles: un icono nuevo tardaria un ano en llegar a
