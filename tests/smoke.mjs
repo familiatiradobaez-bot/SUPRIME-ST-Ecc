@@ -190,10 +190,16 @@ else {
   const enabled = r.status === 200 && st.data?.enabled === true;
   check('owner 2FA sigue activado (smoke no lo toca)', enabled, `${r.status} enabled=${st.data?.enabled}`);
   if (enabled) {
-    // Con 2FA activo y sin step-up, regenerar exige 403 (no muta nada)
+    // Con 2FA activo, regenerar el secreto exige 403 (no muta nada).
+    // Hay dos respuestas correctas y el smoke no controla cuál:
+    //  - ADMIN_2FA_REQUIRED: no hay grant de step-up vigente.
+    //  - SAFETY_LOCKED: sí lo hay, pero el modo seguro bloquea la rotación.
+    // Lo que se verifica es que regule, no el motivo concreto.
     r = await F(`${API}/auth/me/totp/setup`, { method: 'POST', headers: H });
     const e = await j(r);
-    check('totp setup sin step-up 403 (no destructivo)', r.status === 403 && e.error === 'ADMIN_2FA_REQUIRED', `${r.status} ${e.error}`);
+    check('totp setup sin step-up 403 (no destructivo)',
+      r.status === 403 && (e.error === 'ADMIN_2FA_REQUIRED' || e.error === 'SAFETY_LOCKED'),
+      `${r.status} ${e.error}`);
   } else {
     skip('totp setup (sin 2FA no se toca para no regenerar el secreto)');
   }
