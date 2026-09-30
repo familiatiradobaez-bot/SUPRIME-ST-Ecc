@@ -50,22 +50,26 @@
  *   Por eso la purga tiene que incluir estos ficheros, no solo /assets/*.
  *
  * Uso:
- *   node tools/purge-assets.mjs --dry-run   # solo lista lo que se pediría
+ *   node tools/purge-assets.mjs --dry-run            # solo lista lo que se pediría
+ *   node tools/purge-assets.mjs --espera-deploy      # espera a Pages y luego purga
  *   CLOUDFLARE_API_TOKEN=... node tools/purge-assets.mjs
  *   node tools/purge-assets.mjs --token cfat_xxx
  */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const esperaDeploy = args.includes('--espera-deploy');
 
 const ZONE = process.env.CLOUDFLARE_ZONE_ID || '76d7164bb1f6a909167e1c1dc6b46b54';
 const ORIGEN = process.env.CLOUDFLARE_PURGE_ORIGIN || 'https://suprime.xyz';
 const PREFIX = process.env.CLOUDFLARE_PURGE_PREFIX || `${ORIGEN}/assets/*`;
+const PROYECTO = process.env.CLOUDFLARE_PAGES_PROJECT || 'suprime-st-ecc';
 
 /**
  * Ficheros de la raiz sin hash en el nombre: se regeneran con cada cambio de
@@ -108,6 +112,47 @@ if (dryRun) {
   process.exit(0);
 }
 
+/**
+ * Espera a que Pages haya desplegado ESTE commit.
+ *
+ * POR QUE: Pages no despliega en el push, dispara un proceso asincrono
+ * (queued -> clone_repo -> build -> deploy) que tarda unos 5 minutos. La purga
+ * de CI se ejecutaba a los 3-4, o sea ANTES de que existiera el despliegue, y
+ * por lo tanto no purgaba nada. Se vio en produccion: se purgo a las 17:32 y el
+ * despliegue termino a las 17:35, y /icon.svg siguio sirviendo un fichero ya
+ * borrado del repo.
+ */
+async function esperarDeploy(token) {
+  const cuenta = process.env.CLOUDFLARE_ACCOUNT_ID;
+  let sha = process.env.GITHUB_SHA || '';
+  if (!sha) {
+    try { sha = execSync('git rev-parse HEAD', { cwd: join(REPO) }).toString().trim(); } catch { sha = ''; }
+  }
+  if (!cuenta || !sha) {
+    console.log('! sin CLOUDFLARE_ACCOUNT_ID o sin sha: se purga sin esperar (puede no servir de nada)');
+    return;
+  }
+  const corto = sha.slice(0, 8);
+  console.log(`esperando a que Pages despliegue ${corto}...`);
+  const limite = Date.now() + 15 * 60 * 1000;
+  for (let i = 1; Date.now() < limite; i++) {
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cuenta}/pages/projects/${PROYECTO}/deployments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = await r.json().catch(() => ({}));
+    const d = (j.result || []).find((x) => (x.deployment_trigger?.metadata?.commit_hash || '').startsWith(corto));
+    if (d) {
+      const deploy = (d.stages || []).find((s) => s.name === 'deploy');
+      console.log(`  despliegue ${d.id.slice(0, 8)}: deploy=${deploy?.status}`);
+      if (deploy?.status === 'success') { console.log('✓ desplegado'); return; }
+      if (deploy?.status === 'failure') { console.error('✗ el despliegue ha fallado'); process.exit(1); }
+    }
+    if (i % 4 === 0) console.log(`  sigue en cola (${i} intentos)`);
+    await new Promise((s) => setTimeout(s, 20000));
+  }
+  console.error('✗ el despliegue no llego en 15 minutos; se purga igualmente');
+}
+
 async function purgar(files) {
   const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${ZONE}/purge_cache`, {
     method: 'POST',
@@ -121,6 +166,8 @@ async function purgar(files) {
   }
   return body.result?.id;
 }
+
+if (esperaDeploy) await esperarDeploy(token);
 
 const id1 = await purgar([PREFIX]);
 console.log(`✓ purgado ${PREFIX} (id ${id1})`);

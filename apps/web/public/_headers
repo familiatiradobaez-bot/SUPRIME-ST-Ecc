@@ -1,14 +1,23 @@
 # Cabeceras de Cloudflare Pages - SUPRIME
 #
-# NOTA DE CODIFICACION: este archivo va en ASCII puro, sin acentos ni guiones
-# largos. Pages lo parsea linea a linea y el fichero anterior estaba corrupto
-# (los acentos salian como bytes rotos: "a?o", "versi?n"). Con el fichero
-# danado, Pages ignoraba las reglas y aplicaba su valor por defecto a todo.
-# Si se edita este archivo, que sea solo ASCII.
+# ASCII PURO, sin acentos ni guiones largos: Pages lo parsea linea a linea y el
+# fichero anterior estaba corrupto (los acentos salian como bytes rotos), y con
+# el fichero danado Pages ignoraba las reglas. Si se edita, que sea solo ASCII.
 #
-# VALOR POR DEFECTO DE PAGES: public, max-age=31536000, must-revalidate. Un
-# ano. Asi que todo lo que se sirva sin hash en el nombre tiene que declarar su
-# propio Cache-Control aqui, o el cambio no llegara hasta el ano siguiente.
+# ADVERTENCIA IMPORTANTE (medido en produccion, 2026-09-30):
+# Cloudflare SOBREESCRIBE el Cache-Control de estas respuestas. Se comprobo
+# poniendo una cabecera de control X-H-Probe, que Cloudflare no toca: la sonda
+# SI aparecia en la respuesta, asi que esta regla se aplicaba, pero el
+# Cache-Control seguia siendo el de Pages (public, max-age=31536000,
+# must-revalidate) y no el declarado aqui. Por eso los ficheros sin hash en el
+# nombre necesitan ademas la Cache Rule "root-static-short-cache" de la zona,
+# que es la que manda de verdad en el TTL del navegador. Aqui se deja el
+# Cache-Control igual, para cuando se sirva sin Cloudflare delante.
+#
+# OTRA ADVERTENCIA: una ruta repetida hace que Pages aplique solo un bloque y
+# pierda el otro. Cada ruta aparece UNA vez en todo el fichero. Se repitieron
+# /favicon-32.png y /rayo-128.png al anadir los iconos y sus reglas quedaron
+# anuladas.
 
 # Bundles de Vite: llevan hash de contenido, son inmutables, se cachean un ano.
 /assets/*
@@ -18,24 +27,13 @@
 # config.js se reescribe en cada despliegue con la URL de la API.
 /config.js
   Cache-Control: public, max-age=300, must-revalidate
-  X-H-Probe: config
 
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
-  X-H-Probe: manifest
-
-/favicon-32.png
-  Cache-Control: public, max-age=3600
-  X-H-Probe: favicon32
-
-/rayo-128.png
-  Cache-Control: public, max-age=3600
-  X-H-Probe: rayo128
 
 # Iconos y logo de marca. NO llevan hash en el nombre, asi que no pueden
 # cachearse un ano como los bundles: un icono nuevo tardaria un ano en llegar a
 # quien ya tiene el viejo. Una hora es de sobra para un favicon.
-# Rutas explicitas, no comodines: Pages no admite "*" en medio del nombre.
 /favicon-16.png
   Cache-Control: public, max-age=3600
 /favicon-32.png

@@ -54,16 +54,22 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      # Pages sirve la SPA con 200 en cualquier ruta que no exista, y la Cache
-      # Rule de /assets/* guarda ese index.html con TTL de un AÑO bajo una URL
-      # .js. El navegador rechaza el módulo ES por MIME y el chunk no carga:
-      # panel, PDP, carrito y login en blanco, y no se sana solo. Se purga tras
-      # el despliegue. Ver tools/purge-assets.mjs para el incidente completo.
-      - name: Purgar /assets/* de la CDN
+      # Pages sirve la SPA con 200 en cualquier ruta que no exista, y la CDN
+      # guarda ese index.html con TTL de un AÑO bajo una URL .js. El navegador
+      # rechaza el módulo ES por MIME y el chunk no carga: panel, PDP, carrito y
+      # login en blanco, y no se sana solo. Ver tools/purge-assets.mjs.
+      #
+      # --espera-deploy es imprescindible: Pages no despliega en el push, lanza
+      # un proceso asincrono de unos 5 minutos. Antes la purga corria a los 3-4
+      # minutos, o sea ANTES de que existiera el despliegue, y no purgeba nada.
+      # Se comprobo en produccion: purga a las 17:32, despliegue a las 17:35, y
+      # /icon.svg siguio sirviendo un fichero que ya estaba borrado del repo.
+      - name: Esperar al despliegue y purgar la CDN
         if: always()
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node tools/purge-assets.mjs
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node tools/purge-assets.mjs --espera-deploy
 
       - name: E2E
         env:
