@@ -1,27 +1,58 @@
 ﻿# SUPRIME · Pendientes consolidados (2026-09-30)
 
 > Fuente: `PLAN-MEJORAS.md` (detalle por tarea) + verificación en producción.
-> Regenerar este archivo al cerrar cada bloque. **Sesión anterior: contexto bloated (110%), cambiar de agente.**
+> Regenerar este archivo al cerrar cada bloque.
 
 ## Estado base verificado
 
 - Front en producción: `https://suprime.xyz` (Pages, auto-deploy en push a `main`)
 - API en producción: `https://api.suprime.xyz` (Worker `f4de77aa`)
-- Smoke: **70 PASS / 0 FAIL / 2 SKIP** (los 2 SKIP son correctos: `safety_lock` bloquea borrados)
-- PageSpeed móvil: **90** (era 81 → el bloque P0 lo subió)
+- Smoke: **55 PASS / 0 FAIL / 5 SKIP** · con grant de step-up vigente son 70 PASS / 2 SKIP
+  (sin grant, los 5 SKIP son checks de catálogo admin que exigen el 2FA y el smoke no puede
+  hacerlo; con grant, los 2 SKIP son los borrados por `safety_lock`)
+- PageSpeed móvil: **90** (era 81 → el bloque P0 lo subió). Pendiente re-medir tras el de imágenes
 - Typecheck + build: OK
 - D1 limpio: 5 departamentos / 1 subdepartamento / 13 productos
 
 ---
 
-## 🔴 P1 · Imágenes (mayor impacto medido que queda)
+## ✅ Hecho · P1 Imágenes (`5a878c5`)
 
-| # | Tarea | Ganancia | Notas |
-|---|-------|----------|-------|
-| 31 | AVIF/WebP + `srcset`/`sizes` | **839 KiB** en escritorio, 20 KiB móvil | ⚠️ **Polish y Cloudflare Images son Pro+**: hay que hacerlo en código, no en el panel. ImageKit ya está integrado y puede servir WebP |
-| 15 | `srcset`/`sizes` en ProductCard, PDP hero, CategoryCard | — | Parte de #31 |
+**Causa raíz de los 839 KiB**: todas las imágenes de producción son de **Unsplash**, no de
+ImageKit, y el antiguo `thumb()` solo transformaba URLs de ImageKit. Para el resto devolvía la
+URL sin tocar, así que el `srcset` de `ProductCard` acababa con dos entradas **al mismo
+fichero** (400w y 800w con URL idéntica): el navegador elegía la de 800w y descargaba la foto a
+900px. En el buscador, además, se pedía la imagen a 900px para una caja de 100px.
 
-Archivos: `ProductCard.tsx`, `ProductPage.tsx`, `HomePage.tsx`, `styles.css`
+- `apps/web/src/lib/images.ts` (transformaciones por proveedor) +
+  `apps/web/src/components/SmartImage.tsx` (`<picture>` con AVIF/WebP) +
+  `picture { display: contents }` para no tocar el CSS de cada componente.
+- Medido con el mismo navegador y las mismas URLs, antes y después en **producción**:
+
+| Vista | Antes | Después | |
+|-------|-------|---------|---|
+| móvil / home | 921 KB | 373 KB | **-59%** |
+| escritorio / home | 921 KB | 122 KB | **-87%** |
+| móvil / PDP | — (rota) | 212 KB | |
+| escritorio / PDP | — (rota) | 67 KB | |
+
+- Verificación: `npm run img:check` (transformaciones contra los CDN reales),
+  `npm run imgs` en `MovilLab/` (peso real por pantalla), panorama 7 pantallas × 2 viewports.
+- Gotcha de CDN: ImageKit **ignora** el `fm-webp` antiguo; solo convierte con `tr=f-webp` / `f-avif`.
+- Las imágenes de admin (`ImageKit` galería y QR de 2FA) no se tocan: son de otro flujo.
+
+---
+
+## 🔴 P0 · Encontrado y arreglado en el mismo commit (`5a878c5`)
+
+**La PDP estaba en blanco en producción.** El `useEffect` que actualiza `og:image` estaba
+declarado **después** de los `return` de carga/error: al pasar del esqueleto al producto React
+veía más hooks que en el render anterior y tumbaba el árbol entero (error #310). Movido por
+encima de los `return` condicionales y verificado en producción.
+
+> **Regla para los siguientes bloques**: ningún hook (`useState`/`useEffect`/`useMemo`…) puede
+> quedar después de un `return` condicional. Ni el smoke ni los checks de API lo detectan — es
+> un fallo de render. Solo se ve abriendo la página en un navegador.
 
 ---
 
@@ -108,9 +139,11 @@ Archivos: `vite.config.ts`, `AdminPage.tsx` (lazy). Bloque medio: ~15-20K tokens
 
 ## Orden recomendado
 
-1. **P1 imágenes** — mayor ganancia medible, toca front pero es mecánico
+1. ~~**P1 imágenes**~~ — ✅ hecho (`5a878c5`)
 2. **P5 panel Cloudflare** — gratis, 10 min, sin riesgo
 3. **P2 code-splitting** — bloque medio, esperar a tener contexto
 4. **P3 admin UX** — bajo riesgo
 5. **P4 infra** — 404 antes que Playwright (más valor por token)
 6. **S1-S3 seguridad** — el usuario lo tiene en la mano, no consume tokens de código
+7. **Re-medir PageSpeed** móvil y escritorio: el bloque de imágenes debería empujar el
+   escritorio por encima de 97. En móvil sigue atado al DPR 3 (las tarjetas piden 600px)

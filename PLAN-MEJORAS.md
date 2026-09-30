@@ -87,7 +87,7 @@
 | # | Issue | Fix | Estado |
 |---|-------|-----|--------|
 | 14 | **Bundle CSS 142 KB gzip 18 KB** → crítico para móvil 3G | Code-splitting CSS por ruta (Admin, PDP, Checkout) | 🔄 |
-| 15 | **Imágenes sin `srcset`/`sizes`** → descargan 900px en móvil | Añadir `srcSet` + `sizes` en ProductCard, PDP hero | 🔄 |
+| 15 | **Imágenes sin `srcset`/`sizes`** → descargan 900px en móvil | Añadir `srcSet` + `sizes` en ProductCard, PDP hero | ✅ Hecho (`5a878c5`) |
 | 16 | **Faltan `width`/`height` en imágenes** → CLS | Añadir `width`/`height` en `<img>` (PDP, Card, CategoryCard) | ✅ Hecho |
 | 16 | **Falta `fetchpriority="high"` en hero PDP** | Añadir en PDP hero image | ✅ Hecho |
 | 17 | **Sin `preload` de fuentes críticas** | `<link rel="preload" as="font" crossorigin href="...Inter.woff2">` | 🔄 |
@@ -149,7 +149,7 @@ a ~1 s y el rendimiento de 81 a ~95+.
 | 28 | CSS sin usar | 17 KiB | Tarea 14 (code-splitting) |
 | 29 | JS sin usar | 25 KiB | Tarea 14 |
 | 30 | **JS antiguo** (vendor 162 KB) | 11 KiB | Considerar `modulepreload` o bundle moderno |
-| 31 | **Imágenes sin formatos modernos** (AVIF/WebP) | 20 KiB móvil / **839 KiB escritorio** | En escritorio es el mayor gap |
+| 31 | **Imágenes sin formatos modernos** (AVIF/WebP) | 20 KiB móvil / **839 KiB escritorio** | ✅ Hecho (`5a878c5`), en código: Polish y Images son Pro+ |
 | 32 | CLS 0,091 en escritorio | — | Algún elemento entra tarde; revisar tras el fix de #26 |
 | 33 | Animación no compuesta (1 elemento) | — | Usar `transform`/`opacity` |
 | 34 | Tarea larga en hilo principal (1) | — | Revisar tras code-splitting |
@@ -159,6 +159,70 @@ a ~1 s y el rendimiento de 81 a ~95+.
 
 > Tareas 14/17 (code-splitting y preload) ya estaban en la lista; este bloque las **confirma con
 > datos reales** y añade la prioridad correcta: el P0 es el banner, no el code-splitting.
+
+---
+
+## 📸 **BLOQUE DE IMÁGENES — 2026-09-30 (`5a878c5`): el `srcset` era mentira**
+
+Tareas #15 y #31, cerradas. El hallazgo no fue "falta AVIF": fue que **el `srcset` que ya
+existía no hacía nada**.
+
+**Causa raíz.** Todas las imágenes del catálogo están en Unsplash (`?w=900`), no en ImageKit
+(que solo recibe las subidas nuevas desde el panel). El helper `thumb()` aplicaba `?tr=w-N`
+**solo** si la URL era de ImageKit; en cualquier otro host devolvía la URL intacta. Como
+`ProductCard` construía el `srcset` con `thumb(url, 400)` y `thumb(url, 800)`, para Unsplash
+las dos entradas eran **la misma URL con distinto descriptor de anchura**. El navegador
+cumplía la spec, elegía la entrada de 800w y bajaba la foto a 900px. En el buscador de la
+cabecera pasaba algo peor: una imagen de 900px dentro de una caja de 100px.
+
+**Por qué importa el orden de trabajo**: un `srcset` que miente es peor que no tener
+`srcset`, porque el inspector da la impresión de que ya está optimizado.
+
+**Qué se ha hecho**
+
+| Pieza | Detalle |
+|-------|---------|
+| `apps/web/src/lib/images.ts` | Adaptadores por proveedor: ImageKit `tr=w-,h-,q-,f-avif\|f-webp`; Unsplash `w=`, `h=`, `fit=crop`, `fm=`, `q=`. `imgSrcSet()` devuelve `undefined` si el host no es transformable, para que sea imposible volver a emitir un `srcset` mentiroso |
+| `apps/web/src/components/SmartImage.tsx` | `<picture>` con `<source>` AVIF y WebP + `<img>` de reserva con `srcset` en el formato original. Si no hay formatos nuevos, degrada a un `<img>` normal |
+| `styles.css` | `picture { display: contents }` — sin esto, los contenedores que miden a su `<img>` hijo (`.pdp-thumb img { height: 100% }`, wrappers con `aspect-ratio`) se rompen |
+| Anchos por uso | Tarjetas 200/400/600 (la rejilla es `minmax(160px, 1fr)`, no 400px); hero PDP 400/800/1200; miniaturas 144; buscador 100; lightbox 1200 |
+
+**Gotchas verificados contra los CDN, no de memoria**
+
+- ImageKit **ignora** el `fm-webp`/`fm-avif` de la v1 y devuelve el JPEG original sin avisar.
+  Solo convierte con `tr=f-webp` / `tr=f-avif`. Por eso `img-check` existe: un CDN que ignora
+  un parámetro es indistinguible de uno que funciona si no se mira el `content-type`.
+- `width`/`height` + `srcset` no_crop: en la PDP el diseño pide `object-fit: contain` (foto
+  entera, sin recortes), así que **no** se fuerza proporción en el CDN aunque `ImgOpts` lo
+  permita con `ar`. Queda pendiente para el CLS de escritorio (#32).
+
+**Medición (mismo navegador, mismas URLs, antes y después en producción)**
+
+| Vista | Antes | Después | |
+|-------|-------|---------|---|
+| móvil / home | 921 KB / 11 img | 373 KB / 15 img | **-59%** |
+| escritorio / home | 921 KB / 11 img | 122 KB / 15 img | **-87%** |
+| móvil / PDP | 0 KB (ver abajo) | 212 KB / 9 img | |
+| escritorio / PDP | 0 KB (ver abajo) | 67 KB / 9 img | |
+
+Se sirven **más** imágenes que antes y pesan menos de la mitad: la PDP es una página entera que
+antes no renderizaba.
+
+### 🔴 Hallazgo colateral: **la PDP estaba en blanco en producción**
+
+Auditar las imágenes llevó a abrir la PDP, que **no renderizaba nada**: React error #310
+(*"Rendered more hooks than during the previous render"*). El `useEffect` que actualiza
+`og:image`/`twitter:image` estaba declarado **después** de los `return` de carga y de error, así
+que el primer render (esqueleto) ejecutaba menos hooks que el render con el producto cargado.
+React desmonta el árbol entero y la pantalla se queda vacía.
+
+Cómo se Nk caughtó: el `smoke` de API (70 checks) no lo puede detectar porque no renderiza
+nada; el `panorama` de MovilLab sí pasaba por la PDP, pero solo comprobaba `overflowX` y
+recogía errores de consola sin mirar el texto renderizado. Ninguna de las dos herramientas
+mira "**¿la página se ve?**".
+
+> **Regla añadida a la estrategia de sesión**: ningún hook puede quedar después de un `return`
+> condicional. Y el panorama debería fallar si una pantalla clave no tiene texto.
 
 ---
 
@@ -244,15 +308,16 @@ para que la regla aplique.
 > **Resumen operativo en `PENDIENTES.md`** (raíz del repo): qué hacer ahora, en orden de prioridad,
 > con el impacto medido de cada uno y los avisos de seguridad. Este bloque es el detalle técnico.
 
-Bloque P0 cerrado (banner + fuentes + `_headers`). Queda:
+Bloque P0 cerrado (banner + fuentes + `_headers`). Bloque P1 (imágenes) cerrado en `5a878c5`.
+Queda:
 
-1. **P0 · Activar en el panel Cloudflare** (gratis, 10 min, sin código): Speed Brain, Early Hints, Cloudflare Fonts, 2 Cache Rules
-2. **P1 · Imágenes modernas** (#31) → 839 KiB en escritorio. **Ojo: Polish y Cloudflare Images son Pro+, hay que hacerlo en el código** (`srcset`/`sizes` + AVIF/WebP vía ImageKit, que ya usáis)
-3. **P2 · Code-splitting CSS/JS** (#14, #28, #29) → 17 KiB CSS + 25 KiB JS sin usar
-4. **P3 · Admin UX** (9, 10, 19) → 2FA sticky, skeletons, ordenación
-5. **P4 · Infra/DX** (20, 21, 24) → validaciones, 404, Playwright
+1. **P5 · Activar en el panel Cloudflare** (gratis, 10 min, sin código): Speed Brain, Early Hints, Cloudflare Fonts, TTL de assets
+2. **P2 · Code-splitting CSS/JS** (#14, #28, #29) → 17 KiB CSS + 25 KiB JS sin usar
+3. **P3 · Admin UX** (9, 10, 19) → 2FA sticky, skeletons, ordenación
+4. **P4 · Infra/DX** (20, 21, 24) → validaciones, 404, Playwright
+5. **Re-medir PageSpeed** después de P1: el escritorio (839 KiB) era el mayor gap de la auditoría
 
-Los bloques SEO (1-4), UX conversión (5-13) y catálogo admin (25) están hechos.
+Los bloques SEO (1-4), UX conversión (5-13), catálogo admin (25) e imágenes (15, 31) están hechos.
 
 ---
 
@@ -262,11 +327,12 @@ Los bloques SEO (1-4), UX conversión (5-13) y catálogo admin (25) están hecho
 - Carrito/Favs por cuenta con merge invitado→cuenta
 - Checkout con validación completa + sticky footer
 - Admin: usuarios, productos, órdenes, settings, 2FA con safety lock
-- ⚠️ NO tocar aún: `POST /admin/products` fija `subdepartment_id = 'subdep-demo'` (hardcode). Ver tarea #25 antes de crear productos reales.
+- Catálogo completo desde el panel (deptos, subdeptos, productos) — tarea #25 cerrada
 - Modo mantenimiento, safety lock, jerarquía roles
 - PWA básica (manifest, icon, theme-color)
 - CSP, security headers, rate-limit con KV fallback
-- Smoke 54/54, typecheck OK, 0 overflow móvil/desk
+- Imágenes responsive + AVIF/WebP (`SmartImage`) — tareas #15 y #31
+- Smoke 0 FAIL, typecheck OK, 0 overflow móvil/desk
 
 ---
 
