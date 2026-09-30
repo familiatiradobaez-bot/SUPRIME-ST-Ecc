@@ -90,38 +90,64 @@ export function createApp() {
     await next();
   });
 
-  // CSRF protection middleware - TEMPORARILY DISABLED
-  // TODO: Re-enable CSRF protection once CORS issues are resolved
-  // api.use('*', async (context, next) => {
-  //   const method = context.req.method;
-  //   if (method === 'OPTIONS') {
-  //     return next();
-  //   }
-  //   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
-  //     const origin = context.req.header('Origin');
-  //     const referer = context.req.header('Referer');
-  //     const isAllowedOrigin = (val?: string): boolean => {
-  //       if (!val) return false;
-  //       try {
-  //         const originUrl = val.startsWith('http') ? new URL(val).origin : val;
-  //         return allowedOrigins.includes(originUrl) ||
-  //                originUrl.endsWith('.pages.dev') ||
-  //                originUrl.endsWith('.trycloudflare.com') ||
-  //                originUrl.endsWith('.ngrok-free.dev') ||
-  //                originUrl.includes('localhost:') ||
-  //                originUrl.includes('127.0.0.1:') ||
-  //                originUrl.includes('192.168.');
-  //       } catch {
-  //         return false;
-  //       }
-  //     };
-  //     const isAllowed = isAllowedOrigin(origin) || isAllowedOrigin(referer);
-  //     if (!isAllowed && context.env.APP_ENV === 'production') {
-  //       return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
-  //     }
-  //   }
-  //   await next();
-  // });
+  // ── CSRF ────────────────────────────────────────────────────────────────
+  //
+  // Se desactivó el 2026-09-28 (commit da4386f) por un "403 Invalid origin" en
+  // las peticiones de admin. La causa NO era un problema de CORS: el middleware
+  // exigía un Origin válido SIEMPRE, y el propio smoke (node fetch) y cualquier
+  // cliente servidor-a-servidor no mandan esa cabecera. O sea, la protección
+  // bloqueaba a un cliente legítimo y no a un atacante.
+  //
+  // Regla correcta: solo se valida el origen cuando la petición parece venir de
+  // un NAVEGADOR, que es el único caso en el que el navegador adjunta las
+  // credenciales por su cuenta. Si no hay Origin ni Referer, no hay CSRF que
+  // explotar.
+  //
+  // Y en esta API el riesgo es estructuralmente nulo aunque se quite el
+  // middleware: la autenticación es `Authorization: Bearer <token>` con el token
+  // en localStorage, que un atacante de otro origen no puede leer ni lograr que
+  // se envíe. La cookie `session_token` es HttpOnly + SameSite=Strict y además
+  // la API no la lee para autenticar (verificado: /admin/* con solo cookie → 401).
+  //
+  // Se deja igualmente el control: es una barrera gratuita y protege frente a
+  // que en el futuro alguien meta un endpoint que sí use la cookie.
+  api.use('*', async (context, next) => {
+    const method = context.req.method;
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return next();
+    }
+
+    const origin = context.req.header('Origin');
+    const referer = context.req.header('Referer');
+
+    // Cliente no-navegador (smoke, curl, otro backend): sin Origin no hay nada
+    // que validar. Va con Bearer token, que no se puede falsificar.
+    if (origin === undefined && referer === undefined) {
+      return next();
+    }
+
+    const isAllowed = (val: string | undefined): boolean => {
+      if (!val) return false;
+      try {
+        const u = val.startsWith('http') ? new URL(val).origin : val;
+        return allowedOrigins.includes(u) ||
+          u.endsWith('.pages.dev') ||
+          u.endsWith('.trycloudflare.com') ||
+          u.endsWith('.ngrok-free.dev') ||
+          u.includes('localhost:') ||
+          u.includes('127.0.0.1:') ||
+          u.includes('192.168.');
+      } catch {
+        return false;
+      }
+    };
+
+    if (!isAllowed(origin) && !isAllowed(referer)) {
+      return context.json({ error: 'FORBIDDEN', message: 'Invalid origin' }, 403);
+    }
+
+    await next();
+  });
 
   // CORS handled manually in security headers middleware to avoid body consumption
   api.get('/health', (context) => {

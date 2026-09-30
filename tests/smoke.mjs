@@ -328,6 +328,23 @@ check('google exchange sin code 400', r.status === 400, r.status);
 r = await F(`${API}/auth/google/exchange`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: '0'.repeat(64) }) });
 check('google exchange code falso 410', r.status === 410, r.status);
 
+console.log('== CSRF ==');
+// El middleware estuvo desactivado dos dias (commit da4386f) porque exigia un
+// Origin valido SIEMPRE, y el propio smoke (node fetch) no manda esa cabecera:
+// bloqueaba a un cliente legitimo, no a un atacante. Estos cuatro checks son
+// los que faltaron entonces, y los que hay que mirar si vuelve a haber un 403.
+const frontOrigin = WEB.startsWith('http') ? WEB : 'https://suprime.xyz';
+r = await F(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'csrf-smoke@example.com', password: 'WrongAa1!' }) });
+check('CSRF: POST sin Origin (servidor a servidor) NO se bloquea', r.status !== 403, `bloqueado con ${r.status}`);
+r = await F(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': 'https://evil.example' }, body: JSON.stringify({ email: 'csrf-smoke@example.com', password: 'WrongAa1!' }) });
+const csrfEvil = await j(r);
+check('CSRF: POST con Origin de atacante 403 FORBIDDEN', r.status === 403 && csrfEvil.error === 'FORBIDDEN', `${r.status} ${csrfEvil.error}`);
+r = await F(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': frontOrigin }, body: JSON.stringify({ email: 'csrf-smoke@example.com', password: 'WrongAa1!' }) });
+check('CSRF: POST con el Origin del front NO se bloquea', r.status !== 403, `bloqueado con ${r.status}`);
+// GET nunca se bloquea: es el unico metodo que el atacante puede lanzar "a pelo".
+r = await F(`${API}/health`, { headers: { 'Origin': 'https://evil.example' } });
+check('CSRF: GET no se bloquea nunca', r.status === 200, r.status);
+
 console.log('== Password reset ==');
 r = await F(`${API}/auth/admin-stepup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ code: '000000' }) });
 checkOrSkip(authed, 'admin-stepup código malo 401', r.status === 401, r.status);
