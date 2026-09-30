@@ -79,6 +79,12 @@ desde `AdminPage.tsx` para que viaje en su chunk y no en el bundle inicial.
 
 ## 🟡 P3 · Admin UX (nada bloquea, todo son tablas y estados)
 
+**Antes que nada, y de más valor**: que el smoke ejecute los 5 checks que hoy se salta, con una
+cuenta propia `smoke@suprime.xyz` (rol `role-stock-manager`, no owner) que haga el step-up de
+TOTP sola. Spec completo en `SUPRIME-Continuar.md` → *"Smoke con TOTP"*. Resultado esperado:
+**4 PASS + 1 SKIP** (el borrado lo bloquea `safety_lock`, y está bien). Descontado: un código fijo
+compartido que sirviera de atajo admin; sería una puerta trasera global.
+
 | # | Tarea |
 |---|-------|
 | 9 | Botón 2FA sticky en el sidebar del admin |
