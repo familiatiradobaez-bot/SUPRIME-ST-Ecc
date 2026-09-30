@@ -70,10 +70,39 @@ export function totp(secret, counter) {
   const bin = ((hmac[off] & 0x7f) << 24) | ((hmac[off + 1] & 0xff) << 16) | ((hmac[off + 2] & 0xff) << 8) | (hmac[off + 3] & 0xff);
   return String(bin % 1e6).padStart(6, '0');
 }
-export const totpNow = () => {
-  const step = Math.floor(Date.now() / 1000 / 30);
-  return totp(creds.totp, step);
-};
+/** El contador TOTP del instante actual (cambia cada 30 s). */
+const currentCounter = () => Math.floor(Date.now() / 1000 / 30);
+
+/** Milisegundos que faltan para que avance el paso de 30 s. */
+const msToNextStep = (counter) => (counter + 1) * 30_000 - Date.now();
+
+/** El último contador TOTP gastado, para no repetirlo. */
+let lastCounter = -1;
+
+/**
+ * Un código TOTP con contador estrictamente mayor que todos los ya usados.
+ *
+ * La API tiene anti-replay: guarda el último contador aceptado y RECHAZA
+ * cualquier código con contador <= ese valor. Varias pruebas seguidas, cada una
+ * entrando al panel, consumen contadores en orden y en la misma cuenta. Si se
+ * espera "al siguiente paso" a ciegas se puede generar un contador que ya
+ * quedó atrás respecto al que se gastó antes, y la API lo rechaza sin que haya
+ * nada que arreglar (error "Código incorrecto" en la pantalla).
+ *
+ * Por eso se lleva el CONTADOR, no el texto del código: se compara el paso
+ * actual con el último gastado y, si no es mayor, se espera al siguiente. Dos
+ * pasos distintos pueden dar el mismo texto de 6 dígitos, y comparar el texto no
+ * detectaría ese caso.
+ */
+export async function freshCode() {
+  let counter = currentCounter();
+  if (counter <= lastCounter) {
+    await new Promise((r) => setTimeout(r, msToNextStep(lastCounter) + 400));
+    counter = currentCounter();
+  }
+  lastCounter = counter;
+  return totp(creds.totp, counter);
+}
 
 /** Login por API: devuelve el token de sesión. */
 export async function apiLogin() {
@@ -91,14 +120,17 @@ export async function apiLogin() {
 
 /** Pide el step-up de admin con el TOTP. Devuelve true si concede. */
 export async function apiStepUp(token) {
-  const step = Math.floor(Date.now() / 1000 / 30);
+  const step = currentCounter();
   for (const counter of [step, step + 1, step - 1]) {
     const res = await fetch(`${API}/auth/admin-stepup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ code: totp(creds.totp, counter) }),
     });
-    if (res.ok) return true;
+    if (res.ok) {
+      lastCounter = Math.max(lastCounter, counter);
+      return true;
+    }
   }
   return false;
 }

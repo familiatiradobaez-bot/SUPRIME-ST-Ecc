@@ -59,7 +59,13 @@ const RL = {
   forgot: { max: 3, window: 900 },
   otpVerify: { max: 20, window: 900 },
   otpResend: { max: 10, window: 900 },
-  twofa: { max: 10, window: 900 },
+  // El step-up es una acción legítima y frecuente (el botón "Bloquear panel"
+  // revalida en cada bloqueo). Con la ventana ±1 del TOTP solo hay 3 códigos
+  // válidos por paso de 30 s, así que 30 intentos en 15 min no alcanzan a
+  // fuerza bruta sobre 6 dígitos —el anti-replay y la ventana ya cortan el
+  // ataque— y en cambio 10 bloqueaba a un admin que abre y cierra el panel
+  // varias veces, que es justo el uso normal.
+  twofa: { max: 30, window: 900 },
   register: { max: 5, window: 900 },
 } as const;
 
