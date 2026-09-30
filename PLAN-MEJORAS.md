@@ -206,9 +206,28 @@ debe sobrescribir, así que el valor por defecto de assets de Pages está gainan
 configurar el TTL de assets en el panel** (ajustes de caché del proyecto en Pages) o usar una
 Cache Rule en el plan Free (hay 10 disponibles) para `/assets/*` con Edge TTL de 1 año.
 
-### **Plan de acción Cloudflare (todo en el panel, sin coste)**
+### **Regla de secretos (2026-09-30)**
 
-1. **Speed Brain** → `Speed > Content Optimization`: confirmar que está *On* (ya debería estarlo por defecto).
+Los secretos de infraestructura (API token, credenciales R2) **no** están en el repo.
+Viven en `C:\Users\VIP\Desktop\Cerebro Obcidian\_SECRETS\cloudflare.env` (fuera de git).
+En los `.md` del repo solo se documentan la ruta y los **nombres** de las variables,
+nunca los valores. Verificar con `git grep -E "cfat_|cfut_|77e5a9ba"` antes de commitear.
+
+### **Cache Rule de la API — aplicada (2026-09-30)**
+
+Regla creada por API: match `(http.host eq "api.suprime.xyz")` → `set_cache_settings`
+con `cache: false` (bypass). Ruleset `4dd3a298...` en la fase `http_request_cache_settings`.
+Motivo: la API responde con sesión/cookies; cachearla serviría datos de un usuario a otro.
+**Verificado**: `api.suprime.xyz` tiene DNS proxied (nube naranja), condición necesaria
+para que la regla aplique.
+
+> El `PUT` al entrypoint fallaba con error 10003 porque la fase no existía: hay que
+> crearla primero con `POST /zones/:zone_id/rulesets`. Un `PUT` solo sirve para modificarla.
+
+### **Plan de acción Cloudflare (panel, sin coste) — estado**
+
+1. ✅ **Cache Rule de la API** → creada por API (ver arriba). Ya no queda nada por hacer aquí.
+2. **Speed Brain** → `Speed > Content Optimization`: confirmar que está *On* (ya debería estarlo por defecto).
 2. **Early Hints** → mismo panel: *On*. Complementa al `preload` de fuentes.
 3. **Cloudflare Fonts** → *On*. Sustituye el fix manual de la CSS de fuentes y quita el third-party.
 4. **Cache Rules** (10 disponibles) → 2 sugeridas:

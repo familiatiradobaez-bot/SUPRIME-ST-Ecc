@@ -54,6 +54,11 @@ npx wrangler tail --format pretty
 | User | `Jose` / `role-owner` |
 
 > **Solo nombres aquí**. Secrets reales solo en Cloudflare Dashboard / `.dev.vars` local. Rota si se expone.
+>
+> **Secretos de infraestructura Cloudflare/R2**: `C:\Users\VIP\Desktop\Cerebro Obcidian\_SECRETS\cloudflare.env`
+> (fuera del repo, sin control de versiones). Contiene `CLOUDFLARE_API_TOKEN`,
+> `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+> y `R2_ENDPOINT`. Leer solo si la tarea lo pide; no copiar valores aquí.
 
 ---
 
@@ -62,7 +67,7 @@ npx wrangler tail --format pretty
 | Regla | Detalle |
 |-------|---------|
 | **Solo agente principal toca código** | Subagentes solo leen y reportan en `Sesiones/SUPRIME-2026-09-29/` |
-| **No tocar secrets** | Solo nombres aquí; rotar si se expone |
+| **No tocar secrets** | Solo nombres aquí; rotar si se expone. Los valores viven en `C:\Users\VIP\Desktop\Cerebro Obcidian\_SECRETS\cloudflare.env` (fuera del repo, sin git) — leer solo cuando una tarea requiera managear la cuenta |
 | **Owner login** | `admin@admin.com` / `123456` + 2FA TOTP |
 | **Smoke model** | Admin PASS si 200 con grant **O** 403 `ADMIN_2FA_REQUIRED/SETUP_REQUIRED` |
 | **🔑 Control de tokens** | **Antes de CADA tarea/bloque**: `npm run tokens`. Si no alcanza → avisar y cambiar de agente, NO empezar a medias |

@@ -87,6 +87,7 @@ try {
 const WINDOW = 200_000;
 const used = Math.round((ctx / WINDOW) * 100);
 const left = WINDOW - ctx;
+const over = left < 0;
 
 const modelId = model.modelID || model.id || 'desconocido';
 
@@ -113,7 +114,9 @@ if (asJson) {
 }
 
 const bar = (pct) => {
-  const n = Math.round(pct / 5);
+  // Clamp: si el contexto supera la ventana estimada, el porcentaje pasa de 100
+  // y String.repeat() con negativo lanza RangeError (el script se caía).
+  const n = Math.max(0, Math.min(20, Math.round(pct / 5)));
   return '█'.repeat(n) + '░'.repeat(20 - n);
 };
 
@@ -125,7 +128,13 @@ console.log(`  Modelo    ${modelId}  (${model.providerID || '—'})`);
 console.log('');
 console.log(`  Contexto  ${ctx.toLocaleString('es')} / ${WINDOW.toLocaleString('es')} tokens`);
 console.log(`            [${bar(used)}] ${used}%`);
-console.log(`  Libres    ~${left.toLocaleString('es')} tokens de contexto`);
+if (over) {
+  console.log(`  ⚠ SUPERADO por ${Math.abs(left).toLocaleString('es')} tokens. Sesión bloated:`);
+  console.log('    probably se compactó mal o hay contexto muerto acumulado.');
+  console.log('    Recomiendo /compact o empezar sesión nueva.');
+} else {
+  console.log(`  Libres    ~${left.toLocaleString('es')} tokens de contexto`);
+}
 console.log('');
 console.log('  Acumulado sesión');
 console.log(`    input   ${(session.tokens_input || 0).toLocaleString('es')}`);
