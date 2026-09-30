@@ -150,6 +150,23 @@ const token = lj.data?.session?.token;
 const authed = !!token;
 check('login smoke 200 + token', r.status === 200 && !!token, r.status);
 const H = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+// El token de sesión NO es un JWT: no lleva cabecera, payload ni firma, y
+// tampoco va cifrado. Es una cadena aleatoria de 32 bytes (64 hex) que se
+// guarda en sessions.id y se valida contra la tabla, comprobando expires_at.
+//
+// Antes era btoa(user_id:role_id:Date.now()), y eso tenía dos fallos:
+//  - sin entropía: salía entero de tres datos que el atacante puede conocer
+//    (el UUID que la propia API devuelve en el login, el rol, y el instante),
+//    así que solo faltaba acertar el milisegundo. No hay rate-limit al validar
+//    la sesión y vive hasta 30 días con "recuérdame".
+//  - base64 es codificación, no cifrado: el contenido era legible.
+// Estos tres checks son la vuelta de tuerca: si alguien vuelve al formato viejo,
+// saltan.
+checkOrSkip(authed, 'el token es aleatorio (64 hex, no JWT ni base64 de datos)', typeof token === 'string' && /^[0-9a-f]{64}$/.test(token), `formato: ${String(token).slice(0, 12)}... (${String(token).length} car.)`);
+checkOrSkip(authed, 'el token no filtra el user_id al decodificarlo', typeof token === 'string' && !Buffer.from(token, 'base64').toString('utf8').includes(String(lj.data?.user?.id ?? ' ')), 'el user_id se lee al decodificarlo');
+checkOrSkip(authed, 'un token inventado da 401', (await F(`${API}/auth/me`, { headers: { Authorization: `Bearer ${'a'.repeat(64)}` } })).status === 401, 'aceptado');
+
 r = await F(`${API}/auth/me`, { headers: H });
 const me = await j(r);
 checkOrSkip(authed, `me 200 + role ${SMOKE_ROLE}`, r.status === 200 && me.data?.role_id === SMOKE_ROLE, `${r.status} ${me.data?.role_id}`);

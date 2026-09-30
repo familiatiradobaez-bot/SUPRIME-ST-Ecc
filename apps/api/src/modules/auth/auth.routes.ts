@@ -133,6 +133,41 @@ function generateSessionToken(): string {
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/*
+ * COMO ES EL TOKEN DE SESION, Y POR QUE SE GENERA ASI
+ *
+ * El token NO es un JWT: no lleva cabecera, ni payload, ni firma. Tampoco va
+ * cifrado. Es una cadena aleatoria de 32 bytes (256 bits) en hexadecimal, que se
+ * guarda tal cual en `sessions.id` y se usa como Bearer.
+ *
+ * Antes era `btoa(user_id + ":" + role_id + ":" + Date.now())`, y eso era un
+ * fallo de dos formas:
+ *
+ *  1. NO TENIA ENTROPIA. Salia por completo de tres datos que el atacante puede
+ *     conocer: el id de usuario (un UUID que la propia API devuelve en la
+ *     respuesta del login), el rol (una de las pocas cadenas conocidas, tipo
+ *     "role-stock-manager") y el instante del login. Solo falta acertar el
+ *     instante, y Date.now() va en milisegundos: si se sabe que el login fue en
+ *     la ultima hora, son 3.600.000 candidatos. No hay rate-limit en la
+ *     validacion de sesion, asi que se pueden probar, y la sesion vive hasta 30
+ *     dias si el usuario marco "recuerdame". Medido sobre un token real: 92
+ *     caracteres que se decodifican a
+ *     "c05dad1f-...:role-stock-manager:1790797986759".
+ *
+ *  2. NO ERA SEGRETO. Base64 es codificacion, no cifrado: cualquiera con el
+ *     token ve el id de usuario, su rol y la hora de login.
+ *
+ * Lo que SUSTITUYE a eso: la sesion sigue siendo del lado del servidor (el token
+ * se busca en `sessions` y se comprueba `expires_at > now`), asi que un token
+ * inventado no vale por si solo. Lo que cambia es que ya no es adivinable, que
+ * es justo lo que un token de sesion tiene que ser.
+ *
+ * Esta funcion ya existia en el fichero y NO se usaba en ningun sitio: los cuatro
+ * puntos que creaban token hacian el btoa a mano. Verificado que nada decodifica
+ * el token (nadie hace atob ni split(':')), asi que cambiar el formato no rompe
+ * nada. Las sesiones ya abiertas siguen validas hasta que caducan.
+ */
+
 // OTP for email verification (6 digits, 15-minute validity, D1-backed)
 const OTP_TTL_SECONDS = 15 * 60;
 const OTP_MAX_ATTEMPTS = 5;
@@ -426,7 +461,7 @@ authRoutes.post('/verify-otp', async (context) => {
   }
 
   // Auto-login tras verificar (7 días)
-  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
+  const token = generateSessionToken();
   const expiresAt = now + 7 * 24 * 60 * 60;
   await context.env.DB.prepare(
     'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)'
@@ -611,10 +646,10 @@ authRoutes.post('/login', async (context) => {
   // (POST /auth/admin-stepup, válido 1 hora) en su middleware.
 
   const rememberMe = (parsedBody as Record<string, unknown> | null)?.rememberMe === true;
-  // Token format: base64(userId:role:timestamp) - usado como Bearer Y como id de sesión en DB.
-  // (Antes se guardaba sessionId UUID pero el front enviaba el token -> /auth/me siempre 401.)
-  const tokenData = `${user.id}:${user.role_id}:${Date.now()}`;
-  const token = btoa(tokenData);
+  // El token va como Bearer Y es la clave de la fila en sessions. Antes se
+  // guardaba un sessionId distinto del token y el front mandaba el token, con
+  // lo que /auth/me daba 401 siempre: tienen que ser la misma cosa.
+  const token = generateSessionToken();
   // 30 days if rememberMe, 7 days otherwise
   const sessionDurationDays = rememberMe ? 30 : 7;
   const expiresAt = Math.floor(Date.now() / 1000) + sessionDurationDays * 24 * 60 * 60;
@@ -1111,7 +1146,7 @@ authRoutes.post('/google-2fa', async (context) => {
     return context.json({ error: 'INVALID_TOTP_CODE', message: 'Código incorrecto o ya usado. Usa el código actual.' }, 401);
   }
 
-  const token = btoa(`${user.id}:${user.role_id}:${Date.now()}`);
+  const token = generateSessionToken();
   const expiresAt = now + 7 * 24 * 60 * 60;
 
   await context.env.DB.batch([

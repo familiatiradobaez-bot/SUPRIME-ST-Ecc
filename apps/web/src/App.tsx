@@ -49,7 +49,7 @@ export function App() {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, decodeTokenRole, hasAdminAccess, lastAccount, rememberLastAccount } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, hasAdminAccess, lastAccount, rememberLastAccount } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   // Carrito y favoritos ligados a la cuenta ('guest' sin sesión)
   const accountKey = user?.id ?? 'guest';
@@ -342,7 +342,7 @@ export function App() {
   }, [apiUrl]);
 
   // Vista admin completamente separada - oculta toda la tienda
-  if (showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || ''))) {
+  if (showAdminPanel && user && hasAdminAccess(user?.role_id)) {
     return (
       <ErrorBoundary>
         <Suspense fallback={<div className="layout-main"><LazyFallback /></div>}>
@@ -378,7 +378,7 @@ export function App() {
         onLoginClick={() => setShowLogin(true)}
         onUserPanelClick={() => setShowUserPanel(true)}
         onAdminClick={() => setShowAdminPanel(true)}
-        isAdmin={hasAdminAccess(decodeTokenRole(session?.token || ''))}
+        isAdmin={hasAdminAccess(user?.role_id)}
         showMenu={showMenu}
         onCloseMenu={closeMenu}
         onNavClick={handleNavClick}
@@ -389,7 +389,7 @@ export function App() {
       />
 
       {/* Admin Page - página separada para admin+ */}
-      {showAdminPanel && user && hasAdminAccess(decodeTokenRole(session?.token || '')) && (
+      {showAdminPanel && user && hasAdminAccess(user?.role_id) && (
         <Suspense fallback={<LazyFallback />}>
           <AdminPage
             user={user}

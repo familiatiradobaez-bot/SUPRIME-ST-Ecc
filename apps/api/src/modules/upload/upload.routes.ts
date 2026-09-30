@@ -50,20 +50,15 @@ async function requireUploadAdmin(context: any, next: () => Promise<void>) {
   if (!authHeader?.startsWith('Bearer ')) {
     return context.json({ error: 'UNAUTHORIZED', message: 'Inicia sesión como admin para gestionar imágenes' }, 401);
   }
-  let userId: string | null = null;
-  try {
-    const parts = atob(authHeader.slice(7)).split(':');
-    if (parts.length >= 2) userId = parts[0];
-  } catch {
-    return context.json({ error: 'UNAUTHORIZED' }, 401);
-  }
-  if (!userId) {
-    return context.json({ error: 'UNAUTHORIZED' }, 401);
-  }
+  // El token ES la clave de la fila en sessions (s.id). Antes se descodificaba
+  // con atob().split(':') para sacar el userId del token, y eso era innecesario
+  // (el user_id sale de la propia fila) y además incompatible con el token
+  // actual, que es aleatorio y no tiene nada que descodificar: /upload daba 401.
+  const sessionToken = authHeader.slice(7);
   const sess = await context.env.DB.prepare(
     `SELECT u.role_id, s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.user_id = ? AND s.expires_at > strftime('%s', 'now')`
-  ).bind(authHeader.slice(7), userId).first() as { role_id: string; user_id: string } | null;
+     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(sessionToken).first() as { role_id: string; user_id: string } | null;
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }

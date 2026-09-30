@@ -39,6 +39,25 @@ function getFrontendUrl(context: { req: { header: (name: string) => string | und
   return SITIO_CANONICO;
 }
 
+/**
+ * Token de sesion: 32 bytes aleatorios en hexadecimal (256 bits de entropia).
+ *
+ * Va duplicada aqui a proposito, en vez de importarla de auth.routes.ts: ese
+ * fichero no exporta las suyas y no merece la pena abrirlo solo por esto. Lo que
+ * importa es que sea IGUAL en los dos sitios, porque el token se valida contra
+ * `sessions` por igual en los dos caminos de login.
+ *
+ * NO se usa `btoa(user_id:role_id:Date.now())` como antes: eso no tiene entropia
+ * (sale de tres datos que el atacante puede conocer, incluido el UUID que la
+ * propia API devuelve en la respuesta del login) y base64 no es cifrado. La nota
+ * larga esta en auth.routes.ts, junto a generateSessionToken().
+ */
+function generarTokenSesion(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const googleRoutes = new Hono<{ Bindings: Bindings }>();
 
 // GET /auth/google/login - Redirect to Google OAuth
@@ -184,8 +203,10 @@ googleRoutes.get('/callback', async (context) => {
       return context.redirect(`${frontendUrl}?login=2fa-required&provider=google&email=${encodeURIComponent(googleUser.email)}`);
     }
 
-    const tokenData = `${(user as any).id}:${(user as any).role_id}:${Date.now()}`;
-    const token = btoa(tokenData);
+    // Token de sesion: 32 bytes aleatorios, no un JWT. Ver la nota larga de
+    // generateSessionToken() en auth.routes.ts, que explica por que el formato
+    // viejo (base64 de user_id:role_id:Date.now()) no servia.
+    const token = generarTokenSesion();
     const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
     await context.env.DB.prepare(

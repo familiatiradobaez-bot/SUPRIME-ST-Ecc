@@ -47,28 +47,25 @@ adminRoutes.use('*', async (context, next) => {
 
   const sessionToken = authHeader.slice(7);
 
-  // Token format: base64(userId:roleId:timestamp) — del token solo se usa userId
-  // para localizar la sesión; el rol autoritativo es u.role_id de DB.
-  let userId: string | null = null;
-  try {
-    const parts = atob(sessionToken).split(':');
-    if (parts.length >= 2) userId = parts[0];
-  } catch {
-    return context.json({ error: 'UNAUTHORIZED' }, 401);
-  }
-
-  if (!userId) {
-    return context.json({ error: 'UNAUTHORIZED' }, 401);
-  }
-
+  // El token ES la clave de la fila en sessions (s.id), asi que no hace falta
+  // descodificarlo para nada. Antes se hacia `atob(token).split(':')` para sacar
+  // el userId del token, y el resto de la API NO lo hacia: solo el admin. Con el
+  // token ahora aleatorio (32 bytes, sin nada que descodificar) eso devolvia
+  // basura y todo /admin/* responds 401.
+  //
+  // La consulta ya exige que s.id coincida con el token, y de ahi sale el
+  // user_id. Ademas se sigue exigiendo s.user_id = token, o sea que una fila de
+  // sesion no puede belongs a otro usuario.
   const sess = await context.env.DB.prepare(
-    `SELECT u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.user_id = ? AND s.expires_at > strftime('%s', 'now')`
-  ).bind(sessionToken, userId).first() as { role_id: string } | null;
+    `SELECT s.user_id AS user_id, u.role_id FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(sessionToken).first() as { user_id: string; role_id: string } | null;
 
   if (!sess) {
     return context.json({ error: 'SESSION_EXPIRED' }, 401);
   }
+
+  const userId = sess.user_id;
 
   // Nivel mínimo admin: stock_manager (usa la jerarquía roleRank/canAccess)
   if (!canAccess(sess.role_id, 'stock_manager')) {

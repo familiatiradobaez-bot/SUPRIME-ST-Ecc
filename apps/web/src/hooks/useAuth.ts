@@ -3,19 +3,19 @@ import type { User, Session } from '../types';
 import { useApiUrl } from './useApiUrl';
 import { getAuthHeaders } from '../lib/api';
 
-// Decode token to get user role (token format: base64(userId:role:timestamp))
-function decodeTokenRole(token: string): string | null {
-  try {
-    const decoded = atob(token);
-    const parts = decoded.split(':');
-    return parts[1] || null;
-  } catch {
-    return null;
-  }
-}
-
-// Check if user has admin access
-function hasAdminAccess(roleId: string | null): boolean {
+// ¿Tiene el usuario acceso al panel de admin?
+//
+// El rol sale del OBJETO DE USUARIO que devuelve la API (`user.role_id`), nunca
+// de descodificar el token en el navegador. Antes se hacia `atob(token)` y se
+// leia la segunda parte, porque el token era `base64(userId:roleId:timestamp)`;
+// con el token actual, que es aleatorio y no lleva nada dentro, eso devolvia
+// basura y el boton de Admin desaparecia.
+//
+// Ademas es lo correcto por si solo: la API vuelve a comprobar el rol desde la
+// base de datos en cada llamada a /admin/*, asi que esto nunca fue una frontera
+// de seguridad, solo logica de cuando pintar el boton. Y si el rol cambia en la
+// base, el boton se actualiza al recargar, sin depender de un re-login.
+function hasAdminAccess(roleId: string | null | undefined): boolean {
   if (!roleId) return false;
   const adminRoles = ['role-admin', 'role-owner', 'role-stock-manager'];
   return adminRoles.includes(roleId);
@@ -336,7 +336,6 @@ export function useAuth() {
     setOtpError,
     handleVerifyOtp,
     handleResendOtp,
-    decodeTokenRole,
     hasAdminAccess,
     lastAccount,
     rememberLastAccount,
