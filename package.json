@@ -38,7 +38,8 @@
     "profunda:api": "node tools/check-profundidad.mjs api",
     "profunda": "node tools/check-profundidad.mjs todo",
     "carrito": "node tools/barrido-carrito.mjs",
-    "barrido": "node tools/barrido-interaccion.mjs"
+    "barrido": "node tools/barrido-interaccion.mjs",
+    "dmarc:check": "node tools/check-dmarc.mjs"
   },
   "workspaces": [
     "apps/*",

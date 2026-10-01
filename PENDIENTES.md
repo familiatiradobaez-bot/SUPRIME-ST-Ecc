@@ -601,6 +601,10 @@ correo** (prueba desde Gmail). Los informes agregados llegarán solos cada día 
 dos. Cuando confirme que todo lo legítimo pasa, subir a `p=quarantine` y luego
 `p=reject`. Hasta entonces, `p=none`: observa sin tocar nada.
 
+Comprobación permanente: `tools/check-dmarc.mjs` (`npm run dmarc:check`), 11
+checks por DoH (DMARC válido, rua con MX, SPF raíz y de `send`, DKIM RSA, MX).
+Probada contra un dominio vacío para que no dé OK falsos.
+
 ## ✅ Hecho · Orígenes de desarrollo fuera de producción (30-sep)
 
 `allowedOrigins` era **un solo array con todo mezclado**, y como `admin.css` en el CSS, el orden
