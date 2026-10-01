@@ -5944,6 +5944,8 @@ button, .btn {
   button,
   .btn,
   a.btn,
+  select,
+  textarea,
   [role='button'] {
     min-height: 44px;
   }
@@ -5962,7 +5964,9 @@ button, .btn {
   input[type='search'],
   input[type='text'],
   input[type='email'],
-  input[type='password'] {
+  input[type='password'],
+  input[type='tel'],
+  input[type='number'] {
     min-height: 44px;
   }
 }
