@@ -5966,3 +5966,18 @@ button, .btn {
     min-height: 44px;
   }
 }
+
+/* Enlaces del pie: area pulsable de 44px sin mover el texto.
+   Los botones ya estaban arreglados con el bloque de (pointer: coarse) de mas
+   arriba, pero los enlaces de texto del pie no entran en ese selector. Medidos:
+   "EUR" 82x30, "Acerca de nosotros" 177x15. Con 15 px de alto fallan de margen al
+   pulsar, y el pie es justo donde se busca la politica de privacidad o las
+   devoluciones.
+   Se hace con padding vertical y no con min-height sobre el texto, para que el
+   area pulsable crezca sin separar mas las lineas de lo que se ve. */
+.footer a {
+  display: inline-block;
+  padding: 8px 0;
+  min-height: 44px;
+  box-sizing: border-box;
+}

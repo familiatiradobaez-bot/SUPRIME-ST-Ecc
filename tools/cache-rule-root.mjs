@@ -58,7 +58,10 @@ const REGLA = {
   // comas ("invalid digit found in string while parsing with radix 16", que
   // pointing al "16" de favicon-16.png). La cadena de or es mas larga pero no
   // depende de como acepte el parser ese literal.
-  expression: `(http.host eq "suprime.xyz" and (${RUTAS.map((r) => `http.request.uri.path eq "${r}"`).join(' or ')}))`,
+  // www.suprime.xyz es el host canonico. Con solo el apex la regla no llegaba a
+  // coincidir con nada: el apex devuelve un 301 y ya ahi muere la peticion. Se
+  // cubren los dos por si un visitante entra por el apex.
+  expression: `(http.host in {"www.suprime.xyz" "suprime.xyz"} and (${RUTAS.map((r) => `http.request.uri.path eq "${r}"`).join(' or ')}))`,
   action: 'set_cache_settings',
   action_parameters: {
     cache: true,
