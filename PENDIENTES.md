@@ -333,6 +333,52 @@ minifica y el HTML pesa 3,6 KB.
 
 ---
 
+## ✅ Hecho · Barrido de interacción (1-oct, tarde)
+
+Recorrer la web **pulsando todo**, no solo mirando que las páginas pinten. Dos
+herramientas en el repo: `npm run barrido` y `npm run carrito`.
+
+**Un bug real arreglado:** las tarjetas de categoría se salían de la pantalla y
+quedaban **cortadas** en móvil. `.category-card` es un `<button>`, y un botón dentro de
+una columna de rejilla no baja de su ancho mínimo de contenido salvo que se le diga;
+crecía más allá del hueco y el `overflow:hidden` de la propia tarjeta lo recortaba, así
+que el nombre de la categoría quedaba cortado sin que el usuario pudiese verlo ni
+desplazarlo. Medido: 107 elementos saliéndose en la home, hasta 425 px en una pantalla
+de 393 px. Arreglado con `min-width:0` y `overflow-wrap`.
+
+**Un test inestable del E2E, que era un agujero invisible:** el job salía en verde
+con "19 passed" y un `test-failed-1.png`. Eso solo pasa cuando un test falla y luego
+pasa: Playwright lo cuenta como *flaky* y el job no cae. La causa era que el timeout
+global es de 60 s y ese test tardaba 59,5 s, o sea medio segundo de margen. Con el
+CI en `retries: 1`, el fallo se escondía. Ahora ese test tiene `test.setTimeout(150_000)`.
+
+**Siete cosas que parecían fallos y no lo eran.** Se listan porque es la segunda vez
+que pasa y porque, sin mirar cuál de las dos era, se habría "arreglado" la web:
+
+- El carrito no crecía al añadir. **Falso:** el carrito exige sesión a propósito
+  (`handleAddToCartGated` abre el login). Con sesión funciona: tres productos,
+  359,70 € de subtotal, envío gratis, quitar actualiza el panel y se llega al
+  checkout. El primer barrido daba además un PASS falso, porque comprobaba
+  `/carrito/i.test(innerText)` y esa palabra sale siempre en la cabecera.
+- `/carrito` da 404. **No es un bug:** esa ruta no existe, el carrito es un panel
+  lateral. No está en el router y nada lo enlaza. El test se la inventaba y pasaba
+  porque la pantalla de 404 tiene texto de sobra.
+- La búsqueda "pinta HTML crudo". **Falso:** React escapa siempre; se comprobó que
+  aparece como `&lt;script&gt;` en un nodo de texto.
+- 107 elementos fuera de pantalla. **La mayoría falsos:** el carrusel de relacionados
+  tiene `overflow-x auto`, se sale a propósito. Los que sí se cortaban eran las
+  tarjetas de categoría.
+- El botón de checkout es "Proceder al Pago" y yo buscaba `/pagar/`.
+- El de quitar es el emoji 🗑 y yo buscaba `/eliminar|quitar|remove/`.
+- El `aria-label` del botón de añadir es "Agregar <nombre> al carrito", con
+  palabras no adyacentes, así que `/agregar al carrito/` no encontraba ningún botón.
+
+**Decisión de negocio, no un fallo:** el carrito pide iniciar sesión antes de añadir.
+Es el cambio más grande que se puede hacer para vender más, porque cada paso antes
+del pago pierde gente. Pero es decisión del dueño, no un bug.
+
+---
+
 ## ✅ Hecho · Batería profunda de calidad (1-oct)
 
 **183 de 183 comprobaciones en verde contra producción.** El detalle completo, con el

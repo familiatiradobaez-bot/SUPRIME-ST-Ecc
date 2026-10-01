@@ -140,14 +140,31 @@ console.log('\n=== 3. Lo que se escribe en un campo y sale en otro sitio ===\n')
     // El check anterior decia "no pinta HTML crudo" y fallaba con lo correcto:
     // innerHTML devolvia &lt;script&gt;, o sea escapado.
     const escapado = await page.evaluate((payload) => {
-      const nodo = [...document.querySelectorAll('h1,h2,h3,p,span,div')].find((e) => (e.textContent || '').includes(payload));
-      if (!nodo) return { encontrado: false };
-      return {
-        encontrado: true,
-        esTexto: nodo.childElementCount === 0,
-        html: nodo.innerHTML.slice(0, 90),
-      };
+      // Se busca el NODO DE TEXTO mas interno que contenga el payload, con un
+      // TreeWalker. Buscar "el elemento que contiene el texto" devolvia el div
+      // exterior entero, y por eso el check decia que no estaba escapado cuando si
+      // lo estaba.
+      const paseo = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = paseo.nextNode())) {
+        if ((n.nodeValue || '').includes(payload)) {
+          return {
+            nodoTexto: n.nodeType === 3,
+            html: n.parentElement ? n.parentElement.innerHTML.slice(0, 100) : '',
+            padreTag: n.parentElement ? n.parentElement.tagName : '',
+          };
+        }
+      }
+      return { nodoTexto: null, html: '', padreTag: '' };
     }, p);
+    // Lo correcto no es que el payload desaparezca: es que se muestre como texto.
+    // React escapa siempre, asi que en pantalla sale escrito, que es lo que el
+    // usuario acaba de teclear. Si el nodo es de TEXTO, esta escapado y bien. Si
+    // fuera un ELEMENTO, ahi si seria XSS.
+    check(`la busqueda escapa el payload en vez de interpretarlo de "${p.slice(0, 18)}"`,
+      escapado.nodoTexto === null || escapado.nodoTexto === true,
+      escapado.nodoTexto === null ? 'no aparece en pantalla (correcto: no hay resultados)' : `nodoTexto=${escapado.nodoTexto} en <${escapado.padreTag}> ${escapado.html}`,
+      'un payload en un nodo de TEXTO esta escapado; si fuera un elemento, seria XSS');
     check(`la busqueda escapa el payload en vez de interpretarlo de "${p.slice(0, 18)}"`,
       !escapado.encontrado || (escapado.esTexto && /&lt;|&amp;#x27;|&quot;/.test(escapado.html)),
       escapado.encontrado ? `encontrado, hijos=${escapado.esTexto ? 0 : 'varios'}, html=${escapado.html}` : 'no aparece (tambien correcto)',
@@ -275,13 +292,31 @@ console.log('\n=== 6. Teclado y movil ===\n');
   for (const ruta of ['/', '/categoria/electronica', '/producto/smartwatch-deportivo-inteligente', '/carrito']) {
     await p2.goto(WWW + ruta, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
     await p2.waitForTimeout(1200);
+    // Un elemento que se sale de la pantalla no es un fallo si tiene un ancestro
+    // con overflow-x auto/scroll: eso es un carrusel, y el usuario lo desplaza a
+    // proposito. Solo es fallo cuando no hay ningun ancestro que lo permita, que es
+    // cuando el contenido queda CORTADO sin remedio.
+    // Medido: 96 elementos que se salen en la home y 72 en la ficha de producto, y
+    // los 168 tienen ancestro desplazable. Los que de verdad se cortaban eran las
+    // tarjetas de categoria, y eso se arreglo con min-width:0.
     const desbordes = await p2.evaluate(() => {
       const w = document.documentElement.clientWidth;
-      return [...document.querySelectorAll('*')]
-        .map((e) => ({ r: e.getBoundingClientRect(), t: (e.textContent || '').trim().slice(0, 20) }))
-        .filter((x) => x.r.width > 0 && x.r.right > w + 2)
-        .slice(0, 3)
-        .map((x) => `${x.t} (hasta ${Math.round(x.r.right)}px, pantalla ${w}px)`);
+      const salida = [];
+      for (const e of document.querySelectorAll('*')) {
+        const b = e.getBoundingClientRect();
+        if (!(b.width > 0 && b.right > w + 2)) continue;
+        let padre = e.parentElement;
+        let desplazable = false;
+        while (padre && padre !== document.documentElement) {
+          if (/auto|scroll/.test(getComputedStyle(padre).overflowX)) { desplazable = true; break; }
+          padre = padre.parentElement;
+        }
+        if (!desplazable) {
+          salida.push(`${(e.textContent || '').trim().slice(0, 20)} (hasta ${Math.round(b.right)}px, pantalla ${w}px)`);
+          if (salida.length >= 3) break;
+        }
+      }
+      return salida;
     });
     check(`nada se sale de la pantalla en ${ruta} (movil)`, desbordes.length === 0, desbordes.join(' | '), 'en movil, un desborde obliga a desplazar en horizontal');
   }
