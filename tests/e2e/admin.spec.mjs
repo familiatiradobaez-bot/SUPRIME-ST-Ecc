@@ -106,6 +106,13 @@ test.describe('panel de administración', () => {
   });
 
   test('"Bloquear panel" vuelve a pedir el código y se puede volver a entrar', async ({ page }) => {
+  // Margen propio: este test hace login, pide el step-up con TOTP y espera a que
+  // pase la ventana de 30 s del codigo. Con el timeout global de 60 s se quedaba
+  // en 59,5, y en el CI (que va con 1 reintento) fallaba de forma intermitente:
+  // el job salia verde con "19 passed" y un test-failed-1.png, o sea que el fallo
+  // seRetryaba y pasaba al segundo intento. Un test que solo pasa a la segunda es
+  // un test que no esta midiendo lo que dice medir.
+  test.setTimeout(150_000);
     await uiLogin(page);
     await enterAdmin(page);
     // En móvil el pie del sidebar está fuera de pantalla hasta que se abre.
