@@ -39,10 +39,21 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+
+const home = () => {
+  try { return homedir(); } catch { return null; }
+};
 
 
-const RAIZ = 'C:/Users/VIP/Desktop/Cerebro Obcidian/C proyectos Web';
+// tools/rl-bypass.mjs -> la raiz del repo es el padre de tools/. Se deriva de la
+// ubicacion del propio script y NO de una ruta fija: una ruta absoluta de una
+// maquina concreta no existe en el runner del CI (que es Linux, en otra carpeta)
+// y hacia que el paso del CI fallara con ENOENT.
+const DIR_AQUI = dirname(fileURLToPath(import.meta.url));
+const RAIZ = dirname(DIR_AQUI);
 
 // Ver el comentario de WRANGLER_JS mas abajo: va aqui y no junto a los imports
 // porque usa RAIZ, y con const no se puede leer antes de inicializarse.
@@ -61,20 +72,59 @@ const valor = (n, porDefecto) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : porDefecto;
 };
 
+/**
+ * Credenciales de Cloudflare.
+ *
+ * process.env PRIMERO, y el fichero despues. Al reves, el fichero local gana
+ * sobre los secrets del CI y el paso se ejecuta con las credenciales de la
+ * maquina de quien lo commitea (o falla, si no existen: en el runner de Linux no
+ * hay ningun C:/Users/VIP). El orden de esta funcion es lo que decide si el CI
+ * usa sus secrets o los tuyos.
+ */
 function entorno() {
-  const t = readFileSync(SECRETO, 'utf8');
   const o = {};
-  for (const l of t.split(/\r?\n/)) {
-    if (!l || l.startsWith('#')) continue;
-    const i = l.indexOf('=');
-    if (i < 0) continue;
-    o[l.slice(0, i).trim()] = l.slice(i + 1).trim().replace(/^["']|["']$/g, '');
+  for (const k of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) {
+    const v = (process.env[k] || '').trim();
+    if (v) o[k] = v;
+  }
+  if (o.CLOUDFLARE_API_TOKEN && o.CLOUDFLARE_ACCOUNT_ID) return o;
+
+  // Respaldo local: el fichero de _SECRETS, si existe.
+  // Rutas candidatas, en orden: la que se pase por entorno, y la de al lado del
+  // repo. Se derivan de donde esta este script, no de una maquina concreta: una
+  // ruta absoluta de tu disco no existe en el runner del CI ni en otro equipo.
+  for (const cand of [
+    process.env.CLOUDFLARE_ENV_FILE,
+    join(dirname(RAIZ), '_SECRETS', 'cloudflare.env'),
+    join(home(), 'Desktop', 'Cerebro Obcidian', '_SECRETS', 'cloudflare.env'),
+  ].filter(Boolean)) {
+    if (!cand) continue;
+    try {
+      const t = readFileSync(cand, 'utf8');
+      for (const l of t.split(/\r?\n/)) {
+        if (!l || l.startsWith('#')) continue;
+        const i = l.indexOf('=');
+        if (i < 0) continue;
+        const k = l.slice(0, i).trim();
+        const v = l.slice(i + 1).trim().replace(/^["']|["']$/g, '');
+        if (!o[k]) o[k] = v;
+      }
+    } catch {
+      // El fichero puede no existir (CI, otra maquina). Se sigue con env.
+    }
   }
   return o;
 }
 
 function wrangler(...cmd) {
   const e = entorno();
+  if (!e.CLOUDFLARE_API_TOKEN) {
+    console.error('  Faltan credenciales de Cloudflare. Se esperan CLOUDFLARE_API_TOKEN y');
+    console.error('  CLOUDFLARE_ACCOUNT_ID en el entorno, o el fichero en _SECRETS/cloudflare.env.');
+    console.error('  Sin ellas NO se puede leer ni escribir el KV: el estado que ves a');
+    console.error('  continuacion es desconocido, no "apagado".');
+    return null;
+  }
   const envWrangler = { ...process.env, CLOUDFLARE_API_TOKEN: e.CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID: e.CLOUDFLARE_ACCOUNT_ID };
   const r = existsSync(WRANGLER_JS)
     ? spawnSync(process.execPath, [WRANGLER_JS, ...cmd, '--namespace-id', NS, '--remote'], { cwd: RAIZ, encoding: 'utf8', env: envWrangler })
@@ -149,6 +199,11 @@ const ACCION = args[0] || 'estado';
 
 console.log('== Interruptor de rate limit (por IP, con caducidad) ==\n');
 
+function credencialesAusentes() {
+  const e = entorno();
+  return !e.CLOUDFLARE_API_TOKEN || !e.CLOUDFLARE_ACCOUNT_ID;
+}
+
 // --- estado ---
 if (ACCION === 'estado') {
   const raw = leer(BYPASS_KEY);
@@ -157,7 +212,10 @@ if (ACCION === 'estado') {
   console.log('  IP publica de esta maquina:', (await ipPublica()) || '(no se pudo detectar)');
   console.log('  tu IP LAN:               192.168.0.105  (no llega a produccion: es privada)');
   console.log('');
-  if (!raw) console.log('  BYPASS: apagado');
+  if (credencialesAusentes()) {
+    console.log('  BYPASS: DESCONOCIDO (no hay credenciales de Cloudflare)');
+    console.log('  Esto NO es lo mismo que "apagado": no se ha podido comprobar.');
+  } else if (!raw) console.log('  BYPASS: apagado');
   else {
     const d = JSON.parse(raw);
     const mins = Math.max(0, Math.round((d.expiraEn - Date.now() / 1000) / 60));
