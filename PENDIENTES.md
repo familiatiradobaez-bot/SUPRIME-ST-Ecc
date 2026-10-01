@@ -585,6 +585,22 @@ cubre. Mientras tanto `fonts.googleapis.com` y `fonts.gstatic.com` siguen estand
 
 ---
 
+## ✅ Hecho · DMARC publicado en modo observación (1-oct)
+
+`_dmarc.suprime.xyz` no existía (NXDOMAIN confirmado por DoH): sin DMARC no hay
+política anti-spoofing ni informes, y cualquiera podía enviar como
+`noreply@suprime.xyz` sin que ningún buzón lo tratara distinto por eso.
+
+Publicado `v=DMARC1; p=none; rua=mailto:dmarc@suprime.xyz;` (verificado visible
+por DoH). `p=none` no toca el correo legítimo: solo observa. El envío ya
+autentica: SPF en `send.suprime.xyz` (Return-Path de Resend) y DKIM en
+`resend._domainkey`, ambos alineados con `suprime.xyz`.
+
+**Pendiente del dueño (no lo puedo hacer yo):** crear el buzón
+`dmarc@suprime.xyz` en Spacemail para recibir los informes agregados. Hasta que
+exista, los informes rebotan (no afecta a la entrega normal). Cuando los informes
+confirmen que todo lo legítimo pasa, subir a `p=quarantine` y luego `p=reject`.
+
 ## ✅ Hecho · Orígenes de desarrollo fuera de producción (30-sep)
 
 `allowedOrigins` era **un solo array con todo mezclado**, y como `admin.css` en el CSS, el orden
