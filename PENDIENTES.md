@@ -696,6 +696,25 @@ npx wrangler kv key delete --namespace-id c695ababca41469a97d90502eebf1620 --rem
 
 ---
 
+## ⏳ Temporal · Puente Telegram <-> OpenCode (1-oct)
+
+El dueño lo pidió para hablar desde el móvil sin estar pegado al PC. **Se quita
+cuando lo diga.** Vive en `C:\Users\VIP\AppData\Local\Temp\opencode\puente-telegram.mjs`
+(a propósito fuera del repo, con `.log`, `.pid` y `.offset` al lado).
+
+Cómo funciona: lee su chat (solo el 5304543747, resto ignorado), ejecuta cada
+mensaje con `opencode run --title puente-tg` y devuelve la respuesta. Comandos:
+`/estado`, `/off`, `/ayuda`. Cola secuencial, timeout 25 min por respuesta,
+apagado solo tras 60 min sin mensajes. Operaciones peligrosas (deploy, push,
+borrar, secretos, DNS, KV): el agente las explica y espera su sí, no las ejecuta.
+
+Límites conocidos: el PC tiene que estar encendido; cada mensaje gasta cuota como
+aquí; cada respuesta es una sesión nueva (lee PENDIENTES.md, pero el hilo fino de
+"eso no, lo otro" se puede perder: el puente guarda las últimas 6 líneas).
+
+Para quitarlo: `/off` por Telegram, o matar el PID del `.pid` y borrar los cuatro
+ficheros del Temp. Al quitarlo, borrar también este bloque.
+
 ## ⏸️ Post-lanzamiento (aparcado)
 
 - Legales con asesor (los textos actuales son plantilla)
