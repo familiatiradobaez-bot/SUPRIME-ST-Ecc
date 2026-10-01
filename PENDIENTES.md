@@ -591,15 +591,17 @@ cubre. Mientras tanto `fonts.googleapis.com` y `fonts.gstatic.com` siguen estand
 política anti-spoofing ni informes, y cualquiera podía enviar como
 `noreply@suprime.xyz` sin que ningún buzón lo tratara distinto por eso.
 
-Publicado `v=DMARC1; p=none; rua=mailto:dmarc@suprime.xyz;` (verificado visible
+Publicado `v=DMARC1; p=none; rua=mailto:tienda@suprime.xyz;` (verificado visible
 por DoH). `p=none` no toca el correo legítimo: solo observa. El envío ya
 autentica: SPF en `send.suprime.xyz` (Return-Path de Resend) y DKIM en
 `resend._domainkey`, ambos alineados con `suprime.xyz`.
 
-**Pendiente del dueño (no lo puedo hacer yo):** crear el buzón
-`dmarc@suprime.xyz` en Spacemail para recibir los informes agregados. Hasta que
-exista, los informes rebotan (no afecta a la entrega normal). Cuando los informes
-confirmen que todo lo legítimo pasa, subir a `p=quarantine` y luego `p=reject`.
+**Pendiente del dueño (no lo puedo hacer yo):** confirmar que `tienda@suprime.xyz`
+recibe correo (enviarse una prueba desde Gmail) y, si quieres tenerlo ordenado,
+crear una carpeta "Informes DMARC" con una regla que mueva allí los correos con
+asunto `Report domain: suprime.xyz`. Hasta que el buzón reciba, los informes
+rebotan (no afecta a la entrega normal). Cuando los informes confirmen que todo
+lo legítimo pasa, subir a `p=quarantine` y luego `p=reject`.
 
 ## ✅ Hecho · Orígenes de desarrollo fuera de producción (30-sep)
 
