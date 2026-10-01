@@ -5504,6 +5504,14 @@ button, .btn {
   text-align: left;
   color: var(--text-primary);
   transition: transform var(--transition-fast), border-color var(--transition-fast);
+  /* min-width:0 es lo que arregla que la tarjeta se salga de la pantalla en
+     movil. Un <button> dentro de una columna de rejilla no baja de su ancho
+     minimo de contenido salvo que se le indique; sin esto crecia mas alla del
+     hueco y el overflow:hidden de arriba la recortaba, con lo que el nombre de
+     la categoria quedaba cortado sin que el usuario pudiera ver nada. Medido:
+     107 elementos saliendose en la home, hasta 425px en una pantalla de 393px. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .category-card:hover {
@@ -5524,6 +5532,15 @@ button, .btn {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  /* Lo mismo que en la tarjeta: sin esto el texto sigue sin poder encogerse. */
+  min-width: 0;
+}
+
+/* Un nombre de categoria largo ("Informatica y ofimatica") no debe empujar la
+   tarjeta ni cortarse a media palabra. */
+.category-card-body > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .category-card-body small {

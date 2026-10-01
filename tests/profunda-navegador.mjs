@@ -28,7 +28,10 @@ const RUTAS = [
   ['home', '/'],
   ['categoria', '/categoria/electronica'],
   ['PDP', '/producto/smartwatch-deportivo-inteligente'],
-  ['carrito', '/carrito'],
+  // NO se prueba /carrito: no existe. El carrito es el panel lateral
+  // (.cart-sidebar), no una pagina. Se probaba y pasaba porque la pantalla de 404
+  // tiene texto de sobra: un check que pasa con la pagina de error no comprueba
+  // nada. El panel se recorre en tools/barrido-carrito.mjs.
   ['favoritos', '/favoritos'],
   ['cuenta', '/cuenta'],
   ['404', '/esta-ruta-no-existe'],

@@ -36,7 +36,9 @@
     "profunda:seguridad": "node tools/check-profundidad.mjs seguridad",
     "profunda:navegador": "node tools/check-profundidad.mjs navegador",
     "profunda:api": "node tools/check-profundidad.mjs api",
-    "profunda": "node tools/check-profundidad.mjs todo"
+    "profunda": "node tools/check-profundidad.mjs todo",
+    "carrito": "node tools/barrido-carrito.mjs",
+    "barrido": "node tools/barrido-interaccion.mjs"
   },
   "workspaces": [
     "apps/*",
