@@ -596,12 +596,10 @@ por DoH). `p=none` no toca el correo legítimo: solo observa. El envío ya
 autentica: SPF en `send.suprime.xyz` (Return-Path de Resend) y DKIM en
 `resend._domainkey`, ambos alineados con `suprime.xyz`.
 
-**Pendiente del dueño (no lo puedo hacer yo):** confirmar que `tienda@suprime.xyz`
-recibe correo (enviarse una prueba desde Gmail) y, si quieres tenerlo ordenado,
-crear una carpeta "Informes DMARC" con una regla que mueva allí los correos con
-asunto `Report domain: suprime.xyz`. Hasta que el buzón reciba, los informes
-rebotan (no afecta a la entrega normal). Cuando los informes confirmen que todo
-lo legítimo pasa, subir a `p=quarantine` y luego `p=reject`.
+**Estado (1-oct, tarde):** el dueño confirmó que `tienda@suprime.xyz` **recibe
+correo** (prueba desde Gmail). Los informes agregados llegarán solos cada día o
+dos. Cuando confirme que todo lo legítimo pasa, subir a `p=quarantine` y luego
+`p=reject`. Hasta entonces, `p=none`: observa sin tocar nada.
 
 ## ✅ Hecho · Orígenes de desarrollo fuera de producción (30-sep)
 
