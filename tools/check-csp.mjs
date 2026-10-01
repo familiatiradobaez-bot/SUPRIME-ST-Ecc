@@ -78,15 +78,33 @@ const connectSrc = directriz('connect-src');
 // --- El nucleo del cambio ---
 check("script-src SIN 'unsafe-inline'", !/unsafe-inline/.test(scriptSrc), scriptSrc.slice(0, 110) || '(script-src vacio)');
 
-// --- Que no se haya roto el <link> de Google Fonts ---
-// El hash tiene que ser el del manejador real. Si alguien cambia ese onload y no
-// actualiza el hash, las fuentes vuelven a caerse en silencio.
-check("el manejador onload de las fuentes va con 'unsafe-hashes'", /unsafe-hashes/.test(scriptSrc), /unsafe-hashes/.test(scriptSrc) ? 'unsafe-hashes presente' : 'SIN unsafe-hashes: los manejadores inline no pueden pasar');
-check('el hash sha256 del manejador esta presente', /sha256-[A-Za-z0-9+/=]+/.test(scriptSrc), 'con hash sha256');
-check('el <link> de Google Fonts sigue con el manejador que el hash cubre',
-  html.includes("onload=\"this.media='all'\""),
-  "onload=\"this.media='all'\" intacto");
-check('el <link> de Google Fonts sigue con media=print (el truco de no bloquear el render)', html.includes('media="print"'), 'media=print intacto');
+// --- Las fuentes, y el truco de no bloquear el render ---
+//
+// Hay dos caminos validos y hay que aceptar los dos:
+//   a) Google Fonts con el truco de media="print" onload="this.media='all'",
+//      que necesita el hash para que el manejador pase.
+//   b) Cloudflare Fonts, que sustituye ese <link> por un <style> inline con
+//      @font-face apuntando a /cf-fonts/... y no deja ningun manejador inline.
+//      www.suprime.xyz esta en este caso, asi que exigir (a) daria un falso fallo.
+const hayTruccoFuentes = /onload\s*=\s*["']?this\.media/.test(html);
+const cloudflareFonts = html.includes('/cf-fonts/');
+const estilosInline = /<style[^>]*>@font-face/.test(html);
+
+if (hayTruccoFuentes) {
+  check("el <link> de Google Fonts con el truco onload tiene 'unsafe-hashes'", /unsafe-hashes/.test(scriptSrc), /unsafe-hashes/.test(scriptSrc) ? 'unsafe-hashes presente' : 'SIN unsafe-hashes: el manejador quedaria bloqueado y las fuentes no se aplicarian');
+  check('el hash sha256 del manejador de las fuentes esta presente', /sha256-[A-Za-z0-9+/=]+/.test(scriptSrc), /sha256-[A-Za-z0-9+/=]+/.test(scriptSrc) ? 'con hash sha256' : 'SIN hash: el manejador quedaria bloqueado');
+  check("el <link> de Google Fonts conserva el onload que el hash cubre", /onload\s*=\s*["']this\.media=['"]all['"]/.test(html), 'el onload cambio: recalcula su sha256 y actualiza la CSP, o las fuentes se quedan en silencio con la de reserva');
+  check('el <link> de Google Fonts conserva media=print (el truco de no bloquear el render)', /media=["']print["'][^>]*onload/.test(html) || /onload[^>]*media=["']print["']/.test(html), 'media=print junto al onload');
+} else {
+  console.log('  -- sin el truco de Google Fonts: se acepta el camino de Cloudflare Fonts --');
+  check('las fuentes vienen por Cloudflare Fonts (@font-face inline a /cf-fonts/)', estilosInline && cloudflareFonts,
+    estilosInline ? (cloudflareFonts ? 'ok' : 'hay @font-face inline pero no apunta a /cf-fonts/') : 'ni @font-face inline ni truco onload: no se ve de donde salen las fuentes');
+  // El hash sigue en la CSP aunque hoy no lo use nadie: si se apaga Cloudflare
+  // Fonts, el <link> con el onload vuelve y este hash es lo que lo deja pasar.
+  check("el hash se conserva aunque hoy no sea necesario (red si se apaga Cloudflare Fonts)", /sha256-[A-Za-z0-9+/=]+/.test(scriptSrc), /sha256-[A-Za-z0-9+/=]+/.test(scriptSrc) ? 'hash conservado como red de seguridad' : 'SIN hash: apagar Cloudflare Fonts dejaria las fuentes sin aplicar en silencio');
+  check("font-src permite /cf-fonts (mismo origen, covered por 'self')", /font-src[^;]*'self'/.test(d), /font-src[^;]*'self'/.test(d) ? "'self' cubre /cf-fonts (mismo origen)" : "font-src SIN 'self': las fuentes de Cloudflare no cargarian");
+  check('style-src permite el <style> inline que inyecta Cloudflare Fonts', /style-src[^;]*'unsafe-inline'/.test(d), /style-src[^;]*'unsafe-inline'/.test(d) ? "unsafe-inline presente, el <style> se aplica" : "SIN unsafe-inline: el <style> de Cloudflare Fonts no se aplicaria");
+}
 
 // --- style-src: aqui unsafe-inline es INTENCIONAL ---
 // El front tiene 91 atributos style= (React style={{...}}). Sin 'unsafe-inline'
