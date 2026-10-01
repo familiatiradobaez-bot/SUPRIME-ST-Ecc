@@ -87,6 +87,10 @@ export function HomePage({
         </div>
       </section>
 
+      {/* Sin este h2 la jerarquia salta de h1 a h3 y se pierde la estructura
+          para un lector de pantalla. Va sr-only porque el problema es
+          semantico: ponerlo a la vista seria una decision de diseno. */}
+      <h2 className="sr-only">Por que comprar en SUPRIME</h2>
       <section className="features">
         <div className="feature-card">
           <div className="feature-icon">🚚</div>

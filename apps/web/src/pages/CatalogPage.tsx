@@ -52,7 +52,9 @@ export function CatalogPage({ kind, addedToCartId, onAddToCart, currency, wishli
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
 
-  useDocumentTitle(title || undefined);
+  // Canonical de la pagina de catalogo. Sin esto, /categoria/x se declara
+  // duplicado de la home y no se indexa.
+  useDocumentTitle(title || undefined, undefined, `/categoria/${slug}`);
 
   useEffect(() => {
     if (!slug) return;

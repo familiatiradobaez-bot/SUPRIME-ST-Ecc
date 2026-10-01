@@ -5,7 +5,7 @@ export function Footer() {
     <footer className="footer">
       <div className="footer-content">
         <div className="footer-section">
-          <h4>Sobre SUPRIME</h4>
+          <h3>Sobre SUPRIME</h3>
           <ul>
             <li><Link to="/contacto">Acerca de nosotros</Link></li>
             <li><Link to="/faq">Preguntas frecuentes</Link></li>
@@ -13,7 +13,7 @@ export function Footer() {
           </ul>
         </div>
         <div className="footer-section">
-          <h4>Ayuda</h4>
+          <h3>Ayuda</h3>
           <ul>
             <li><Link to="/faq">Preguntas frecuentes</Link></li>
             <li><Link to="/contacto">Contacto</Link></li>
@@ -21,7 +21,7 @@ export function Footer() {
           </ul>
         </div>
         <div className="footer-section">
-          <h4>Legal</h4>
+          <h3>Legal</h3>
           <ul>
             <li><Link to="/privacidad">Política de Privacidad</Link></li>
             <li><Link to="/terminos">Términos y Condiciones</Link></li>

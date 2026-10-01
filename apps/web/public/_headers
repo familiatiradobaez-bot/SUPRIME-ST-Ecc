@@ -60,6 +60,12 @@
 
 /*
   Cache-Control: public, max-age=0, must-revalidate
+  # Obliga a https para siempre desde la primera visita. Sin esto, un atacante en
+  # una wifi abierta puede contestar a un http:// y robar la sesion en claro.
+  # NO se anade preload todavia: es practically irreversible (el navegador
+  # dispara la peticion y el dominio queda en su lista), asi que no se activa sin
+  # que lo decidas. Si lo quieres, añade ; preload al final.
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: SAMEORIGIN

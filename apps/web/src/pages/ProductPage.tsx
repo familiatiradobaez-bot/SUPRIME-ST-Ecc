@@ -91,7 +91,15 @@ export function ProductPage({ addedToCartId, onAddToCart, currency, wishedIds, o
   const [qty, setQty] = useState(1);
   const [lightbox, setLightbox] = useState(false);
 
-  useDocumentTitle(product?.name || undefined, product?.description?.slice(0, 150));
+  // La ruta y la imagen se pasan para que el canonical y la vista previa apunten a
+  // ESTA ficha y no a la home. Sin esto, Google recibe "esta pagina es la home" en
+  // todas las fichas y no indexa ninguna por separado.
+  useDocumentTitle(
+    product?.name || undefined,
+    product?.description?.slice(0, 150),
+    product ? `/producto/${product.slug}` : '/',
+    product?.image_url || undefined,
+  );
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {

@@ -45,12 +45,49 @@ async function withImages(env: Bindings, products: any[]): Promise<any[]> {
   })));
 }
 
+// Techo de lo que se puede pedir en una pagina. Sin el, un limit=10000 se lleva
+// el catalogo entero y se paga en cuota de Workers (100.000 peticiones/dia).
+const MAX_LIMIT = 100;
+
+/**
+ * Lee limit y offset de la query.
+ *
+ * Sin limit devuelve null, y eso significa "todos". Es justo lo que hace el
+ * front: pide /catalog/products sin limit y filtra en el cliente, asi que poner
+ * un limite por defecto dejaria la pagina de categoria y la busqueda mostrando
+ * solo unos pocos productos. Por eso el limite solo se aplica si se pide.
+ *
+ * Con limit, pagina de verdad. Antes se ignoraba: medido en produccion,
+ * ?limit=1 devolvia los 11 productos, y offset no hacia nada. Sin eso no hay
+ * paginacion posible y cualquiera se lleva el catalogo entero.
+ *
+ * Se validan como enteros antes de usarlos: un 'abc' no puede llegar a la
+ * consulta, y LIMIT/OFFSET van atados como parametros, nunca concatenados.
+ */
+function leerPaginacion(url: string): { limit: number | null; offset: number } {
+  const u = new URL(url);
+  const rawLimit = u.searchParams.get('limit');
+  const rawOffset = u.searchParams.get('offset') ?? u.searchParams.get('skip') ?? '0';
+
+  let limit: number | null = null;
+  if (rawLimit !== null && rawLimit !== '') {
+    const n = Number.parseInt(rawLimit, 10);
+    if (Number.isFinite(n)) limit = Math.max(1, Math.min(n, MAX_LIMIT));
+  }
+
+  const o = Number.parseInt(rawOffset, 10);
+  const offset = Number.isFinite(o) ? Math.max(0, o) : 0;
+  return { limit, offset };
+}
+
 // GET /products - List all active products (con imágenes y departamento)
 catalogRoutes.get('/products', async (context) => {
-  const result = await context.env.DB.prepare(
-    `SELECT ${PRODUCT_SELECT}
-     ${PRODUCT_JOINS} WHERE p.status = ? ORDER BY p.created_at DESC`,
-  ).bind('active').all();
+  const { limit, offset } = leerPaginacion(context.req.url);
+
+  const base = `SELECT ${PRODUCT_SELECT} ${PRODUCT_JOINS} WHERE p.status = ? ORDER BY p.created_at DESC`;
+  const result = limit !== null
+    ? await context.env.DB.prepare(`${base} LIMIT ? OFFSET ?`).bind('active', limit, offset).all()
+    : await context.env.DB.prepare(base).bind('active').all();
 
   return context.json({ data: await withImages(context.env, result.results) });
 });

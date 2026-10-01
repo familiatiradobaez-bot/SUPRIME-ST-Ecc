@@ -83,7 +83,9 @@ const PAGES: Record<string, { title: string; updated: string; body: React.ReactN
 
 export function LegalPage({ slug }: { slug: string }) {
   const page = PAGES[slug];
-  useDocumentTitle(page?.title, page ? `SUPRIME: ${page.title}.` : undefined);
+  // Canonical propio: una pagina legal que se declara duplicado de la home es ruido
+  // para el buscador.
+  useDocumentTitle(page?.title, page ? `SUPRIME: ${page.title}.` : undefined, page ? `/${slug}` : '/');
   if (!page) {
     return (
       <div className="layout-main">

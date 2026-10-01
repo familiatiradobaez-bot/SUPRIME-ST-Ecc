@@ -16,3 +16,14 @@
  * (canonical, og:url y las dos imagenes og/twitter).
  */
 export const SITE_URL = 'https://www.suprime.xyz';
+
+
+/**
+ * Origen canonico, para construir canonical y og:url desde JS.
+ *
+ * Existe por el mismo motivo que SITIO_CANONICO: el host estaba escrito a mano
+ * en varios ficheros, y con el host repetido es facil que uno se quede con el
+ * viejo. Notar que es SIN barra final a proposito: se concatena con la ruta
+ * ('/producto/x') y con las dos barras saldria 'https://www.suprime.xyz//producto/x'.
+ */
+export const ORIGEN_CANONICO = SITE_URL.replace(/\/+$/, '');

@@ -5910,3 +5910,59 @@ button, .btn {
     font-size: 0.65rem;
   }
 }
+/* Solo para lectores de pantalla. Se usa para el h2 de seccion de la home, que
+   hace falta para que la jerarquia de encabezados no salte de h1 a h3, pero que
+   no aporta nada visual: ponerlo a la vista seria una decision de diseno. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   Objetivos tactiles en pantallas tactiles
+   ==========================================================================
+
+   44px es el minimo por debajo del cual un dedo no acierta siempre, y es lo que
+   pide Lighthouse (y lasWCAG 2.5.5, AAA). Medido en produccion: el boton de
+   "Buscar productos" era 377x34, "Explorar Tienda" 158x38 y "Ver Catalogo"
+   140x38, todos por debajo.
+
+   Se aplica SOLO con (pointer: coarse), es decir, a dedo. En un raton un boton
+   de 34px va bien, y forzar 44px en escritorio solo haria el sitio mas grande.
+   Y se limita a button y a los enlaces con clase de boton: los enlaces de texto
+   dentro de un parrafo ("leer mas", "ver todos") no son un blanco facil de
+   pulsar y estirarlos descuadra el texto.
+*/
+@media (pointer: coarse) {
+  button,
+  .btn,
+  a.btn,
+  [role='button'] {
+    min-height: 44px;
+  }
+
+  /* Los iconos sueltos (menu, carrito, cuenta) tambien: son 32x32 o menos, y son
+     los que mas se pulsan mal en movil porque estan juntos. */
+  header button,
+  .icon-btn,
+  .cart-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Un input de busqueda con 34px de alto es dificil de tocar y ademas el teclado
+     movil tapa lo que hay debajo. */
+  input[type='search'],
+  input[type='text'],
+  input[type='email'],
+  input[type='password'] {
+    min-height: 44px;
+  }
+}
