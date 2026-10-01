@@ -395,10 +395,25 @@ npm run rl:telegram        # atiende los botones de Telegram pendientes
 
 Los tres los encontró la prueba de producción, no el typecheck ni el test unitario.
 
+### Un cuarto bug, este solo en el CI
+
+El paso del CI fallaba con `ENOENT`: el script leía las credenciales de una ruta
+**absoluta de esta máquina** (`C:/Users/VIP/.../_SECRETS/cloudflare.env`), que en el
+runner de Linux no existe. Ahora `RAIZ` sale de `import.meta.url` y las credenciales
+se leen de `process.env` **primero**, con el fichero local como respaldo. El orden
+decide cuál gana: al revés, el fichero local pisaría los secrets del CI.
+
+Y un detalle que importa más de lo que parece: **sin credenciales, `estado` dice
+DESCONOCIDO, no "apagado"**. Decir "apagado" sin haber mirado es peor que no
+decir nada: si crees que está apagado y no lo está, te topas sin saber por qué; y
+en el CI, un fallo de credenciales pasaría por un estado limpio y nadie lo vería.
+
 ### Verificación
 
 - `tests/rl-bypass.test.mjs`: 24 checks con KV en memoria, incluidos los que
   fallaban (**cubo ya lleno + bypass**, que es el caso real de "me he quedado topado")
+- CI: el paso `Apagar el bypass` corre en verde antes del smoke
+  (`smoke 94/0/1`, `CSP 22/22`, `E2E 20/20`)
 - Prueba en producción: sin bypass se ven 429, con el bypass **0 de 15**, la web sigue
   200, y tras apagar se vuelve a 401
 
