@@ -333,6 +333,49 @@ minifica y el HTML pesa 3,6 KB.
 
 ---
 
+## ✅ Hecho · Batería profunda de calidad (1-oct)
+
+**183 de 183 comprobaciones en verde contra producción.** El detalle completo, con el
+qué y el cómo de cada check, está en `BATERIA-PROFUNDA.md`. Se repite con
+`npm run profunda` (o por partes: `seguridad`, `navegador`, `api`, `rendimiento`).
+
+| Parte | Checks | Qué mide |
+|---|---|---|
+| Seguridad | 48/48 | Inyección, sesión, CSRF/CORS, fugas, cabeceras |
+| Navegador | 74/74 | Renders, interacción, accesibilidad, móvil y escritorio |
+| API y datos | 48/48 | Contrato, paginación, datos, privilegios, SEO |
+| Rendimiento e infra | 13/13 | Peso, peticiones, caché, secretos, interruptor |
+
+**Cinco bugs reales encontrados**, y ninguno lo vio el typecheck porque son de
+comportamiento, no de sintaxis:
+
+1. **La ficha de producto se declaraba duplicado de la home.** El `canonical` era
+   siempre `https://www.suprime.xyz/`, también en `/producto/xyz`, porque Pages
+   sirve el mismo HTML para todas las rutas. Google no indexaba las fichas por
+   separado: se perdía todo el tráfico orgánico de producto. El más caro.
+2. **`/catalog/products` ignoraba `limit` y `offset`** (`?limit=1` devolvía los 11).
+3. **La Cache Rule de la raíz estaba muerta**: apuntaba a `suprime.xyz` cuando el host
+   canónico es `www`, así que no coincidía con nada. `config.js` —que lleva la URL de
+   la API— llevaba un año de TTL.
+4. **HSTS ausente en el front** (la API ya lo tenía).
+5. **Objetivos táctiles por debajo de 44px** en botones, enlaces del pie y el selector
+   de moneda.
+
+Y cinco correcciones de accesibilidad: dos `h1` por página (el logo del header era
+`h1` y se repite en todas) y saltos en la jerarquía de encabezados.
+
+**Lección sobre los tests:** seis de los fallos que parecían bugs del sitio eran
+fallos del propio test (el sitemap es XML y se exigía JSON, la ruta de "forgot" no era
+la correcta, `expires_at` viene en segundos y se leía como milisegundos). Un test
+roto no es un sitio roto, y sin mirar cuál de los dos es, se arregla lo que no era.
+
+**El check de la Cache Rule era incapaz de ver el fallo que tenía delante:** preguntaba
+"¿existe la regla?" por la API, que con estos tokens devuelve 0 reglas siempre. Ahora
+pregunta por el TTL que llega en la respuesta. Preguntar por el efecto, no por la
+configuración.
+
+---
+
 ## ✅ Hecho · Interruptor de rate limit para trabajar sin toparte (1-oct)
 
 Para no quedarse topado con los límites al trabajar, sin desactivar la protección
