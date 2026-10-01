@@ -25,7 +25,14 @@
     "backup": "wrangler d1 export DB --remote --output ./backups/d1-backup.sql",
     "backup:local": "wrangler d1 export DB --local --output ./backups/d1-backup-local.sql",
     "network-info": "echo Accede desde tu celular en: && echo http://192.168.0.105:5173",
-    "csp:check": "node tools/check-csp.mjs"
+    "csp:check": "node tools/check-csp.mjs",
+    "rl:on": "node tools/rl-bypass.mjs on",
+    "rl:off": "node tools/rl-bypass.mjs off",
+    "rl:estado": "node tools/rl-bypass.mjs estado",
+    "rl:limpiar": "node tools/rl-bypass.mjs limpiar",
+    "rl:telegram": "node tools/telegram-rl.mjs once",
+    "rl:tl-escuchar": "node tools/telegram-rl.mjs escuchar 3600",
+    "rl:apagar": "node tools/rl-bypass.mjs off --si"
   },
   "workspaces": [
     "apps/*",

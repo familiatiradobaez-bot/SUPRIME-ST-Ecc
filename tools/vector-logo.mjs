@@ -1,7 +1,7 @@
 // ============================================================================
 // Vectoriza el logo desde el JPG original con marching squares.
 //
-// POR QUE NO SE USA EL SVG DE CONVERTIO: el trazado先天 falla. Su path grande
+// POR QUE NO SE USA EL SVG DE CONVERTIO: el trazado falla. Su path grande
 // es un rectangulo solido (medido: 93% opaco, igual con nonzero y con evenodd,
 // o sea que el logo no esta ni como agujero ni como isla dentro) y los 46
 // trazos sueltos solo cubren el 0.1%. Es decir, el arte se perdio al vectorizar.

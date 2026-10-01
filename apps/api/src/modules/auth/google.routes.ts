@@ -1,6 +1,7 @@
 ﻿import { Hono } from 'hono';
 import type { Bindings } from '../../app';
 import { checkRateLimit, rateKey } from '../../lib/rate-limit';
+import { getClientIp } from '../../lib/request';
 import { SITIO_CANONICO } from '../../lib/site';
 
 // Frontend URLs for post-login redirect
@@ -240,7 +241,7 @@ googleRoutes.get('/callback', async (context) => {
 // El front llama aquí tras el redirect con ?code=... (nunca viaja el token en URL).
 
 googleRoutes.post('/exchange', async (context) => {
-  const allowed = await checkRateLimit(context.env, rateKey(context.req, 'google-exchange'), 20, 900);
+  const allowed = await checkRateLimit(context.env, rateKey(context.req, 'google-exchange'), 20, 900, getClientIp(context.req));
   if (!allowed) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED' }, 429);
   }

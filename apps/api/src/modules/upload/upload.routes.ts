@@ -19,7 +19,7 @@ const UPLOAD_MAX = 20;
 const UPLOAD_WINDOW = 15 * 60;
 
 async function uploadAllowed(env: UploadBindings, ip: string): Promise<boolean> {
-  return checkRateLimit(env, `upload:${ip}`, UPLOAD_MAX, UPLOAD_WINDOW);
+  return checkRateLimit(env, `upload:${ip}`, UPLOAD_MAX, UPLOAD_WINDOW, ip);
 }
 
 // Validate image data URL

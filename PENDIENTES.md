@@ -333,6 +333,77 @@ minifica y el HTML pesa 3,6 KB.
 
 ---
 
+## ✅ Hecho · Interruptor de rate limit para trabajar sin toparte (1-oct)
+
+Para no quedarse topado con los límites al trabajar, sin desactivar la protección
+de fuerza bruta de la web.
+
+### Qué es, y qué NO es
+
+| | |
+|---|---|
+| **Por IP**, no global | Un flag global dejaría la web sin protección de fuerza bruta **para todo el mundo** mientras trabajas, que es lo contrario de blindarla. Con el bypass activo, los cubos de las demás IPs siguen contando igual. |
+| **Con caducidad** | Es una entrada de KV con hora de expiración (45 min por defecto), no un flag eterno. Si se te olvida apagarlo, se apaga solo. |
+| **Se apaga al hacer push** | El CI lo cierra antes de las pruebas. El automatismo va **solo en el lado seguro**: un push nunca *activa* el bypass (un push por descuido te dejaría la web desprotegida), un push siempre lo *apaga*. |
+| **Lado seguro en toda ambigüedad** | Si el KV falla, se aplica el límite. Un fallo del sistema de avisos nunca se convierte en un bypass. |
+
+### Lo que se pidió y no puede ser, y por qué
+
+**El rango `192.168.0.1-0.10` no funciona contra producción, y no es cuestión de
+configuración.** 192.168.0.0/24 es dirección **privada** (RFC 1918) y el router la
+traduce por NAT, así que al Worker le llega la **IP pública** del router, nunca la
+privada. La IP pública de esta máquina es `45.153.165.7`, que no está en ese rango.
+Por eso el script guarda la IP pública detectada sola, y `anadir` permite meter más
+si tu ISP te la cambia.
+
+**Un Worker no puede dejar una petición esperando 5 minutos a que contestes.** La
+petición muere antes (30 s de CPU en plan Free) y mantener conexiones abiertas es en
+sí mismo un vector de ataque. El flujo que se implementó es **fail-closed**:
+se bloquea → llega el Telegram con **Aprobar / Rechazar** → solo pasa si pulsas
+Aprobar → si no pulsas nada, **se queda bloqueado**. El resultado de seguridad es el
+pedido; lo único que cambia es que approving requiere reintentar, en vez de que la
+petición continúe sola.
+
+### Uso
+
+```
+npm run rl:on              # activa 45 min para tu IP publica (la detecta sola)
+npm run rl:on -- 90        # 90 minutos
+npm run rl:on -- <ip>      # para otra IP concreta
+npm run rl:on -- anadir <ip>  # anade otra sin reiniciar la cuenta
+npm run rl:estado          # que hay puesto y cuando caduca
+npm run rl:off             # apaga y limpia tus cubos, para no quedarte topado
+npm run rl:limpiar         # borra TODOS los cubos (util solo si hace falta)
+npm run rl:telegram        # atiende los botones de Telegram pendientes
+```
+
+### Tres bugs que salieron al probarlo en producción
+
+1. **El bypass no hacía nada.** Estaba solo en `checkRateLimit` (el que *consume*
+   intentos), pero el 429 del login lo decide `loginBlocked`, que usa
+   `peekRateLimit` (el que solo *mira*). Con un cubo ya lleno, activar el bypass no
+   cambiaba nada. **El caso para el que existe el bypass era justo el que no
+   funcionaba.** Arreglado con `exentaYLimpia` en `loginBlocked`.
+2. **El borrado de cubos se quedaba a medias.** Era `kv.delete(...)` sin await, y
+   en un Worker las promesas pendientes se cancelan al terminar la petición. Con el
+   bypass activo los intentos pasaban, pero al apagarlo el cubo viejo seguía lleno
+   y volvía el 429. **Un borrado que a veces no ocurre es peor que no borrar nada,
+   porque aparenta que sí.**
+3. **`rl:off` no limpiaba tus cubos.** Te topabas → activabas el bypass → trabajabas
+   → lo apagabas → y el primer login te volvía a dar 429, porque el cubo de antes
+   seguía ahí. Ahora `off` los borra.
+
+Los tres los encontró la prueba de producción, no el typecheck ni el test unitario.
+
+### Verificación
+
+- `tests/rl-bypass.test.mjs`: 24 checks con KV en memoria, incluidos los que
+  fallaban (**cubo ya lleno + bypass**, que es el caso real de "me he quedado topado")
+- Prueba en producción: sin bypass se ven 429, con el bypass **0 de 15**, la web sigue
+  200, y tras apagar se vuelve a 401
+
+---
+
 ## ✅ Hecho · CSP sin `unsafe-inline` en scripts (1-oct)
 
 El token de sesión vive en `localStorage` ("recuérdame"), así que **un XSS exitoso es una sesión

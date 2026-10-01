@@ -4,7 +4,7 @@ import type { Bindings } from '../../app';
 import { sendEmail } from '../../lib/email';
 import { getClientIp } from '../../lib/request';
 import { isSafetyLockOn } from '../../lib/pricing';
-import { checkRateLimit, peekRateLimit, clearRateLimit } from '../../lib/rate-limit';
+import { checkRateLimit, peekRateLimit, clearRateLimit, debeBloquearYAvisar, exentaYLimpia } from '../../lib/rate-limit';
 import { cifrarSecreto, descifrarSecreto, estaCifrado } from '../../lib/secrets-box';
 
 // Teléfono: 9-15 dígitos (se ignoran espacios, puntos, guiones y paréntesis).
@@ -72,9 +72,14 @@ const RL = {
 
 type RLScope = keyof typeof RL;
 
-function rlAllowed(env: Bindings, scope: RLScope, subject: string): Promise<boolean> {
+/**
+ * La IP se propaga al limite porque es lo que decide el bypass del owner: la
+ * clave del cubo puede no llevarla (loginAccount usa el hash del email), y sin
+ * ella el bypass no se reconoceria en ese scope.
+ */
+function rlAllowed(env: Bindings, scope: RLScope, subject: string, ip?: string): Promise<boolean> {
   const { max, window } = RL[scope];
-  return checkRateLimit(env, `${scope}:${subject}`, max, window);
+  return checkRateLimit(env, `${scope}:${subject}`, max, window, ip);
 }
 
 /**
@@ -83,6 +88,18 @@ function rlAllowed(env: Bindings, scope: RLScope, subject: string): Promise<bool
  * la clave correcta no gastara ninguno de los dos topes.
  */
 async function loginBlocked(env: Bindings, ip: string, accountKey: string): Promise<boolean> {
+  // El bypass se consulta AQUÍ y no solo en checkRateLimit. Este es el camino que
+  // DECIDE el 429 del login (con peekRateLimit, que solo mira sin contar), así que
+  // si el bypass no se comprobara aquí, un cubo ya lleno seguiría bloqueando
+  // aunque la IP estuviera exenta. Ese era el fallo real que se encontró probando
+  // en producción: el bypass estaba solo en el camino que consume, no en el que
+  // bloquea.
+  //
+  // exentaYLimpia además borra los cubos de esta IP: sin eso, activar el bypass
+  // no serviría justo en el caso para el que se activa, que es cuando ya te has
+  // quedado topado.
+  if (await exentaYLimpia(env, ip, ['loginIp:'])) return false;
+
   const byIp = await peekRateLimit(env, `loginIp:${ip}`, RL.loginIp.max);
   if (byIp && byIp.remaining <= 0) return true;
   if (accountKey) {
@@ -94,8 +111,8 @@ async function loginBlocked(env: Bindings, ip: string, accountKey: string): Prom
 
 /** Suma un intento fallido a los dos cubos. */
 async function consumeLoginFailure(env: Bindings, ip: string, accountKey: string): Promise<void> {
-  await rlAllowed(env, 'loginIp', ip);
-  if (accountKey) await rlAllowed(env, 'loginAccount', accountKey);
+  await rlAllowed(env, 'loginIp', ip, ip);
+  if (accountKey) await rlAllowed(env, 'loginAccount', accountKey, ip);
 }
 
 // ── Contraseñas ────────────────────────────────────────────────────────────
@@ -451,7 +468,7 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>();
 authRoutes.post('/register', async (context) => {
   // El registro manda correo (verificación) y crea filas: sin tope, un
   // Disposable-email puede usarla para spamear la bandeja de otra gente.
-  if (!(await rlAllowed(context.env, 'register', getClientIp(context.req)))) {
+  if (!(await rlAllowed(context.env, 'register', getClientIp(context.req), getClientIp(context.req)))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -494,7 +511,7 @@ authRoutes.post('/register', async (context) => {
 // POST /auth/verify-otp - Validar código OTP y activar cuenta (con auto-login)
 authRoutes.post('/verify-otp', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'otpVerify', clientIp))) {
+  if (!(await rlAllowed(context.env, 'otpVerify', clientIp, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -562,7 +579,7 @@ authRoutes.post('/verify-otp', async (context) => {
 // Respuesta genérica salvo cooldown: no revela si la cuenta existe ni su estado.
 authRoutes.post('/resend-otp', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'otpResend', clientIp))) {
+  if (!(await rlAllowed(context.env, 'otpResend', clientIp, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -592,7 +609,7 @@ authRoutes.post('/resend-otp', async (context) => {
 // POST /auth/forgot-password - Enviar OTP para recuperar contraseña (respuesta genérica anti-enumeración)
 authRoutes.post('/forgot-password', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'forgot', clientIp))) {
+  if (!(await rlAllowed(context.env, 'forgot', clientIp, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -618,7 +635,7 @@ authRoutes.post('/forgot-password', async (context) => {
 // POST /auth/reset-password - Restablecer contraseña con OTP
 authRoutes.post('/reset-password', async (context) => {
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'otpVerify', clientIp))) {
+  if (!(await rlAllowed(context.env, 'otpVerify', clientIp, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 
@@ -698,7 +715,19 @@ authRoutes.post('/login', async (context) => {
   // Se Mira antes de tocar la contraseña, así el 429 no filtra si la cuenta
   // existe (mismo criterio que el resto de la ruta).
   if (await loginBlocked(context.env, clientIp, accountKey)) {
-    return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' }, 429);
+    // Aqui es donde mas duele toparse (login es lo que se repite al trabajar), y
+    // el aviso con boton de aprobacion tiene sentido justo en este punto. Se
+    // llama AUNQUE el cubo ya este bloqueado: la funcion decide si de verdad hay
+    // que bloquear, y avisa una sola vez por IP cada 5 min. Si hay un grant
+    // aprobado, devuelve false y el login sigue.
+    const bloqueado = await debeBloquearYAvisar(context.env, clientIp, 'login');
+    if (bloqueado) {
+      return context.json(
+        { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again later.' },
+        429,
+        { 'X-RateLimit-Blocked': 'login', 'X-RateLimit-Hint': 'approve-in-telegram' },
+      );
+    }
   }
 
   const user = await context.env.DB.prepare(
@@ -790,7 +819,7 @@ authRoutes.post('/admin-stepup', async (context) => {
   }
 
   const clientIp = getClientIp(context.req);
-  if (!(await rlAllowed(context.env, 'twofa', clientIp))) {
+  if (!(await rlAllowed(context.env, 'twofa', clientIp, clientIp))) {
     return context.json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Demasiados intentos. Intenta más tarde.' }, 429);
   }
 

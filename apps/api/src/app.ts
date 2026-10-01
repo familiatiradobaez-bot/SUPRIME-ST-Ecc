@@ -30,6 +30,13 @@ export type Bindings = {
   GOOGLE_REDIRECT_URI?: string;
   RESEND_API_KEY?: string;
   /**
+   * Bot de Telegram para avisar al owner. Son secretos del Worker
+   * (`wrangler secret put`), NUNCA vars en wrangler.toml: con el token en el
+   * repo, cualquiera que lo lea podria escribir como el bot.
+   */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  /**
    * Clave de 32 bytes en base64url con la que se cifra el secreto TOTP en D1.
    * Vive en un secreto del Worker, NUNCA en D1 ni en wrangler.toml: si estuviera
    * junto al dato, cifrar no serviría de nada. Ver lib/secrets-box.ts.
