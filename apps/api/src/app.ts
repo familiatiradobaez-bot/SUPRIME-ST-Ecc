@@ -103,24 +103,42 @@ export function createApp() {
     }
 
     // Security headers
-    // El CSP tambien llevaba los origenes de desarrollo, incluidos los
-    // comodines de tunel. Se quitan tambien en la variante de desarrollo: un
-    // un CSP no necesita abrir la conexion a un tunel cualquiera para que
-    // funcione `npm run dev`, solo a la API de destino (8789 en local, la de
+    //
     // El CSP se construye con el dominio canonico en vez de escribirlo a mano,
-    // que es como se quedaba desactualizado. connect-src es donde puedeIr el
+    // que es como se quedaba desactualizado. connect-src es donde puede ir el
     // front a conectarse: el mismo origen (self), la API y los dos hosts de la
     // tienda. Sin comodines de tunel ni IP locales: no hacen falta para que
     // funcione `npm run dev`, que solo necesita la API de destino.
+    //
+    // QUE ESTA Y QUE NO ESTA, Y POR QUE
+    //
+    // OJO: una CSP solo se aplica a quien la recibe como DOCUMENTO. Las
+    // respuestas de esta API son JSON, asi que en la practica esta cabecera no
+    // restringe nada por si sola: la que protege de verdad la web es la que va
+    // en el <meta http-equiv> del index.html, y esa es la que lleva
+    // script-src SIN 'unsafe-inline'. Aqui se mantiene igual y sin
+    // 'unsafe-inline' en script por coherencia, para que si alguna vez esta
+    // respuesta se sirviera como documento, la politica sea la restrictiva.
+    //
+    // 'unsafe-inline' SE QUEDA en style-src, tambien aqui: el front tiene 91
+    // atributos style= y sin eso la app no aplica sus estilos. CSS inyectado no
+    // ejecuta codigo, que es la diferencia con el caso de script.
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "script-src 'self' https://fonts.googleapis.com https://static.cloudflareinsights.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https: blob:",
+      // Refuerzo: object-src y base-uri son los que se suelen olvidar.
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
       esProduccion
         ? `connect-src 'self' ${SITIO_CANONICO} https://suprime.xyz https://api.suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net https://api.qrserver.com`
-        : `connect-src 'self' ${SITIO_CANONICO} https://suprime.xyz https://api.suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net http://localhost:* http://127.0.0.1:* http://192.168.*:8789 https://api.qrserver.com`,
+        // En desarrollo solo hace falta que el front (5173/4173) hable con la
+        // API local (8787). El comodin de red local se fue tambien: no hacia
+        // falta para nada y permitiria a cualquier IP de la LAN.
+        : `connect-src 'self' ${SITIO_CANONICO} https://suprime.xyz https://api.suprime.xyz https://suprime-st-ecc-api.familia-tirado-baez.workers.dev https://api.bigdatacloud.net http://localhost:* http://127.0.0.1:* https://api.qrserver.com`,
     ].join('; ');
     context.header('Content-Security-Policy', csp);
     context.header('X-XSS-Protection', '1; mode=block');

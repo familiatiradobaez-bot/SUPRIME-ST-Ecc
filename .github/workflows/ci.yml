@@ -71,6 +71,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node tools/purge-assets.mjs --espera-deploy
 
+      # Va DESPUES de la purga, que es donde ya se sabe que el despliegue existe.
+      # No puede estar en el job de smoke: Pages no despliega en el push, tarda
+      # unos 5 minutos, y estos checks leen el HTML servido, asi que en el mismo
+      # push que cambia la CSP estarian mirando la version anterior y fallarian.
+      - name: CSP del documento desplegada
+        run: node tools/check-csp.mjs
+
       - name: E2E
         env:
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
