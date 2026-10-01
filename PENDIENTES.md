@@ -5,9 +5,9 @@
 
 ## Estado base verificado
 
-- Front en producción: `https://suprime.xyz` (Pages, auto-deploy en push a `main`)
+- Front en producción: **`https://www.suprime.xyz`** (Pages, auto-deploy en push a `main`); el apex 301 → www
 - API en producción: `https://api.suprime.xyz` (Worker `2d52ec33`)
-- Smoke: **68 PASS / 0 FAIL / 1 SKIP** · E2E (Playwright): **20/20** (10 móvil + 10 escritorio)
+- Smoke: **94 PASS / 0 FAIL / 1 SKIP** · E2E (Playwright): **20/20** (10 móvil + 10 escritorio) — CSP del documento: **22/22** en producción (`npm run csp:check`)
 - Typecheck + build: OK
 - D1: 3 usuarios (owner, admin, `smoke@suprime.xyz`) · 5 departamentos / 1 subdepartamento / 13 productos
 - Lighthouse (local, `MovilLab/psi.mjs`): escritorio home **92** (LCP 1,0 s · TBT 40 ms · CLS 0,154) ·
@@ -330,6 +330,83 @@ minifica y el HTML pesa 3,6 KB.
 | 35 | Targets táctiles pequeños (a11y) |
 | 36 | Roles ARIA en elementos no compatibles — **parcialmente hecho** (banner de cookies arreglado) |
 | 37 | Enlaces idénticos con distinta finalidad (footer) |
+
+---
+
+## ✅ Hecho · CSP sin `unsafe-inline` en scripts (1-oct)
+
+El token de sesión vive en `localStorage` ("recuérdame"), así que **un XSS exitoso es una sesión
+robada**. `'unsafe-inline'` en `script-src` era justo lo que permitía ejecutar el HTML inyectado, y
+Google lo señalaba en *Ensure CSP is effective against XSS attacks*.
+
+**Por qué se podía quitar sin romper nada:** medido sobre el build, los dos `<script>` del documento
+son **externos** (`/assets/index-*.js` y `/config.js`). Cero scripts inline, así que
+`'unsafe-inline'` no hacía falta para nada y solo dejaba la puerta abierta.
+
+**El riesgo real no eran los scripts, eran los manejadores inline.** Ahí el fallo es *silencioso*: no
+salta ningún error, la página sigue cargando y simplemente algo deja de funcionar. Pasaba con el
+`<link>` de Google Fonts, que lleva `onload="this.media='all'"` para que su CSS no bloquee el
+render: con la política restringida el manejador queda bloqueado y **las fuentes dejan de aplicarse**
+—la web se ve con las tipografías de reserva y no hay aviso—. La salida correcta no es devolver
+`'unsafe-inline'` sino un **hash**: con `'unsafe-hashes'` en la directiva, los hashes sí valen para
+manejadores. De ahí el `sha256-MhtPZXr7+...` en la CSP.
+
+### Qué cambió
+
+| | antes | ahora |
+|---|---|---|
+| `script-src` | `'self' 'unsafe-inline'` + fuentes + beacon | `'self' 'unsafe-hashes' 'sha256-MhtP…' + fuentes + beacon` |
+| `style-src` | `'self' 'unsafe-inline'` + fuentes | **igual, a propósito** (91 atributos `style=`) |
+| refuerzo | — | `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` |
+| `frame-ancestors` | en el `<meta>` | **fuera del `<meta>`**, se queda en la cabecera de la API |
+| `connect-src` (front) | con `*.trycloudflare.com`, `*.ngrok-free.dev`, `*.pages.dev`, `192.168.0.105` | sin comodines ni IP local |
+
+- `'unsafe-inline'` **se queda en `style-src`**: el front usa 91 atributos `style={{...}}` y sin eso
+  no aplica sus estilos. CSS inyectado no ejecuta código, que es la diferencia con el caso de script.
+- `frame-ancestors` fuera del `<meta>` porque **la especificación dice que ahí se ignora**, solo
+  funciona como cabecera HTTP. Dejarlo da falsa sensación de protección; en la cabecera de la API sí
+  funciona, y ahí se queda.
+- Los comodines de túnel se quitaron también del front, no solo de la API (se habían limpiado ayer en
+  la API y se habían olvidado aquí).
+
+### Verificado en un navegador contra producción
+
+- **0 violaciones** de CSP en carga y en las 5 rutas (home, categoría, PDP, carrito, 404)
+- **Script inline inyectado → BLOQUEADO.** Manejador `on*` inyectado → **BLOQUEADO**
+- Las fuentes **se aplican de verdad**: Inter 417 px vs 399 px de la de reserva, Playfair 389 px vs
+  359 px de serif. Este era el fallo silencioso y aquí es donde se habría visto
+- `object-src`, `base-uri` y `form-action` presentes; el beacon de Cloudflare sigue cargando
+
+### `tools/check-csp.mjs` (22 checks) + paso en el CI
+
+**Por qué está fuera del smoke:** el smoke corre en el push, y Pages no despliega en el push —lanza
+un proceso asíncrono de ~5 min—, así que estos checks leerían el HTML viejo y fallarían en el mismo
+push que los arregla. Va en el job `e2e`, **después** de `purge-assets.mjs --espera-deploy`, que es
+donde ya se sabe que el despliegue existe.
+
+El primer commit lo dejó **21/22 y el CI en rojo**: el check exigía `onload="this.media='all'"`
+literal, y en `www.suprime.xyz` ese manejador no existe porque está activo **Cloudflare Fonts** (sustituye
+el `<link>` de Google Fonts por un `<style>` inline con `@font-face` a `/cf-fonts/…`). El check pasó
+a exigir la **propiedad** —ningún manejador inline sin hash— en vez del literal, y a reconocer de
+dónde vienen las fuentes. El `sha256` **se conserva** en la CSP aunque hoy no lo necesite nadie: es la
+red si algún día se apaga Cloudflare Fonts.
+
+Prueba negativa: **25 roturas detectadas una a una** en los dos caminos de fuentes, para que la
+herramienta no pueda dar un OK vacío.
+
+---
+
+## ✅ Hecho · Cloudflare Fonts activo en www (descubierto al verificar la CSP)
+
+`www.suprime.xyz` sirve `@font-face` apuntando a `/cf-fonts/v/inter/5.2.8/…/normal.woff2`: **ya no
+se pide nada a Google Fonts** (0 peticiones a `fonts.gstatic.com`, 200 a `/cf-fonts/`). Es la
+"alternativa mejor" que ya estaba anotada como comentario en el `index.html`, y quita el
+third-party del camino crítico de las fuentes.
+
+**Consecuencia a tener en cuenta:** `www.suprime.xyz` y `suprime-st-ecc.pages.dev` **sirven HTML
+distinto** (Cloudflare Fonts es un ajuste de zona, y `pages.dev` queda fuera). El `onload` sigue
+en el fichero del repo, así que si se apaga Cloudflare Fonts vuelve a estar y el `hash` de la CSP lo
+cubre. Mientras tanto `fonts.googleapis.com` y `fonts.gstatic.com` siguen estando en la CSP como red.
 
 ---
 
