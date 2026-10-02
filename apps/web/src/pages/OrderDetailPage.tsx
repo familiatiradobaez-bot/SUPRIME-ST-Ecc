@@ -140,8 +140,7 @@ export function OrderDetailPage() {
                 {order.tracking_carrier && <small className="carrier">{order.tracking_carrier}</small>}
               </div>
               <button
-                className="btn btn-passkey"
-                style={{ width: 'auto', padding: '0.7rem 1.2rem' }}
+                className="btn btn-track"
                 onClick={() => setTrackerMsg('Pronto: conectamos el rastreador con este número.')}
               >
                 🔍 Rastrear paquete

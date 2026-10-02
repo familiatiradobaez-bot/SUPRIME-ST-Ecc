@@ -6298,3 +6298,20 @@ button, .btn {
   .order-head h1 { font-size: 1.25rem; }
   .tracking-row { flex-direction: column; align-items: flex-start; }
 }
+
+.btn-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.7rem 1.2rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--pill-bg);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+
+.btn-track:hover { transform: translateY(-1px); border-color: var(--accent, #d96b3b); }
