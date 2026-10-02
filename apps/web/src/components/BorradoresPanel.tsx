@@ -86,7 +86,7 @@ export function BorradoresPanel({ apiUrl, sessionToken }: BorradoresPanelProps) 
 
   const fotosEdit = edit ? (edit.fotos || []) : [];
   const keepList = fotosEdit.filter((_, i) => f.keep[i]);
-  const preview = fotosEdit.length ? fotosEdit[0]?.url : '';
+  const preview = keepList.length ? keepList[0]?.url : '';
 
   return (
     <div>

@@ -932,6 +932,21 @@ adminRoutes.post('/borradores/a-producto', async (context) => {
   const sub = await context.env.DB.prepare('SELECT id FROM subdepartments WHERE id = ?').bind(body.subdepartment_id).first();
   if (!sub) return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND' }, 404);
 
+  // Guarda: no crear dos veces si el borrador ya está marcado publicado.
+  try {
+    const token = context.env.GITHUB_TOKEN;
+    if (token) {
+      const metaUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${BORRADORES_PATH}`;
+      const metaRes = await fetch(metaUrl, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'suprime-worker' } });
+      if (metaRes.ok) {
+        const meta = (await metaRes.json()) as { content: string };
+        const arr: any[] = JSON.parse(atob(meta.content.replace(/\n/g, '')));
+        const cur = (Array.isArray(arr) ? arr : []).find((x: any) => x?.productId === body.productId);
+        if (cur?.status === 'publicado') return context.json({ error: 'ALREADY_IMPORTED', message: 'Ese borrador ya está marcado como publicado' }, 409);
+      }
+    }
+  } catch { /* si falla la comprobación, seguimos igual */ }
+
   const productId = generateId();
   const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'producto';
   let slug = baseSlug;
