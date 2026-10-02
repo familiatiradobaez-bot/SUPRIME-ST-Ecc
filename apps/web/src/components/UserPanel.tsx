@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { User } from '../types';
 import { formatPrice } from '../lib/api';
 
@@ -50,6 +51,7 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
+  const navigate = useNavigate();
 
   // ── Passkeys y dispositivos de confianza ──────────────────────────────
   const [passkeys, setPasskeys] = useState<any[]>([]);
@@ -365,25 +367,20 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
             )}
             {orders.map(o => (
               <div key={o.id} className="user-order">
+                {/* Cada pedido lleva a su PÁGINA propia con el detalle completo
+                    y el seguimiento. Antes se desplegaba aquí mismo, que
+                    escondía la información y no dejaba url para compartir. */}
                 <button
                   type="button"
                   className="user-order-header"
-                  onClick={() => loadOrderDetail(o.id)}
+                  onClick={() => { onClose(); navigate(`/pedido/${o.id}`); }}
+                  aria-label={`Ver pedido ${o.id.slice(0, 8)}`}
                 >
                   <span style={{ fontFamily: 'monospace' }}>{o.id.slice(0, 8)}…</span>
                   <span className={`order-status order-status-${o.status}`}>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
                   <span>{formatPrice(o.total_cents)}</span>
+                  <span className="user-order-go" aria-hidden="true">›</span>
                 </button>
-                {openOrder?.id === o.id && (
-                  <div className="user-order-detail">
-                    {openOrder.items.map((it, i) => (
-                      <p key={i}>{it.product_name || it.product_id} × {it.quantity} — {formatPrice(it.price_cents * it.quantity)}</p>
-                    ))}
-                    <small style={{ color: 'var(--text-secondary)' }}>
-                      {o.created_at ? new Date(o.created_at).toLocaleString('es-ES') : ''}
-                    </small>
-                  </div>
-                )}
               </div>
             ))}
           </div>

@@ -230,7 +230,8 @@ ordersRoutes.get('/:id', async (context) => {
   const order = await context.env.DB.prepare(
     `SELECT o.id, o.status, o.total_cents, o.shipping_cents, o.shipping_name, o.shipping_email,
             o.shipping_phone, o.shipping_address, o.payment_method, o.created_at, o.user_id,
-            oi.product_id, oi.quantity, oi.price_cents, p.name as product_name
+            o.tracking_number, o.tracking_carrier, o.tracking_updated_at,
+            oi.product_id, oi.quantity, oi.price_cents, p.name as product_name, p.image_url as product_image
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
      LEFT JOIN products p ON p.id = oi.product_id
@@ -252,6 +253,7 @@ ordersRoutes.get('/:id', async (context) => {
     return {
       product_id: row.product_id,
       product_name: row.product_name,
+      product_image: row.product_image,
       quantity: row.quantity,
       price_cents: row.price_cents,
     };
@@ -270,6 +272,9 @@ ordersRoutes.get('/:id', async (context) => {
       shipping_address: first.shipping_address,
       payment_method: first.payment_method,
       created_at: first.created_at,
+      tracking_number: first.tracking_number ?? null,
+      tracking_carrier: first.tracking_carrier ?? null,
+      tracking_updated_at: first.tracking_updated_at ?? null,
       items,
     },
   });

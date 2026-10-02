@@ -26,6 +26,7 @@ const CatalogPage = lazy(() => import('./pages/CatalogPage').then((m) => ({ defa
 const WishlistPage = lazy(() => import('./pages/WishlistPage').then((m) => ({ default: m.WishlistPage })));
 const LegalPage = lazy(() => import('./pages/LegalPage').then((m) => ({ default: m.LegalPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+const OrderDetailPage = lazy(() => import('./pages/OrderDetailPage').then((m) => ({ default: m.OrderDetailPage })));
 const CartSidebar = lazy(() => import('./components/CartSidebar').then((m) => ({ default: m.CartSidebar })));
 const LoginForm = lazy(() => import('./components/LoginForm').then((m) => ({ default: m.LoginForm })));
 const OtpForm = lazy(() => import('./components/OtpForm').then((m) => ({ default: m.OtpForm })));
@@ -439,6 +440,10 @@ export function App() {
               currency={currency}
             />
           }
+        />
+        <Route
+          path="/pedido/:id"
+          element={<OrderDetailPage />}
         />
         <Route path="/privacidad" element={<LegalPage slug="privacidad" />} />
         <Route path="/terminos" element={<LegalPage slug="terminos" />} />
