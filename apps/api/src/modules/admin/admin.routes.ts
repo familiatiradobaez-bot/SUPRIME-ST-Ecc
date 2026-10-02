@@ -415,6 +415,7 @@ adminRoutes.post('/products', async (context) => {
     return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND', message: 'El subdepartamento no existe' }, 404);
   }
 
+  const allowedStatus = ['draft', 'active', 'archived'];
   const productId = generateId();
   const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'producto';
   // Slug único (evita 500 por UNIQUE en renombres/duplicados)
@@ -427,8 +428,9 @@ adminRoutes.post('/products', async (context) => {
 
   await context.env.DB.prepare(
     `INSERT INTO products (id, subdepartment_id, name, slug, description, image_url, price_cents, stock_quantity, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`
-  ).bind(productId, subdepartmentId, name, slug, description, image_url, price_cents, stock_quantity).run();
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(productId, subdepartmentId, name, slug, description, image_url, price_cents, stock_quantity,
+        allowedStatus.includes(body.status) ? body.status : 'active').run();
 
   // Persistir galería en product_images (primera = principal)
   const galleryUrls = Array.isArray(body.images) && body.images.length > 0 ? body.images : [image_url];
@@ -461,6 +463,29 @@ adminRoutes.put('/products/:id', async (context) => {
     return context.json({ error: 'INVALID_STOCK', message: 'stock_quantity debe ser entero >= 0' }, 400);
   }
 
+  // Estado + valores actuales: si el cliente no manda un campo (por ejemplo
+  // una versión vieja del panel), se conserva el de la BD. Antes, bind(undefined)
+  // reventaba el PUT con 500 y el panel mostraba "Error updating product".
+  const current = await context.env.DB.prepare(
+    'SELECT status, name, description, image_url, price_cents, stock_quantity FROM products WHERE id = ?'
+  ).bind(productId).first() as { status: string; name: string; description: string; image_url: string; price_cents: number; stock_quantity: number } | null;
+  const curStatus = current?.status;
+  if (curStatus === undefined || curStatus === null) {
+    return context.json({ error: 'PRODUCT_NOT_FOUND' }, 404);
+  }
+  const nameFinal = (typeof body.name === 'string' && body.name) ? name : current!.name;
+  const descriptionFinal = (typeof description === 'string') ? description : current!.description;
+  const imageUrlFinal = (typeof image_url === 'string' && image_url) ? image_url : current!.image_url;
+  const priceFinal = Number.isInteger(price_cents) ? price_cents : current!.price_cents;
+  const stockFinal = Number.isInteger(stock_quantity) ? stock_quantity : current!.stock_quantity;
+  const allowedStatus = ['draft', 'active', 'archived'];
+  let statusVal = curStatus;
+  if (typeof body.status === 'string' && allowedStatus.includes(body.status)) {
+    statusVal = body.status;
+  } else if (body.status !== undefined && body.status !== null) {
+    return context.json({ error: 'INVALID_STATUS' }, 400);
+  }
+
   // Reubicar el producto: solo si viene informado, y validando que existe.
   let subdepartmentId: string | null = null;
   if (body.subdepartment_id !== undefined && body.subdepartment_id !== null && body.subdepartment_id !== '') {
@@ -478,13 +503,13 @@ adminRoutes.put('/products/:id', async (context) => {
 
   const updated = subdepartmentId
     ? await context.env.DB.prepare(
-        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?, subdepartment_id = ?
+        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?, subdepartment_id = ?, status = ?
          WHERE id = ?`
-      ).bind(name, description, image_url, price_cents, stock_quantity, subdepartmentId, productId).run()
+      ).bind(nameFinal, descriptionFinal, imageUrlFinal, priceFinal, stockFinal, subdepartmentId, statusVal, productId).run()
     : await context.env.DB.prepare(
-        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?
+        `UPDATE products SET name = ?, description = ?, image_url = ?, price_cents = ?, stock_quantity = ?, status = ?
          WHERE id = ?`
-      ).bind(name, description, image_url, price_cents, stock_quantity, productId).run();
+      ).bind(nameFinal, descriptionFinal, imageUrlFinal, priceFinal, stockFinal, statusVal, productId).run();
 
   if ((updated.meta as { changes?: number } | undefined)?.changes === 0) {
     return context.json({ error: 'PRODUCT_NOT_FOUND' }, 404);
@@ -582,12 +607,29 @@ function logAudit(
 }
 
   // GET /admin/products - Listar TODOS los productos (incluye drafts/active)
+  // Trae los MISMOS campos que /catalog/products (descripción, subdepartamento,
+  // nombres de depto/subdepto) porque el formulario de edición los reutiliza:
+  // sin ellos, editar un producto fallaba con "Error updating product".
   adminRoutes.get('/products', async (context) => {
     const rows = await context.env.DB.prepare(
-      `SELECT id, name, slug, price_cents, image_url, stock_quantity, status, created_at
-         FROM products ORDER BY created_at DESC`
+      `SELECT p.id, p.name, p.slug, p.description, p.image_url, p.price_cents,
+              p.stock_quantity, p.status, p.created_at, p.subdepartment_id,
+              sd.name AS subdepartment_name, sd.slug AS subdepartment_slug,
+              d.name AS department_name, d.slug AS department_slug
+         FROM products p
+         JOIN subdepartments sd ON sd.id = p.subdepartment_id
+         JOIN departments d ON d.id = sd.department_id
+        ORDER BY p.created_at DESC`
     ).all();
-    return context.json({ data: rows.results });
+    const products = rows.results as any[];
+    const withImages = await Promise.all(products.map(async (p) => {
+      const imgs = await context.env.DB.prepare(
+        'SELECT url FROM product_images WHERE product_id = ? ORDER BY display_order ASC'
+      ).bind(p.id).all();
+      const urls = (imgs.results || []).map((r: any) => r.url).filter(Boolean);
+      return { ...p, images: urls.length > 0 ? urls : (p.image_url ? [p.image_url] : []) };
+    }));
+    return context.json({ data: withImages });
   });
 
 // GET /admin/catalog - Departamentos + subdepartamentos con conteo de productos

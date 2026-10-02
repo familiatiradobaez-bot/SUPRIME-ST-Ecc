@@ -60,6 +60,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [productPrice, setProductPrice] = useState('');
   const [productStock, setProductStock] = useState('');
   const [productSubId, setProductSubId] = useState('');
+  const [productStatus, setProductStatus] = useState<'draft' | 'active'>('draft');
 
   // Jerarquía de catálogo: alimenta el selector de subdepartamento del producto.
   const [catalog, setCatalog] = useState<CatalogDepartment[]>([]);
@@ -445,6 +446,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
           subdepartment_id: productSubId,
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
+          status: productStatus,
         }),
       });
       const data = await res.json();
@@ -473,13 +475,17 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         credentials: 'include',
         body: JSON.stringify({
           name: productName || editingProduct.name,
-          description: productDesc || editingProduct.description,
-          image_url: productImages[0] || editingProduct.image_url,
+          // Defaults obligatorios: si `description` o `image_url` llegan
+          // undefined, D1 hace bind(undefined) y el PUT revienta con 500
+          // ("Error updating product" en el panel).
+          description: productDesc || editingProduct.description || '',
+          image_url: productImages[0] || editingProduct.image_url || (editingProduct.images && editingProduct.images[0]) || '',
           images: productImages.length > 0 ? productImages : editingProduct.images || [editingProduct.image_url],
           // Solo se manda si se eligió: si no, el backend conserva el actual.
           ...(productSubId ? { subdepartment_id: productSubId } : {}),
           price_cents: Math.round(parseFloat(productPrice) * 100),
           stock_quantity: parseInt(productStock),
+          status: productStatus,
         }),
       });
       const data = await res.json();
@@ -492,7 +498,31 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         alert('Error: ' + (data.error || 'unknown') + (data.message ? `\n\n${data.message}` : ''));
       }
     } catch (err) {
-      alert('Error updating product');
+      alert('Error updating product: ' + String(err));
+    }
+  };
+
+  // Pasar un producto oculto (draft) a la lista de activos sin abrir el formulario.
+  const activateProduct = async (p: any) => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/products/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: p.name,
+          description: p.description || '',
+          image_url: p.image_url || (p.images && p.images[0]) || '',
+          images: p.images || [p.image_url],
+          price_cents: p.price_cents,
+          stock_quantity: p.stock_quantity,
+          status: 'active',
+        }),
+      });
+      const data = await res.json();
+      if (data.data) { fetchProducts(); fetchStats(); }
+      else alert('Error: ' + (data.error || 'unknown'));
+    } catch (err) {
+      alert('No se pudo activar: ' + String(err));
     }
   };
 
@@ -520,6 +550,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     setProductPrice('');
     setProductStock('');
     setProductSubId('');
+    setProductStatus('draft');
   };
 
   const startEditProduct = (product: AdminProduct) => {
@@ -530,6 +561,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     setProductPrice((product.price_cents / 100).toFixed(2));
     setProductStock(product.stock_quantity.toString());
     setProductSubId(product.subdepartment_id || '');
+    setProductStatus(product.status === 'active' ? 'active' : 'draft');
     setShowProductForm(true);
   };
 
@@ -996,6 +1028,13 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                   <label>Stock:</label>
                   <input type="number" inputMode="numeric" value={productStock} onChange={(e) => setProductStock(e.target.value)} placeholder="0" />
                 </div>
+                <div className="form-group">
+                  <label>Visibilidad:</label>
+                  <select value={productStatus} onChange={(e) => setProductStatus(e.target.value as 'draft' | 'active')} aria-label="Visibilidad del producto">
+                    <option value="draft">🚫 Oculto (borrador) — no sale en la web</option>
+                    <option value="active">✅ Activo — visible en la web</option>
+                  </select>
+                </div>
                 <div className="form-actions">
                   <button className="btn btn-primary" onClick={editingProduct ? updateProduct : createProduct}>
                     {editingProduct ? '💾 Guardar' : '➕ Crear'}
@@ -1032,8 +1071,11 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
                     </td>
                     <td>{(p.price_cents / 100).toFixed(2)}€</td>
                     <td>{p.stock_quantity}</td>
-                    <td>{p.status === 'active' ? '✅' : '❌'}</td>
+                    <td>{p.status === 'active' ? '✅ Activo' : (p.status === 'draft' ? '🚫 Oculto (borrador)' : `— ${p.status}`)}</td>
                     <td>
+                      {p.status !== 'active' && (
+                        <button className="btn btn-sm btn-primary" onClick={() => activateProduct(p)}>👁️ Activar</button>
+                      )}
                       <button className="btn btn-sm btn-secondary" onClick={() => startEditProduct(p)}>✏️</button>
                       <button className="btn btn-sm btn-danger" onClick={() => deleteProduct(p.id)}>🗑️</button>
                     </td>
