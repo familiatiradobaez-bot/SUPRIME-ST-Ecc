@@ -3,6 +3,7 @@ import type { User } from '../types';
 import { ImageManager } from '../components/ImageManager';
 import { CatalogManager } from '../components/CatalogManager';
 import { BorradoresPanel } from '../components/BorradoresPanel';
+import { EarningsPanel } from '../components/EarningsPanel';
 import type { CatalogDepartment } from '../components/CatalogManager';
 // La CSS del panel se importa desde main.tsx, no desde aquí. Estaba en este
 // archivo para code-split, pero Vite la emitía como archivo aparte y, si ese
@@ -38,7 +39,7 @@ type AdminPageProps = {
 };
 
 export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'orders' | 'products' | 'catalog' | 'borradores' | 'settings'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'earnings' | 'users' | 'orders' | 'products' | 'catalog' | 'borradores' | 'settings'>('stats');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -567,6 +568,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
 
   const tabs = [
     { id: 'stats', label: 'Dashboard', icon: '📊' },
+    { id: 'earnings', label: 'Ganancias', icon: '💰' },
     { id: 'products', label: 'Productos', icon: '📦' },
     { id: 'catalog', label: 'Catálogo', icon: '🗂️' },
     { id: 'borradores', label: 'Borradores', icon: '📝' },
@@ -924,10 +926,16 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               <div className="stat-value">{stats.users}</div>
               <div className="stat-label">Usuarios</div>
             </div>
-            <div className="stat-card">
+            {/* Los ingresos llevan a la pantalla de resumen completo. Antes
+                solo mostraban la cifra y no había forma de bajar al detalle. */}
+            <button
+              className="stat-card stat-card-link"
+              onClick={() => setActiveTab('earnings')}
+              aria-label="Ver el resumen completo de ganancias"
+            >
               <div className="stat-value">{(stats.revenue / 100).toFixed(2)}€</div>
-              <div className="stat-label">Ingresos</div>
-            </div>
+              <div className="stat-label">Ingresos · ver resumen →</div>
+            </button>
           </div>
         )}
         {activeTab === 'stats' && (() => {
@@ -1097,6 +1105,10 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         )}
 
         {/* USERS TAB */}
+        {activeTab === 'earnings' && (
+          <EarningsPanel apiUrl={apiUrl} sessionToken={sessionToken} />
+        )}
+
         {activeTab === 'borradores' && (
           <BorradoresPanel apiUrl={apiUrl} sessionToken={sessionToken} />
         )}

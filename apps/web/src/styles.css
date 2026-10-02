@@ -6315,3 +6315,160 @@ button, .btn {
 }
 
 .btn-track:hover { transform: translateY(-1px); border-color: var(--accent, #d96b3b); }
+
+/* -- Panel de ganancias ------------------------------------------------- */
+.stat-card-link {
+  cursor: pointer;
+  text-align: center;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  font: inherit;
+  color: inherit;
+}
+
+.stat-card-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent, #d96b3b);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 18%);
+}
+
+.earnings { display: flex; flex-direction: column; gap: 1rem; }
+
+.earnings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.earnings-head h2 { margin: 0; font-size: 1.25rem; }
+
+.earnings-periods { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.earnings-sub { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+
+.earnings-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.earnings-kpi {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.9rem;
+  background: var(--pill-bg);
+}
+
+.earnings-kpi.main {
+  border-color: var(--accent, #d96b3b);
+}
+
+.earnings-kpi small { display: block; color: var(--text-secondary); font-size: 0.8rem; }
+
+.earnings-kpi strong { font-size: 1.35rem; }
+
+.earnings-split { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.earnings-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.earnings-bar .seg.products { background: var(--accent, #d96b3b); }
+.earnings-bar .seg.shipping { background: #3b82f6; }
+
+.earnings-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.earnings-legend .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.earnings-legend .dot.products { background: var(--accent, #d96b3b); }
+.earnings-legend .dot.shipping { background: #3b82f6; }
+.earnings-legend .cancelled { color: #ef4444; }
+
+.earnings-note { color: var(--text-secondary); font-size: 0.8rem; }
+
+.earnings-card {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1rem;
+  background: var(--pill-bg);
+}
+
+.earnings-card h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+
+.earnings-empty { color: var(--text-secondary); font-size: 0.9rem; margin: 0; }
+
+.earnings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.earn-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+}
+
+.earn-row:last-child { border-bottom: none; }
+
+.earn-row .rank {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  background: var(--pill-bg);
+  border: 1px solid var(--border-color);
+}
+
+.earn-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.earn-row .qty { color: var(--text-secondary); white-space: nowrap; }
+.earn-row .amount { font-weight: 600; white-space: nowrap; }
+
+.earnings-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 140px;
+  overflow-x: auto;
+}
+
+.chart-col {
+  flex: 1 0 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+}
+
+.chart-bar {
+  width: 100%;
+  background: var(--accent, #d96b3b);
+  border-radius: 4px 4px 0 0;
+  min-height: 3px;
+}
+
+.chart-col small { color: var(--text-secondary); font-size: 0.6rem; margin-top: 4px; }

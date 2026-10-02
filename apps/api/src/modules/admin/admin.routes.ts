@@ -126,6 +126,106 @@ adminRoutes.get('/stats', async (context) => {
   });
 });
 
+// GET /admin/earnings - Resumen económico completo.
+// ?days=7|30|90|365|0 (0 = todo). El periodo se valida con una lista:
+// nunca se interpola el valor del query en el SQL.
+const EARNINGS_PERIODS: Record<string, number> = { '7': 7, '30': 30, '90': 90, '365': 365, '0': 0 };
+adminRoutes.get('/earnings', async (context) => {
+  const requested = context.req.query('days') ?? '30';
+  const days = EARNINGS_PERIODS[requested] ?? 30;
+  // Corte en ISO UTC. days = 0 significa "todo": no se aplica filtro.
+  const since = days > 0 ? new Date(Date.now() - days * 86400000).toISOString() : null;
+
+  const bind = since ? [since] : [];
+  // Dos variantes porque unas consultas usan `orders` sin alias y otras con
+  // el alias `o` (por el JOIN con order_items).
+  const fOrders = since ? 'AND created_at >= ?' : '';
+  const fAliased = since ? 'AND o.created_at >= ?' : '';
+  // Para las consultas que NO tienen otro WHERE (por estado), el filtro tiene
+  // que traer el WHERE él mismo. Sin esto el SQL queda "FROM orders AND ...".
+  const wOrders = since ? 'WHERE created_at >= ?' : '';
+
+  // Ingresos: se excluyen cancelados. Un pedido pendiente sí cuenta como
+  // ingreso，因为他 está pagado en la pasarela (status 'paid').
+  const totals = await context.env.DB.prepare(
+    `SELECT COUNT(*) AS orders,
+            COALESCE(SUM(total_cents), 0) AS revenue,
+            COALESCE(SUM(shipping_cents), 0) AS shipping,
+            COALESCE(SUM(total_cents - COALESCE(shipping_cents, 0)), 0) AS products_revenue
+       FROM orders
+      WHERE status NOT IN ('cancelled', 'archived') ${fOrders}`
+  ).bind(...bind).first() as any;
+
+  const cancelled = await context.env.DB.prepare(
+    `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS amount
+       FROM orders WHERE status IN ('cancelled','archived') ${fOrders}`
+  ).bind(...bind).first() as any;
+
+  const byStatus = await context.env.DB.prepare(
+    `SELECT status, COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS amount
+       FROM orders ${wOrders} GROUP BY status ORDER BY orders DESC`
+  ).bind(...bind).all();
+
+  const units = await context.env.DB.prepare(
+    `SELECT COALESCE(SUM(oi.quantity), 0) AS units
+       FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.status NOT IN ('cancelled','archived') ${fAliased}`
+  ).bind(...bind).first() as any;
+
+  const topProducts = await context.env.DB.prepare(
+    `SELECT oi.product_id, p.name AS name,
+            SUM(oi.quantity) AS units, SUM(oi.price_cents * oi.quantity) AS revenue
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       LEFT JOIN products p ON p.id = oi.product_id
+      WHERE o.status NOT IN ('cancelled','archived') ${fAliased}
+      GROUP BY oi.product_id
+      ORDER BY revenue DESC
+      LIMIT 8`
+  ).bind(...bind).all();
+
+  // Serie diaria para el gráfico. Solo con periodo (en "todo" sería enorme).
+  let daily: Array<{ day: string; revenue: number; orders: number }> = [];
+  if (days > 0) {
+    const rows = await context.env.DB.prepare(
+      `SELECT date(created_at) AS day, COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS revenue
+         FROM orders
+        WHERE status NOT IN ('cancelled','archived') AND created_at >= ?
+        GROUP BY date(created_at) ORDER BY day ASC`
+    ).bind(since).all();
+    daily = (rows.results as any[]).map((r) => ({ day: r.day, revenue: r.revenue, orders: r.orders }));
+  }
+
+  const topCustomers = await context.env.DB.prepare(
+    `SELECT shipping_name, shipping_email, COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS amount
+       FROM orders
+      WHERE status NOT IN ('cancelled','archived') ${fOrders}
+      GROUP BY shipping_email, shipping_name
+      ORDER BY amount DESC LIMIT 5`
+  ).bind(...bind).all();
+
+  const orders = totals?.orders || 0;
+  const revenue = totals?.revenue || 0;
+
+  return context.json({
+    data: {
+      days,
+      orders,
+      revenue,
+      shipping_cents: totals?.shipping || 0,
+      products_revenue: totals?.products_revenue || 0,
+      units_sold: units?.units || 0,
+      average_ticket: orders > 0 ? Math.round(revenue / orders) : 0,
+      cancelled_orders: cancelled?.orders || 0,
+      cancelled_amount: cancelled?.amount || 0,
+      by_status: byStatus.results,
+      top_products: topProducts.results,
+      top_customers: topCustomers.results,
+      daily,
+    },
+  });
+});
+
 // Columnas por las que se puede ordenar la tabla de usuarios. Allowlist:
 // el valor llega del query y no se puede interpolar en el ORDER BY.
 const USER_SORT_COLUMNS: Record<string, string> = {
