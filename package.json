@@ -17,6 +17,8 @@
     "smoke": "node tests/smoke.mjs",
     "smoke:setup": "node tools/smoke-setup.mjs",
     "e2e": "playwright test",
+    "e2e:limpio": "playwright test && npm run orders:limpiar-test",
+    "orders:limpiar-test": "node tools/limpiar-pedidos-test.mjs",
     "e2e:install": "playwright install chromium",
     "e2e:ui": "playwright test --ui",
     "cf:purge-assets": "node tools/purge-assets.mjs",
