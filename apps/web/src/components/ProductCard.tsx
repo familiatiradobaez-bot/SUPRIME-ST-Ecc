@@ -1,5 +1,5 @@
 import type { Product } from '../types';
-import { formatPrice } from '../lib/api';
+import { formatPrice, DEFAULT_CURRENCY } from '../lib/api';
 import { SmartImage } from './SmartImage';
 
 type ProductCardProps = {
@@ -12,7 +12,7 @@ type ProductCardProps = {
   onToggleWishlist?: (productId: string) => void;
 };
 
-export function ProductCard({ product, onAddToCart, isAdded, currency = 'EUR', onOpen, wished, onToggleWishlist }: ProductCardProps) {
+export function ProductCard({ product, onAddToCart, isAdded, currency = DEFAULT_CURRENCY, onOpen, wished, onToggleWishlist }: ProductCardProps) {
   return (
     <div
       className="product-card anim-product-card"

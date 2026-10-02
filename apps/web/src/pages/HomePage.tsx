@@ -95,7 +95,7 @@ export function HomePage({
         <div className="feature-card">
           <div className="feature-icon">🚚</div>
           <h3>Envío Rápido</h3>
-          <p>Entrega en 24-48 horas a toda España</p>
+          <p>Entrega en 24-48 horas a toda República Dominicana</p>
         </div>
         <div className="feature-card">
           <div className="feature-icon">🛡️</div>

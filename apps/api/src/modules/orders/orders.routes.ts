@@ -22,8 +22,11 @@ const checkoutSchema = z.object({
   shipping_phone: phoneSchema,
   shipping_address: z.string().trim().min(1).max(200),
   shipping_city: z.string().trim().min(1).max(100),
-  shipping_postal_code: z.string().trim().min(1).max(10).refine((v) => /^\d{5}$/.test(v.trim()), {
-    message: 'Invalid postal code (5 digits)',
+  // El campo se llama postal_code por compatibilidad con lo ya guardado, pero
+  // en República Dominicana NO hay códigos postales: la gente se orienta por
+  // el sector. Por eso se admite texto libre en lugar de 5 dígitos.
+  shipping_postal_code: z.string().trim().min(2).max(60).refine((v) => /^[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ#.\-\s]+$/.test(v.trim()), {
+    message: 'Sector inválido (solo letras, números, guiones y #)',
   }),
   shipping_country: z.string().trim().min(1).max(60).optional(),
   payment_method: z.enum(['card', 'paypal', 'bank']),
@@ -72,7 +75,7 @@ ordersRoutes.post('/', async (context) => {
   const { items, shipping_name, shipping_email, shipping_phone, shipping_address, shipping_city, shipping_postal_code, shipping_country, payment_method } = parsed.data;
   const shippingCity = shipping_city.trim();
   const shippingPostal = shipping_postal_code.trim();
-  const shippingCountry = shipping_country?.trim() || 'España';
+  const shippingCountry = shipping_country?.trim() || 'República Dominicana';
   const shippingPhone = normalizePhone(shipping_phone);
 
   const userId = session.user_id as string;

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-// Textos base para una tienda online en España. NOTA LEGAL: son plantillas,
+// Textos base para una tienda online en República Dominicana. NOTA LEGAL: son plantillas,
 // revísalos con un asesor antes de la apertura al público.
 const PAGES: Record<string, { title: string; updated: string; body: React.ReactNode }> = {
   privacidad: {
@@ -42,7 +42,7 @@ const PAGES: Record<string, { title: string; updated: string; body: React.ReactN
     body: (
       <>
         <h3>Envíos</h3>
-        <p>Entrega en 24-48 horas laborables en España. Recibirás el seguimiento por email cuando tu pedido salga del almacén.</p>
+        <p>Entrega en 24-48 horas laborables en República Dominicana. Recibirás el seguimiento por email cuando tu pedido salga del almacén.</p>
         <h3>Devoluciones</h3>
         <p>Tienes 30 días naturales desde la entrega para devolver productos en perfecto estado (desistimiento, art. 102 TRLGDCU). Escríbenos con tu número de pedido y gestionamos la recogida y el reembolso por el mismo medio de pago.</p>
         <h3>Excepciones</h3>

@@ -4,7 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useApiUrl } from '../hooks/useApiUrl';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { formatPrice } from '../lib/api';
+import { formatPrice, CURRENCIES, DEFAULT_CURRENCY } from '../lib/api';
 import { img } from '../lib/images';
 import { ProductCard } from '../components/ProductCard';
 import { SmartImage } from '../components/SmartImage';
@@ -12,8 +12,13 @@ import { SkeletonPdp } from '../components/Skeletons';
 
 function generateProductJsonLd(product: Product, gallery: string[], currency: string) {
   const base = SITE_URL;
-  const price = (product.price_cents / 100).toFixed(2);
-  const currencyCode = currency === 'EUR' ? 'EUR' : currency;
+  // El precio se guarda en céntimos de euro. Antes se metía ese número tal cual
+  // con la etiqueta de la moneda visible: si el cliente veía RD$, Google
+  // leía un precio en euros marcado como pesos. Ahora se convierte con la
+  // MISMA tasa que usa formatPrice, para que ambos coincidan.
+  const meta = CURRENCIES[currency] || CURRENCIES[DEFAULT_CURRENCY];
+  const price = ((product.price_cents / 100) * meta.rate).toFixed(2);
+  const currencyCode = CURRENCIES[currency] ? currency : DEFAULT_CURRENCY;
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',

@@ -227,7 +227,16 @@ export async function uiLogin(page) {
 export async function acceptCookiesIfPresent(page) {
   const btn = page.getByRole('button', { name: /Aceptar/i }).first();
   if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await btn.click();
+    // El banner es position:fixed y en móvil el emulador a veces lo considera
+    // "tapado" por el contenido que hay debajo (elementFromPoint dice que sí
+    // es el elemento superior, pero Playwright sigue reintentando). Se intenta
+    // el clic normal y, si el layout está shifting, se fuerza: el consent se
+    // guarda igual y lo que se prueba aquí es la página, no el banner.
+    try {
+      await btn.click({ timeout: 4000 });
+    } catch {
+      await btn.click({ force: true, timeout: 4000 }).catch(() => {});
+    }
     await btn.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
   }
 }

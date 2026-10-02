@@ -41,8 +41,10 @@ test.describe('tienda', () => {
     await page.goto(`/producto/${product.slug}`);
     await acceptCookiesIfPresent(page);
     await expect(page.getByRole('heading', { name: new RegExp(product.name.slice(0, 12), 'i') })).toBeVisible({ timeout: 20_000 });
-    // El precio se pinta en euros; solo se comprueba que hay un símbolo.
-    await expect(page.locator('body')).toContainText('€', { timeout: 10_000 });
+    // El precio se muestra en la moneda activa (por defecto pesos
+    // dominicanos; el visitante puede cambiarla a €/$/£), así que se
+    // comprueba que hay ALGÚN símbolo de moneda, no uno concreto.
+    await expect(page.locator('body')).toContainText(/RD\$|€|\$|£/, { timeout: 10_000 });
   });
 
   test('una URL inexistente cae en el 404 de la SPA con salidas', async ({ page }) => {

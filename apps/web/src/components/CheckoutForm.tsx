@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatPrice, calcShipping } from '../lib/api';
+import { formatPrice, calcShipping, DEFAULT_CURRENCY } from '../lib/api';
 
 type CheckoutFormProps = {
   total: number;
@@ -29,13 +29,17 @@ type CheckoutFormProps = {
 };
 
 // Sin ciudad + CP + teléfono válidos no hay checkout (lo exige también la API).
-export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defaultName, defaultEmail, defaultPhone, defaultAddress, defaultCity, defaultPostalCode, onSubmit, onCancel }: CheckoutFormProps) {
+export function CheckoutForm({ total, itemCount, loading, currency = DEFAULT_CURRENCY, defaultName, defaultEmail, defaultPhone, defaultAddress, defaultCity, defaultPostalCode, onSubmit, onCancel }: CheckoutFormProps) {
   const [name, setName] = useState(defaultName || '');
   const [email, setEmail] = useState(defaultEmail || '');
   const [phone, setPhone] = useState(defaultPhone || '');
   const [address, setAddress] = useState(defaultAddress || '');
   const [city, setCity] = useState(defaultCity || '');
   const [postalCode, setPostalCode] = useState(defaultPostalCode || '');
+  // En República Dominicana no existe el código postal: la gente se orienta
+  // por el SECTOR y la ciudad. El campo se llama igual en la API por
+  // compatibilidad, pero guarda texto libre (p. ej. "Los Alcarrizos").
+  const [sector, setSector] = useState(postalCode);
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -43,7 +47,7 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name.trim(), shipping_email: email.trim(), shipping_phone: phone.trim(), shipping_address: address.trim(), shipping_city: city.trim(), shipping_postal_code: postalCode.trim(), shipping_country: 'España', payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ shipping_name: name.trim(), shipping_email: email.trim(), shipping_phone: phone.trim(), shipping_address: address.trim(), shipping_city: city.trim(), shipping_postal_code: sector.trim(), shipping_country: 'República Dominicana', payment_method: paymentMethod, card_number: cardNumber, card_expiry: cardExpiry, card_cvv: cardCvv }); }} className="form">
       <div className="checkout-summary">
         <p><strong>Artículos:</strong> {itemCount}</p>
         <p><strong>Subtotal:</strong> {formatPrice(total, currency)}</p>
@@ -94,11 +98,11 @@ export function CheckoutForm({ total, itemCount, loading, currency = 'EUR', defa
       <div className="form-row-2col">
       <div className="form-group">
         <label htmlFor="co-city">Ciudad:</label>
-        <input id="co-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" required minLength={2} maxLength={100} autoComplete="address-level2" />
+        <input id="co-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Santo Domingo" required minLength={2} maxLength={100} autoComplete="address-level2" />
       </div>
       <div className="form-group">
-        <label htmlFor="co-postal">Código postal:</label>
-        <input id="co-postal" type="text" inputMode="numeric" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="28001" required pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} autoComplete="postal-code" />
+        <label htmlFor="co-postal">Sector:</label>
+        <input id="co-postal" type="text" value={sector} onChange={(e) => setSector(e.target.value)} placeholder="Santo Domingo Este, Los Alcarrizos" required minLength={2} maxLength={60} title="Tu sector o zona, p. ej. Los Alcarrizos" autoComplete="address-line3" />
       </div>
       </div>
 

@@ -10,8 +10,12 @@ export function getAuthHeaders(session: Session | null): HeadersInit {
 
 // Las transformaciones de imagen (ImageKit + Unsplash) viven en `lib/images.ts`.
 
-export function formatPrice(cents: number, currency: string = 'EUR'): string {
-  const meta = CURRENCIES[currency] || CURRENCIES.EUR;
+// Moneda por defecto: la tienda es de República Dominicana (rep.dom), así que
+// se muestra en pesos dominicanos. El resto sigue disponible para el cliente.
+export const DEFAULT_CURRENCY = 'DOP';
+
+export function formatPrice(cents: number, currency: string = DEFAULT_CURRENCY): string {
+  const meta = CURRENCIES[currency] || CURRENCIES[DEFAULT_CURRENCY];
   const converted = (cents / 100) * meta.rate;
   return converted.toLocaleString(meta.locale, {
     style: 'currency',
@@ -19,14 +23,20 @@ export function formatPrice(cents: number, currency: string = 'EUR'): string {
   });
 }
 
-// Monedas soportadas en tienda. Tasas estáticas aproximadas respecto a EUR
-// (precio base guardado en céntimos de euro). Para tasas en vivo, sustituir
-// por fetch a un API de tipos de cambio.
+// Monedas soportadas en tienda. Tasas ESTÁTICAS aproximadas: el precio base
+// sigue guardándose en céntimos de euro y aquí se convierte solo para mostrar.
+// OJO: la tasa del DOP hay que revisarla cada cierto tiempo (está en
+// tools/actualizar-tasas.mjs con la media oficial) o los precios se
+// descuadrarán del cambio real.
 export const CURRENCIES: Record<string, { rate: number; locale: string; label: string }> = {
-  EUR: { rate: 1, locale: 'es-ES', label: 'EUR €' },
-  USD: { rate: 1.08, locale: 'en-US', label: 'USD $' },
-  GBP: { rate: 0.85, locale: 'en-GB', label: 'GBP £' },
+  DOP: { rate: 62, locale: 'es-DO', label: 'RD$' },
+  EUR: { rate: 1, locale: 'es-ES', label: '€' },
+  USD: { rate: 1.08, locale: 'en-US', label: '$' },
+  GBP: { rate: 0.85, locale: 'en-GB', label: '£' },
 };
+
+// exchange rate actual para convertir de céntimos de euro a pesos
+export const DOP_RATE = CURRENCIES.DOP.rate;
 
 // Política de envío (España). Valores por defecto = constantes; el servidor es
 // la fuente autoritativa y el front los refresca con loadStoreSettings().

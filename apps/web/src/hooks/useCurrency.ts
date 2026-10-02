@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { CURRENCIES } from '../lib/api';
+import { CURRENCIES, DEFAULT_CURRENCY } from '../lib/api';
 
 const CURRENCY_STORAGE_KEY = 'suprime_currency';
 
@@ -10,7 +10,8 @@ function loadCurrency(): string {
   } catch {
     // Ignore storage errors
   }
-  return 'EUR';
+  // Sin preferencia guardada: pesos dominicanos (la tienda es de RD).
+  return DEFAULT_CURRENCY;
 }
 
 export function useCurrency() {

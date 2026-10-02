@@ -1,5 +1,5 @@
 import type { CartItem, Product } from '../types';
-import { formatPrice, calcShipping, FREE_SHIPPING_THRESHOLD_CENTS } from '../lib/api';
+import { formatPrice, calcShipping, FREE_SHIPPING_THRESHOLD_CENTS, DEFAULT_CURRENCY } from '../lib/api';
 
 type CartSidebarProps = {
   cart: CartItem[];
@@ -12,7 +12,7 @@ type CartSidebarProps = {
   notice?: string | null;
 };
 
-export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout, currency = 'EUR', notice }: CartSidebarProps) {
+export function CartSidebar({ cart, products, cartTotal, onClose, onRemove, onCheckout, currency = DEFAULT_CURRENCY, notice }: CartSidebarProps) {
   return (
     <>
       <div className="cart-overlay" onClick={onClose} />

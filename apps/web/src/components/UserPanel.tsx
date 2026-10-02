@@ -32,7 +32,18 @@ type OrderDetail = OrderSummary & {
   items: Array<{ product_id: string; product_name: string; quantity: number; price_cents: number }>;
 };
 
-const SPANISH_PROVINCES = ['Álava','Albacete','Alicante','Almería','Asturias','Ávila','Badajoz','Barcelona','Burgos','Cáceres','Cádiz','Cantabria','Castellón','Ceuta','Ciudad Real','Córdoba','Cuenca','Girona','Granada','Guadalajara','Guipúzcoa','Huelva','Huesca','Islas Baleares','Jaén','La Coruña','La Rioja','Las Palmas','León','Lleida','Lugo','Madrid','Málaga','Melilla','Murcia','Navarra','Orense','Palencia','Pontevedra','Salamanca','Santa Cruz de Tenerife','Segovia','Sevilla','Soria','Tarragona','Teruel','Toledo','Valencia','Valladolid','Vizcaya','Zamora','Zaragoza'];
+// Provincias de República Dominicana (no de España: la tienda es rep.dom).
+// 31 provincias + Distrito Nacional.
+const DR_PROVINCES = [
+  'Distrito Nacional', 'Azua', 'Bahoruco', 'Barahona', 'Dajabón', 'Duarte',
+  'Elías Piña', 'Espaillat', 'Hato Mayor', 'Hermanas Mirabal', 'Independencia',
+  'La Altagracia', 'La Romana', 'Las Bahamas', 'Las Matas de Santa Cruz',
+  'La Vega', 'María Trinidad Sánchez', 'Monseñor Nouel', 'Monte Cristi',
+  'Monte Plata', 'Pedernales', 'Peravia', 'Puerto Plata', 'Samaná',
+  'San Cristóbal', 'San José de Ocoa', 'San Juan de la Maguana',
+  'San Pedro de Macorís', 'Sánchez Ramírez', 'Santiago', 'Santiago Rodríguez',
+  'Santo Domingo Este', 'Valverde',
+];
 
 export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSaveShipping, onSaveProfile }: UserPanelProps) {
   const [displayName, setDisplayName] = useState(user.display_name || '');
@@ -316,7 +327,7 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
             </div>
             <div className="form-group">
               <label htmlFor="up-phone">Teléfono:</label>
-              <input id="up-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 612 345 678" pattern="\+?[0-9\s.\-()]{9,20}" title="9-15 dígitos, p. ej. +34 612 345 678" autoComplete="tel" />
+              <input id="up-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="809 123 4567" pattern="\+?[0-9\s.\-()]{9,20}" title="10 dígitos, p. ej. 809 123 4567" autoComplete="tel" />
             </div>
             <div className="form-group">
               <label htmlFor="up-address">Dirección:</label>
@@ -324,14 +335,14 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
             </div>
             <div className="form-group">
               <label htmlFor="up-city">Ciudad:</label>
-              <input id="up-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" list="suprime-provinces" autoComplete="address-level2" />
+              <input id="up-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Santo Domingo Este" list="suprime-provinces" autoComplete="address-level2" />
               <datalist id="suprime-provinces">
-                {SPANISH_PROVINCES.map((p) => <option key={p} value={p} />)}
+                {DR_PROVINCES.map((p) => <option key={p} value={p} />)}
               </datalist>
             </div>
             <div className="form-group">
-              <label htmlFor="up-postal">Código postal:</label>
-              <input id="up-postal" type="text" inputMode="numeric" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="28001" pattern="[0-9]{5}" title="5 dígitos, p. ej. 28001" maxLength={5} autoComplete="postal-code" />
+              <label htmlFor="up-postal">Sector:</label>
+              <input id="up-postal" type="text" value={postal} onChange={(e) => setPostal(e.target.value)} placeholder="Los Alcarrizos" minLength={2} maxLength={60} title="Tu sector o zona, p. ej. Los Alcarrizos" autoComplete="address-line3" />
             </div>
             {editedToday && (
               <p style={{ color: '#68736b', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
@@ -340,7 +351,7 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
             )}
             <button className="btn btn-primary" style={{ width: '100%' }} disabled={editedToday} onClick={async () => {
               if (!name.trim() || !phone.trim() || !address.trim() || !city.trim() || !postal.trim()) {
-                alert('Completa nombre, teléfono, dirección, ciudad y código postal.');
+                alert('Completa nombre, teléfono, dirección, ciudad y sector.');
                 return;
               }
               try {
