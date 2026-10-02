@@ -914,20 +914,40 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         {/* DASHBOARD TAB */}
         {activeTab === 'stats' && stats && (
           <div className="admin-stats">
-            <div className="stat-card">
+            {/* Cada recuadro lleva a su zona. Usuarios solo es clicable si el
+                rol puede verlo: la pestaña Usuarios está oculta para
+                stock_manager y el servidor devuelve 403 en /admin/users. */}
+            <button
+              className="stat-card stat-card-link"
+              onClick={() => setActiveTab('products')}
+              aria-label="Ir a Productos"
+            >
               <div className="stat-value">{stats.products}</div>
-              <div className="stat-label">Productos</div>
-            </div>
-            <div className="stat-card">
+              <div className="stat-label">Productos →</div>
+            </button>
+            <button
+              className="stat-card stat-card-link"
+              onClick={() => setActiveTab('orders')}
+              aria-label="Ir a Órdenes"
+            >
               <div className="stat-value">{stats.orders}</div>
-              <div className="stat-label">Órdenes</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">{stats.users}</div>
-              <div className="stat-label">Usuarios</div>
-            </div>
-            {/* Los ingresos llevan a la pantalla de resumen completo. Antes
-                solo mostraban la cifra y no había forma de bajar al detalle. */}
+              <div className="stat-label">Órdenes →</div>
+            </button>
+            {canManageStore ? (
+              <button
+                className="stat-card stat-card-link"
+                onClick={() => setActiveTab('users')}
+                aria-label="Ir a Usuarios"
+              >
+                <div className="stat-value">{stats.users}</div>
+                <div className="stat-label">Usuarios →</div>
+              </button>
+            ) : (
+              <div className="stat-card">
+                <div className="stat-value">{stats.users}</div>
+                <div className="stat-label">Usuarios</div>
+              </div>
+            )}
             <button
               className="stat-card stat-card-link"
               onClick={() => setActiveTab('earnings')}
