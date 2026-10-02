@@ -315,7 +315,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/catalog/products`);
+      const res = await fetch(`${apiUrl}/admin/products`, { headers: { Authorization: `Bearer ${sessionToken}` } });
       const data = await res.json();
       if (data.data) setProducts(data.data);
     } catch (err) {

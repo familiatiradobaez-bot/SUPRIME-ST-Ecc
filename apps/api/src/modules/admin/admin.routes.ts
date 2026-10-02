@@ -581,6 +581,15 @@ function logAudit(
   ).bind(generateId(), userId || null, action, entityType, entityId, JSON.stringify(details)).run();
 }
 
+  // GET /admin/products - Listar TODOS los productos (incluye drafts/active)
+  adminRoutes.get('/products', async (context) => {
+    const rows = await context.env.DB.prepare(
+      `SELECT id, name, slug, price_cents, image_url, stock_quantity, status, created_at
+         FROM products ORDER BY created_at DESC`
+    ).all();
+    return context.json({ data: rows.results });
+  });
+
 // GET /admin/catalog - Departamentos + subdepartamentos con conteo de productos
 adminRoutes.get('/catalog', async (context) => {
   const departments = await context.env.DB.prepare(
