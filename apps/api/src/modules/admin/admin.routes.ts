@@ -858,3 +858,58 @@ adminRoutes.delete('/subdepartments/:id', async (context) => {
 
   return context.json({ data: { deleted: true } });
 });
+
+// ---------------------------------------------------------------------------
+// Borradores: marcar un borrador como "publicado"/comentado en el JSON de
+// GitHub. El mismo endpoint también purga los marcados hace > 7 días.
+// ---------------------------------------------------------------------------
+const GH_OWNER = 'familiatiradobaez-bot';
+const GH_REPO = 'SUPRIME-ST-Ecc';
+const BORRADORES_PATH = 'apps/web/public/borradores/borradores.json';
+
+adminRoutes.post('/borradores/publicado', async (context) => {
+  const body = await context.req.json<{ productId?: string }>().catch(() => null);
+  if (!body?.productId) return context.json({ error: 'INVALID_INPUT' }, 400);
+  const token = context.env.GITHUB_TOKEN;
+  if (!token) return context.json({ error: 'SERVER_CONFIG', message: 'Falta GITHUB_TOKEN en secrets' }, 500);
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'suprime-worker',
+  };
+
+  // 1. Traer el archivo de GitHub (contenido + sha)
+  const metaUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${BORRADORES_PATH}`;
+  const metaRes = await fetch(metaUrl, { headers });
+  if (!metaRes.ok) return context.json({ error: 'GITHUB_GET', detail: await metaRes.text() }, 502);
+  const meta = (await metaRes.json()) as { content: string; sha: string };
+  const raw = atob(meta.content.replace(/\n/g, ''));
+  let arr: any[] = [];
+  try { arr = JSON.parse(raw); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+
+  const now = new Date();
+  // 2. Purgar comentados > 7 días
+  arr = arr.filter((x: any) => {
+    if (x?.status !== 'publicado') return true;
+    const t = x?.commented_at ? Date.parse(x.commented_at) : 0;
+    return now.getTime() - t < 7 * 24 * 60 * 60 * 1000;
+  });
+
+  // 3. Marcar el borrador
+  const target = arr.find((x: any) => x?.productId === body.productId);
+  if (!target) return context.json({ error: 'NOT_FOUND', message: 'No está en borradores' }, 404);
+  target.status = 'publicado';
+  target.commented_at = now.toISOString();
+
+  // 4. Guardar en GitHub
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(arr, null, 2))));
+  const putRes = await fetch(metaUrl, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: `web: borrar ${body.productId} de borradores`, content, sha: meta.sha }),
+  });
+  if (!putRes.ok) return context.json({ error: 'GITHUB_PUT', detail: await putRes.text() }, 502);
+  return context.json({ data: { updated: true } });
+});

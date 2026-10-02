@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { User } from '../types';
 import { ImageManager } from '../components/ImageManager';
 import { CatalogManager } from '../components/CatalogManager';
+import { BorradoresPanel } from '../components/BorradoresPanel';
 import type { CatalogDepartment } from '../components/CatalogManager';
 // La CSS del panel se importa desde main.tsx, no desde aquí. Estaba en este
 // archivo para code-split, pero Vite la emitía como archivo aparte y, si ese
@@ -37,7 +38,7 @@ type AdminPageProps = {
 };
 
 export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'orders' | 'products' | 'catalog' | 'settings'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'orders' | 'products' | 'catalog' | 'borradores' | 'settings'>('stats');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -536,6 +537,7 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
     { id: 'stats', label: 'Dashboard', icon: '📊' },
     { id: 'products', label: 'Productos', icon: '📦' },
     { id: 'catalog', label: 'Catálogo', icon: '🗂️' },
+    { id: 'borradores', label: 'Borradores', icon: '📝' },
     { id: 'users', label: 'Usuarios', icon: '👥' },
     { id: 'orders', label: 'Órdenes', icon: '📋' },
     { id: 'settings', label: 'Configuración', icon: '⚙️' },
@@ -1053,6 +1055,9 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
         )}
 
         {/* USERS TAB */}
+        {activeTab === 'borradores' && (
+          <BorradoresPanel apiUrl={apiUrl} sessionToken={sessionToken} />
+        )}
         {activeTab === 'users' && (
           <div className="admin-users">
             <h2>Gestión de Usuarios</h2>
