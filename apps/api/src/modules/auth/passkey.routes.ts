@@ -386,6 +386,133 @@ passkeyRoutes.post('/trusted-device/login', async (context) => {
   });
 });
 
+// ── Huella como segundo factor del panel ─────────────────────────────────
+// El 2FA del admin se puede cumplir con el CÓDIGO TOTP o con la HUELLA del
+// passkey ya registrado. El panel pide "algo que solo sabe quien está delante":
+// esto no lo debilita: cambia el factor por otro igual de fuerte.
+//
+// Reglas que no se tocan:
+//  · sigue haciendo falta una SESIÓN válida (usuario y clave, Google o passkey),
+//    la huella solo sustituye al segundo factor;
+//  · solo passkeys del PROPIO usuario, y la firma se verifica igual que al
+//    iniciar sesión;
+//  · el grant que se concede es el mismo de 1 hora que da el TOTP.
+
+const ADMIN_ROLE_RANK: Record<string, number> = {
+  customer: 10, 'role-customer': 10,
+  stock_manager: 20, 'role-stock_manager': 20, 'role-stock-manager': 20,
+  admin: 30, 'role-admin': 30,
+  owner: 40, 'role-owner': 40,
+};
+
+async function sessionUser(context: any): Promise<{ id: string; role_id: string } | null> {
+  const authHeader = context.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const row = await context.env.DB.prepare(
+    `SELECT s.user_id AS id, u.role_id AS role_id FROM sessions s JOIN users u ON u.id = s.user_id
+      WHERE s.id = ? AND s.expires_at > strftime('%s', 'now')`
+  ).bind(authHeader.slice(7)).first() as { id: string; role_id: string } | null;
+  return row;
+}
+
+passkeyRoutes.post('/passkey/stepup/options', async (context) => {
+  if (!originOk(context.req.header('Origin'))) return context.json({ error: 'FORBIDDEN', message: 'Origin no permitido' }, 403);
+  const session = await sessionUser(context);
+  if (!session) return context.json({ error: 'UNAUTHORIZED' }, 401);
+  // Solo quien puede entrar al panel puede usar la huella para entrar en él.
+  if ((ADMIN_ROLE_RANK[session.role_id] || 0) < ADMIN_ROLE_RANK['stock_manager']) {
+    return context.json({ error: 'FORBIDDEN', message: 'Solo para el panel de administración' }, 403);
+  }
+
+  const keys = await context.env.DB.prepare(
+    'SELECT credential_id FROM passkeys WHERE user_id = ?'
+  ).bind(session.id).all();
+  const credentials = keys.results as Array<{ credential_id: string }>;
+  if (credentials.length === 0) {
+    return context.json({ error: 'NO_PASSKEY', message: 'No tienes ningún passkey registrado' }, 404);
+  }
+
+  const challenge = randomToken();
+  await context.env.DB.prepare(
+    'INSERT INTO webauthn_challenges (challenge, user_id, type, expires_at) VALUES (?, ?, ?, ?)'
+  ).bind(challenge, session.id, 'login', Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SEC).run();
+
+  return context.json({
+    data: {
+      challenge,
+      rpId: RP_ID,
+      timeout: CHALLENGE_TTL_SEC * 1000,
+      userVerification: 'preferred',
+      // allowCredentials con las SUyas: aquí no vale el passkey de otro usuario.
+      allowCredentials: credentials.map((c) => ({ id: c.credential_id, type: 'public-key' })),
+    },
+  });
+});
+
+passkeyRoutes.post('/passkey/stepup/verify', async (context) => {
+  if (!originOk(context.req.header('Origin'))) return context.json({ error: 'FORBIDDEN', message: 'Origin no permitido' }, 403);
+  const ip = getClientIp(context.req);
+  if (!(await checkRateLimit(context.env, `pkStepup:${ip}`, 20, 900, ip))) {
+    return context.json({ error: 'RATE_LIMIT_EXCEEDED' }, 429);
+  }
+  const session = await sessionUser(context);
+  if (!session) return context.json({ error: 'UNAUTHORIZED' }, 401);
+
+  const body = await context.req.json().catch(() => null);
+  const parsed = z.object({
+    challenge: z.string().min(10),
+    credentialId: z.string().min(10),
+    clientDataJSON: z.string().min(10),
+    authenticatorData: z.string().min(10),
+    signature: z.string().min(10),
+    userHandle: z.string().nullish(),
+  }).safeParse(body);
+  if (!parsed.success) return context.json({ error: 'INVALID_INPUT' }, 400);
+
+  const passkey = await context.env.DB.prepare(
+    `SELECT id, user_id, public_key, alg, sign_count FROM passkeys
+      WHERE credential_id = ? AND user_id = ?`
+  ).bind(parsed.data.credentialId, session.id).first() as any;
+  // La credencial TIENE que ser de este usuario: sin esta condición, el
+  // passkey de otro usuario serviría como segundo factor.
+  if (!passkey) return context.json({ error: 'INVALID_CREDENTIALS' }, 401);
+
+  const consumed = await consumeChallenge(context.env, parsed.data.challenge, 'login');
+  if (!consumed || consumed.userId !== session.id) return context.json({ error: 'INVALID_CHALLENGE' }, 400);
+
+  try {
+    const signCount = await verifyAssertion({
+      credentialId: parsed.data.credentialId,
+      storedPublicKey: passkey.public_key,
+      storedAlg: passkey.alg,
+      storedSignCount: passkey.sign_count,
+      clientDataJSON: parsed.data.clientDataJSON,
+      authenticatorData: parsed.data.authenticatorData,
+      signature: parsed.data.signature,
+      userHandle: parsed.data.userHandle ?? null,
+      expectedUserId: toBase64Url(new TextEncoder().encode(passkey.user_id)),
+      expectedChallenge: parsed.data.challenge,
+      expectedOrigin: context.req.header('Origin') || '',
+      expectedRpId: RP_ID,
+      requireUserVerification: false,
+    });
+
+    await context.env.DB.prepare('UPDATE passkeys SET sign_count = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(signCount, passkey.id).run();
+
+    // Mismo grant que concede el TOTP: 1 hora de acceso al panel.
+    const now = Math.floor(Date.now() / 1000);
+    await context.env.DB.prepare(
+      `INSERT INTO admin_stepup (user_id, verified_at, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET verified_at = excluded.verified_at, expires_at = excluded.expires_at`
+    ).bind(session.id, now, now + 3600).run();
+
+    return context.json({ data: { granted: true, validFor: 3600, factor: 'passkey' } });
+  } catch (err) {
+    return context.json({ error: 'INVALID_CREDENTIALS', message: String((err as Error).message).slice(0, 160) }, 401);
+  }
+});
+
 // GET /auth/passkey/devices - passkeys + dispositivos de confianza del usuario
 passkeyRoutes.get('/passkey/devices', async (context) => {
   const userId = await requireSession(context);

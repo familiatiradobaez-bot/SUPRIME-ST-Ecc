@@ -17,6 +17,24 @@ type AdminStats = {
   revenue: number;
 };
 
+// WebAuthn en base64url: puente entre lo que devuelve la API y lo que espera
+// el navegador (challenge, credencial, firma).
+function b64uToBuf(value: string): ArrayBuffer {
+  const b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function bufToB64u(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 type AdminProduct = {
   id: string;
   name: string;
@@ -49,6 +67,9 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
   const [totpCode, setTotpCode] = useState('');
   const [totpError, setTotpError] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
+  // Segundo factor con la huella (passkey) en vez del código TOTP.
+  const [pkStepupSupported, setPkStepupSupported] = useState<boolean | null>(null);
+  const [pkStepupLoading, setPkStepupLoading] = useState(false);
   const [showTotpSetup, setShowTotpSetup] = useState(false);
   const [totpSecret, setTotpSecret] = useState('');
   const [totpUri, setTotpUri] = useState('');
@@ -157,6 +178,79 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
       setTotpError('Error de conexión');
     } finally {
       setTotpLoading(false);
+    }
+  };
+
+  // ── Step-up con la huella (passkey) ─────────────────────────────────────
+  // Pregunta al servidor si este usuario tiene passkeys y si el navegador
+  // soporta la API. Solo entonces se ofrece el botón.
+  useEffect(() => {
+    if (stepUp !== 'code') return;
+    let cancelled = false;
+    const canUse = typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined';
+    setPkStepupSupported(canUse);
+    if (!canUse) return;
+    fetch(`${apiUrl}/auth/passkey/stepup/options`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+      .then((r) => r.status !== 404)
+      .then((hayPasskey) => { if (!cancelled) setPkStepupSupported(!!hayPasskey); })
+      .catch(() => { if (!cancelled) setPkStepupSupported(false); });
+    return () => { cancelled = true; };
+  }, [stepUp, apiUrl, sessionToken]);
+
+  const handlePasskeyStepUp = async () => {
+    setPkStepupLoading(true);
+    setTotpError('');
+    try {
+      const optRes = await fetch(`${apiUrl}/auth/passkey/stepup/options`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const optPayload = await optRes.json();
+      if (!optRes.ok) { setTotpError(optPayload.message || 'No hay passkeys registrados'); return; }
+      const o = optPayload.data;
+
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: b64uToBuf(o.challenge),
+          rpId: o.rpId,
+          timeout: o.timeout,
+          userVerification: o.userVerification,
+          allowCredentials: (o.allowCredentials || []).map((c: any) => ({ id: b64uToBuf(c.id), type: 'public-key' })),
+        },
+      }) as PublicKeyCredential | null;
+      if (!assertion) { setTotpError('Cancelado'); return; }
+      const response = assertion.response as AuthenticatorAssertionResponse;
+
+      const res = await fetch(`${apiUrl}/auth/passkey/stepup/verify`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          challenge: o.challenge,
+          credentialId: bufToB64u(assertion.rawId),
+          clientDataJSON: bufToB64u(response.clientDataJSON),
+          authenticatorData: bufToB64u(response.authenticatorData),
+          signature: bufToB64u(response.signature),
+          userHandle: response.userHandle ? bufToB64u(response.userHandle) : null,
+        }),
+      });
+      if (res.ok) {
+        setStepUp('ok');
+        setTotpCode('');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setTotpError(data.message || 'No se pudo verificar la huella');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      if (!/cancel/i.test(msg)) setTotpError(msg);
+    } finally {
+      setPkStepupLoading(false);
     }
   };
 
@@ -741,6 +835,31 @@ export function AdminPage({ user, sessionToken, apiUrl, onBack }: AdminPageProps
               </button>
               <button className="btn btn-secondary" onClick={onBack}>Cancelar</button>
             </div>
+
+            {/* Alternativa con la huella: mismo candado, otro factor. Solo
+                aparece si este dispositivo/navegador puede usar passkeys. */}
+            {pkStepupSupported && (
+              <>
+                <div className="auth-divider"><span>o con tu huella</span></div>
+                <button
+                  className="btn btn-passkey"
+                  style={{ width: '100%' }}
+                  disabled={pkStepupLoading || totpLoading}
+                  onClick={handlePasskeyStepUp}
+                  data-testid="admin-stepup-passkey"
+                >
+                  {pkStepupLoading ? '⏳ Esperando tu huella…' : '👆 Entrar al panel con la huella'}
+                </button>
+                <small style={{ display: 'block', textAlign: 'center', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                  FaceID, huella o PIN. Concede el mismo acceso que el código, 1 hora.
+                </small>
+              </>
+            )}
+            {pkStepupSupported === false && (
+              <small style={{ display: 'block', textAlign: 'center', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
+                ¿Prefieres la huella? Añádela en tu cuenta → Seguridad → Añadir passkey.
+              </small>
+            )}
           </div>
         </div>
       </div>
