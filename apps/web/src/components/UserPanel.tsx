@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
 import { formatPrice } from '../lib/api';
 
@@ -50,6 +50,113 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
+
+  // ── Passkeys y dispositivos de confianza ──────────────────────────────
+  const [passkeys, setPasskeys] = useState<any[]>([]);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [pkMsg, setPkMsg] = useState('');
+  const [pkBusy, setPkBusy] = useState(false);
+  const passkeySupported = typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined';
+
+  const authHeaders = { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' };
+
+  const b64uToBuf = (value: string): ArrayBuffer => {
+    const b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+    const bin = atob(b64 + pad);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  };
+  const bufToB64u = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+
+  const loadSecurity = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiUrl}/auth/passkey/devices`, { headers: { Authorization: `Bearer ${sessionToken}` }, credentials: 'include' });
+      const payload = await res.json();
+      if (payload.data) { setPasskeys(payload.data.passkeys || []); setDevices(payload.data.devices || []); }
+    } catch { /* silencioso */ }
+  }, [apiUrl, sessionToken]);
+
+  useEffect(() => { loadSecurity(); }, [loadSecurity]);
+
+  const addPasskey = async () => {
+    if (!passkeySupported) { setPkMsg('Este navegador no admite passkeys'); return; }
+    setPkBusy(true);
+    setPkMsg('');
+    try {
+      const optRes = await fetch(`${apiUrl}/auth/passkey/register/options`, { method: 'POST', headers: { Authorization: `Bearer ${sessionToken}` }, credentials: 'include' });
+      const optPayload = await optRes.json();
+      if (!optRes.ok) throw new Error(optPayload.message || 'No se pudo preparar el registro');
+      const o = optPayload.data;
+
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: b64uToBuf(o.challenge),
+          rp: { id: o.rp.id, name: o.rp.name },
+          user: { id: b64uToBuf(o.user.id), name: o.user.name, displayName: o.user.displayName },
+          pubKeyCredParams: o.pubKeyCredParams,
+          timeout: o.timeout,
+          attestation: 'none',
+          authenticatorSelection: o.authenticatorSelection,
+        },
+      }) as PublicKeyCredential | null;
+      if (!credential) { setPkMsg('Cancelado'); return; }
+
+      const response = credential.response as AuthenticatorAttestationResponse;
+      const verifyRes = await fetch(`${apiUrl}/auth/passkey/register/verify`, {
+        method: 'POST',
+        headers: authHeaders,
+        credentials: 'include',
+        body: JSON.stringify({
+          challenge: o.challenge,
+          deviceLabel: navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad') ? 'iPhone/iPad' : (navigator.userAgent.includes('Android') ? 'Android' : 'Este navegador'),
+          response: {
+            clientDataJSON: bufToB64u(response.clientDataJSON),
+            attestationObject: bufToB64u(response.attestationObject),
+            transports: response.getTransports ? response.getTransports() : [],
+          },
+        }),
+      });
+      const payload = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(payload.message || 'No se pudo registrar el passkey');
+      setPkMsg('Passkey añadido ✓ Ya puedes entrar con la huella');
+      loadSecurity();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      if (!/cancel/i.test(msg)) setPkMsg(msg);
+    } finally {
+      setPkBusy(false);
+    }
+  };
+
+  const revokePasskey = async (id: string) => {
+    if (!confirm('¿Revocar este passkey? Perderás el acceso con la huella en ese dispositivo.')) return;
+    await fetch(`${apiUrl}/auth/passkey/${id}`, { method: 'DELETE', headers: authHeaders, credentials: 'include' });
+    loadSecurity();
+  };
+
+  const revokeDevice = async (id: string) => {
+    if (!confirm('¿Revocar este dispositivo de confianza?')) return;
+    await fetch(`${apiUrl}/auth/trusted-device/${id}`, { method: 'DELETE', headers: authHeaders, credentials: 'include' });
+    loadSecurity();
+  };
+
+  const trustThisDevice = async () => {
+    await fetch(`${apiUrl}/auth/passkey/trust-device`, {
+      method: 'POST',
+      headers: authHeaders,
+      credentials: 'include',
+      body: JSON.stringify({ label: 'Este dispositivo' }),
+    });
+    setPkMsg('Dispositivo de confianza activado ✓');
+    loadSecurity();
+  };
 
   useEffect(() => {
     setOrdersLoading(true);
@@ -279,6 +386,62 @@ export function UserPanel({ user, apiUrl, sessionToken, onClose, onLogout, onSav
                 )}
               </div>
             ))}
+          </div>
+
+          {/* ── Seguridad: passkeys y dispositivos de confianza ── */}
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Seguridad</h3>
+            {pkMsg && <p style={{ fontSize: '0.9rem' }} aria-live="polite">{pkMsg}</p>}
+
+            <button
+              className="btn btn-passkey"
+              onClick={addPasskey}
+              disabled={pkBusy || !passkeySupported}
+              data-testid="add-passkey"
+            >
+              {pkBusy ? '⏳ Registrando…' : '👆 Añadir passkey a este dispositivo'}
+            </button>
+            <small style={{ display: 'block', color: 'var(--text-secondary)', margin: '6px 0 12px' }}>
+              Entra después con FaceID, la huella o el PIN, sin escribir la contraseña.
+            </small>
+
+            {passkeys.length > 0 && (
+              <div className="passkey-list">
+                {passkeys.map((p) => (
+                  <div className="passkey-row" key={p.id}>
+                    <div>
+                      <strong>🔑 {p.device_label || 'Passkey'}</strong>
+                      <small>Creado {new Date(p.created_at).toLocaleDateString('es-ES')} · último uso {p.last_used_at ? new Date(p.last_used_at).toLocaleDateString('es-ES') : 'nunca'}</small>
+                    </div>
+                    <button className="btn btn-sm btn-danger" onClick={() => revokePasskey(p.id)}>Revocar</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: '12px' }}>
+              <button className="btn btn-secondary" style={{ width: '100%' }} onClick={trustThisDevice}>
+                📱 Confiar en este dispositivo (30 días)
+              </button>
+              <small style={{ display: 'block', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                Con la confianza activada entras sin contraseña ni huella. El panel de administración
+                seguirá pidiendo el 2FA igual.
+              </small>
+            </div>
+
+            {devices.length > 0 && (
+              <div className="passkey-list" style={{ marginTop: '12px' }}>
+                {devices.map((d) => (
+                  <div className="passkey-row" key={d.id}>
+                    <div>
+                      <strong>📲 {d.device_label || 'Dispositivo'}</strong>
+                      <small>Desde {d.ip || 'IP desconocida'} · caduca {new Date(d.expires_at * 1000).toLocaleDateString('es-ES')}</small>
+                    </div>
+                    <button className="btn btn-sm btn-danger" onClick={() => revokeDevice(d.id)}>Revocar</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>

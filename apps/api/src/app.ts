@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { catalogRoutes } from './modules/catalog/catalog.routes';
+import { passkeyRoutes } from './modules/auth/passkey.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
@@ -216,6 +217,8 @@ export function createApp() {
   });
   api.route('/catalog', catalogRoutes);
   api.route('/auth', authRoutes);
+  // Passkeys y dispositivos de confianza cuelgan de /auth (mismo prefijo).
+  api.route('/auth', passkeyRoutes);
   api.route('/orders', ordersRoutes);
   api.route('/admin', adminRoutes);
   api.route('/auth/google', googleRoutes);

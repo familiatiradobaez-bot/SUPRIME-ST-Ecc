@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { LastAccount } from '../hooks/useAuth';
 
 type LoginFormProps = {
@@ -10,9 +10,13 @@ type LoginFormProps = {
   apiUrl: string;
   onForgotPassword?: () => void;
   lastAccount?: LastAccount | null;
+  passkeySupported?: boolean;
+  onPasskey?: () => void;
+  onTrustedDevice?: () => void;
+  passkeyLoading?: boolean;
 };
 
-export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl, onForgotPassword, lastAccount }: LoginFormProps) {
+export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, apiUrl, onForgotPassword, lastAccount, passkeySupported, onPasskey, onTrustedDevice, passkeyLoading }: LoginFormProps) {
   const [email, setEmail] = useState(lastAccount?.email ?? '');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -20,6 +24,16 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [trustDevice, setTrustDevice] = useState(true);
+  const [trustedAttempted, setTrustedAttempted] = useState(false);
+
+  // Dispositivo de confianza: al abrir el login se intenta una vez. Si la
+  // cookie no está o caducó, el formulario sigue igual (nada se rompe).
+  useEffect(() => {
+    if (mode !== 'login' || !onTrustedDevice || trustedAttempted) return;
+    setTrustedAttempted(true);
+    onTrustedDevice();
+  }, [mode, onTrustedDevice, trustedAttempted]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +58,7 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
   };
 
   return (
-    <form onSubmit={handleSubmit} className="form">
+    <form onSubmit={handleSubmit} className="form auth-card">
       {error && <p className="error" style={{ marginBottom: '1rem' }}>{error}</p>}
       {mode === 'login' && lastAccount && email !== lastAccount.email && (
         <button
@@ -144,6 +158,35 @@ export function LoginForm({ onSubmit, onCancel, mode, onToggleMode, loading, api
         </button>
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
       </div>
+
+      {/* ── Passkeys: huella / FaceID / seguridad del dispositivo ── */}
+      {mode === 'login' && passkeySupported && (
+        <>
+          <div className="auth-divider"><span>o entra con tu huella</span></div>
+          <div className="form-group" style={{ margin: '0 0 0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-passkey"
+              style={{ width: '100%' }}
+              disabled={passkeyLoading || loading}
+              onClick={() => onPasskey?.()}
+              data-testid="login-passkey"
+            >
+              {passkeyLoading ? '⏳ Esperando tu huella…' : '👆 Entrar con passkey'}
+            </button>
+            <small style={{ display: 'block', textAlign: 'center', color: 'var(--text-secondary)', marginTop: '6px' }}>
+              Usa FaceID, la huella o el PIN de tu dispositivo (iPhone, Android o PC). Sin escribir contraseña.
+            </small>
+          </div>
+          <div className="form-group remember-me">
+            <label className="checkbox-label">
+              <input type="checkbox" checked={trustDevice} onChange={(e) => setTrustDevice(e.target.checked)} />
+              <span>Recordar este dispositivo (entra solo durante 30 días)</span>
+            </label>
+          </div>
+        </>
+      )}
+
       <div className="form-group" style={{ textAlign: 'center', margin: '1rem 0' }}>
         <button
           type="button"

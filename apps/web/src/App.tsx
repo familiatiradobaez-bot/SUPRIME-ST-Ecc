@@ -49,7 +49,7 @@ export function App() {
   const apiUrl = useApiUrl();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, hasAdminAccess, lastAccount, rememberLastAccount } = useAuth();
+  const { user, session, loginMode, actionError, actionLoading, setUser, setSession, setLoginMode, setActionError, setActionLoading, handleLogin, handleLogout, saveShipping, saveProfile, persistSession, pendingOtpEmail, otpLoading, otpResending, otpError, setPendingOtpEmail, setOtpError, handleVerifyOtp, handleResendOtp, hasAdminAccess, lastAccount, rememberLastAccount, passkeySupported, passkeyLogin, trustedDeviceLogin } = useAuth();
   const { products, status, searchTerm, filteredProducts, paginatedProducts, currentPage, totalPages, setProducts, handleSearch, goToPage } = useProducts();
   // Carrito y favoritos ligados a la cuenta ('guest' sin sesión)
   const accountKey = user?.id ?? 'guest';
@@ -569,6 +569,10 @@ export function App() {
               apiUrl={apiUrl}
               onForgotPassword={() => setShowPasswordReset(true)}
               lastAccount={lastAccount}
+              passkeySupported={passkeySupported}
+              passkeyLoading={actionLoading}
+              onPasskey={() => { void passkeyLogin(lastAccount?.email); }}
+              onTrustedDevice={trustedDeviceLogin}
             />
             )}
           </div>
