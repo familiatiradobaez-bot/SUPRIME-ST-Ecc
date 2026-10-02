@@ -353,7 +353,11 @@ passkeyRoutes.post('/trusted-device/login', async (context) => {
   }
 
   const token = cookieValue(context, TRUSTED_COOKIE);
-  if (!token) return context.json({ error: 'NO_TRUSTED_DEVICE' }, 401);
+  // Sin cookie NO es un error de autenticación: es simplemente que este
+  // navegador no está en la lista de confianza. Se responde 200 con
+  // authenticated:false para no ensuciar la consola del visitante con 401 en
+  // cada carga de la web (era un 401 por visita en el panorama móvil).
+  if (!token) return context.json({ data: { authenticated: false } });
 
   const hash = await sha256Hex(token);
   const row = await context.env.DB.prepare(
@@ -361,13 +365,13 @@ passkeyRoutes.post('/trusted-device/login', async (context) => {
        FROM trusted_devices d JOIN users u ON u.id = d.user_id
       WHERE d.token_hash = ? AND d.expires_at > strftime('%s', 'now')`
   ).bind(hash).first() as any;
-  if (!row || !row.is_active) return context.json({ error: 'NO_TRUSTED_DEVICE' }, 401);
+  if (!row || !row.is_active) return context.json({ data: { authenticated: false } });
 
   // Vinculada al navegador que la creó: si el token vuela a otra UA, no vale.
   const uaHash = await sha256Hex(context.req.header('User-Agent') || '');
   if (row.ua_hash && row.ua_hash !== uaHash) {
     await context.env.DB.prepare('DELETE FROM trusted_devices WHERE id = ?').bind(row.device_id).run();
-    return context.json({ error: 'NO_TRUSTED_DEVICE' }, 401);
+    return context.json({ data: { authenticated: false } });
   }
 
   await context.env.DB.prepare('UPDATE trusted_devices SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(row.device_id).run();
@@ -375,6 +379,7 @@ passkeyRoutes.post('/trusted-device/login', async (context) => {
 
   return context.json({
     data: {
+      authenticated: true,
       user: { id: row.user_id, username: row.username, email: row.email, display_name: row.display_name, role_id: row.role_id },
       session: { id: session.token, token: session.token, expires_at: session.expiresAt },
     },

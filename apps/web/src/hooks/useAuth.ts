@@ -416,7 +416,9 @@ export function useAuth() {
   // Autofill condicional: el móvil ofrece el passkey en la lista de
   // credenciales de Google/Apple sin que haga falta tocar nada.
   useEffect(() => {
-    if (!passkeySupported) return;
+    // Solo si NO hay sesión: si ya estás dentro, pedir un passkey al cargar
+    // sería absurdo (y ensuciaría D1 con un desafío por visita).
+    if (!passkeySupported || session) return;
     let cancelled = false;
     const tryConditional = async () => {
       try {
@@ -463,11 +465,10 @@ export function useAuth() {
     };
     tryConditional();
     return () => { cancelled = true; };
-  }, [apiUrl, passkeySupported, afterSession]);
+  }, [apiUrl, passkeySupported, afterSession, session]);
 
   // Dispositivo de confianza: entra solo con la cookie httpOnly.
   const trustedDeviceLogin = useCallback(async () => {
-    setActionLoading(true);
     try {
       const res = await fetch(`${apiUrl}/auth/trusted-device/login`, {
         method: 'POST',
@@ -477,12 +478,13 @@ export function useAuth() {
       });
       if (!res.ok) return false;
       const payload = await res.json();
+      // La API responde 200 con authenticated:false cuando este navegador no
+      // está en la lista de confianza (no es un error).
+      if (!payload.data?.authenticated || !payload.data?.session) return false;
       await afterSession(payload.data, true);
       return true;
     } catch {
       return false;
-    } finally {
-      setActionLoading(false);
     }
   }, [apiUrl, afterSession]);
 
