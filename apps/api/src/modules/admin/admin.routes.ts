@@ -913,3 +913,75 @@ adminRoutes.post('/borradores/publicado', async (context) => {
   if (!putRes.ok) return context.json({ error: 'GITHUB_PUT', detail: await putRes.text() }, 502);
   return context.json({ data: { updated: true } });
 });
+
+// ---------------------------------------------------------------------------
+// Crear el producto (por defecto PROYECTO OCULTO / borrador) desde un
+// borrador del scraping, y marcar ese borrador como publicado en el JSON.
+// ---------------------------------------------------------------------------
+adminRoutes.post('/borradores/a-producto', async (context) => {
+  const body = await context.req.json().catch(() => null);
+  if (!body || !body.productId || !body.subdepartment_id) return context.json({ error: 'INVALID_INPUT' }, 400);
+  const name = typeof body.name === 'string' ? body.name : '';
+  const description = typeof body.description === 'string' ? body.description : '';
+  const image_url = typeof body.image_url === 'string' ? body.image_url : '';
+  const images: string[] = Array.isArray(body.images) ? body.images.filter((x: any) => typeof x === 'string') : [];
+  const priceCents = Number.isInteger(body.price_cents) && body.price_cents >= 0 ? body.price_cents : null;
+  const stock = Number.isInteger(body.stock_quantity) && body.stock_quantity >= 0 ? body.stock_quantity : null;
+  if (!name || !image_url || priceCents == null || stock == null) return context.json({ error: 'MISSING_FIELDS' }, 400);
+
+  const sub = await context.env.DB.prepare('SELECT id FROM subdepartments WHERE id = ?').bind(body.subdepartment_id).first();
+  if (!sub) return context.json({ error: 'SUBDEPARTMENT_NOT_FOUND' }, 404);
+
+  const productId = generateId();
+  const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 80) || 'producto';
+  let slug = baseSlug;
+  for (let a = 0; a < 5; a++) {
+    const taken = await context.env.DB.prepare('SELECT 1 AS ok FROM products WHERE slug = ?').bind(slug).first();
+    if (!taken) break;
+    slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  // Por defecto PROYECTO OCULTO → status 'draft'.
+  await context.env.DB.prepare(
+    `INSERT INTO products (id, subdepartment_id, name, slug, description, image_url, price_cents, stock_quantity, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')`
+  ).bind(productId, body.subdepartment_id, name, slug, description, image_url, priceCents, stock).run();
+
+  const gallery = images.length ? images.slice(0, 10) : [image_url];
+  await context.env.DB.batch([
+    context.env.DB.prepare('DELETE FROM product_images WHERE product_id = ?').bind(productId),
+    ...gallery.map((url, i) =>
+      context.env.DB.prepare('INSERT INTO product_images (id, product_id, url, display_order, is_primary) VALUES (?, ?, ?, ?, ?)')
+        .bind(generateId(), productId, url, i, i === 0 ? 1 : 0)
+    ),
+  ]);
+
+  try {
+    const token = context.env.GITHUB_TOKEN;
+    if (token) {
+      const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'suprime-worker' };
+      const metaUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${BORRADORES_PATH}`;
+      const metaRes = await fetch(metaUrl, { headers });
+      if (metaRes.ok) {
+        const meta = (await metaRes.json()) as { content: string; sha: string };
+        let arr: any[] = [];
+        try { arr = JSON.parse(atob(meta.content.replace(/\n/g, ''))); } catch { arr = []; }
+        if (!Array.isArray(arr)) arr = [];
+        const now = new Date();
+        arr = arr.filter((x: any) => {
+          if (x?.status !== 'publicado') return true;
+          const t = x?.commented_at ? Date.parse(x.commented_at) : 0;
+          return now.getTime() - t < 7 * 24 * 60 * 60 * 1000;
+        });
+        const target = arr.find((x: any) => x?.productId === body.productId);
+        if (target) { target.status = 'publicado'; target.commented_at = now.toISOString(); }
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(arr, null, 2))));
+        await fetch(metaUrl, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: `web: borrar ${body.productId} de borradores`, content, sha: meta.sha }) });
+      }
+    }
+  } catch {
+    // no bloquea la creación del producto
+  }
+
+  return context.json({ data: { id: productId, name, slug } }, 201);
+});
