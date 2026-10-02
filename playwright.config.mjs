@@ -19,7 +19,11 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  timeout: 60_000,
+  // 90 s (no 60): las pruebas de admin reintentan hasta 3 veces el código TOTP
+  // y cada reintento puede esperar al siguiente paso de 30 s por el anti-replay.
+  // Con 60 s el test se quedaba sin tiempo a mitad del último reintento y
+  // fallaba sin que hubiera ningún fallo real.
+  timeout: 90_000,
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
   use: {
