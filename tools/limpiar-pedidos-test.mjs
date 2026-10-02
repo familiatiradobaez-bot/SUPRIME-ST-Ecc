@@ -49,6 +49,7 @@ d1(
     WHERE shipping_address = 'Calle E2E 1'
        OR shipping_name = 'Cliente E2E'
        OR shipping_name = 'QA Dropshipping'
+       OR shipping_name = 'QA Ganancias'
        OR shipping_name = 'Test Owner';`,
   'Pedidos marcados como de prueba',
 );
