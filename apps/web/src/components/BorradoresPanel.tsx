@@ -46,9 +46,10 @@ export function BorradoresPanel({ apiUrl, sessionToken }: BorradoresPanelProps) 
   }
 
   function abrirEdit(b: Borrador) {
+    const fotosValidas = (b.fotos || []).filter((ft) => (ft?.url || '').startsWith('http'));
     const keep: Record<number, boolean> = {};
-    (b.fotos || []).forEach((_, i) => { keep[i] = true; });
-    setEdit(b);
+    fotosValidas.forEach((_, i) => { keep[i] = true; });
+    setEdit({ ...b, fotos: fotosValidas });
     setF({ title: b.title || '', price: b.price || '', description: b.description || '', subdepartment_id: subs[0]?.id || '', stock: '0', keep });
   }
 
